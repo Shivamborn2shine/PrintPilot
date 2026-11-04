@@ -1,0 +1,2006 @@
+using System;
+using System.Collections.Generic;
+using System.Globalization;
+using System.IO;
+using System.Security.Cryptography;
+using System.Text;
+using PrintAway.Engine;
+
+namespace PrintAway.Storage
+{
+    public sealed class PrintAwayRepository
+    {
+        public const string VerifiedXeroxQueueName = "Xerox B1025 Multifunction Printer PCL6";
+        public const string SecondaryXeroxQueueName = "Xerox B1025 Multifunction Printer";
+
+        private readonly SqliteDatabase _db;
+        private readonly string _vaultDirectory;
+        private readonly string _webhookSecret;
+        private readonly string _workerSharedToken;
+
+        public PrintAwayRepository(SqliteDatabase db, string vaultDirectory, string webhookSecret, string workerSharedToken)
+        {
+            _db = db;
+            _vaultDirectory = vaultDirectory;
+            _webhookSecret = webhookSecret;
+            _workerSharedToken = workerSharedToken;
+
+            if (!Directory.Exists(_vaultDirectory))
+            {
+                Directory.CreateDirectory(_vaultDirectory);
+            }
+
+            InitializeSchemaAndSeed();
+        }
+
+        public SqliteDatabase Db { get { return _db; } }
+        public string VaultDirectory { get { return _vaultDirectory; } }
+        public string WebhookSecret { get { return _webhookSecret; } }
+        public string WorkerSharedToken { get { return _workerSharedToken; } }
+
+        public static string UtcNowIso(double offsetSeconds = 0)
+        {
+            return DateTime.UtcNow.AddSeconds(offsetSeconds).ToString("yyyy-MM-ddTHH:mm:ssZ", CultureInfo.InvariantCulture);
+        }
+
+        public static string ToIstDisplay(string utcIso)
+        {
+            if (string.IsNullOrWhiteSpace(utcIso)) return "";
+            DateTime dt;
+            if (DateTime.TryParse(utcIso, CultureInfo.InvariantCulture, DateTimeStyles.AssumeUniversal | DateTimeStyles.AdjustToUniversal, out dt))
+            {
+                DateTime ist = dt.AddHours(5).AddMinutes(30);
+                return ist.ToString("yyyy-MM-dd hh:mm:ss tt 'IST'", CultureInfo.InvariantCulture);
+            }
+            return utcIso;
+        }
+
+        private void InitializeSchemaAndSeed()
+        {
+            string ddl = @"
+CREATE TABLE IF NOT EXISTS shops (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    slug TEXT NOT NULL UNIQUE,
+    name TEXT NOT NULL,
+    tagline TEXT NOT NULL,
+    intake_paused INTEGER NOT NULL DEFAULT 0,
+    pause_reason TEXT,
+    operating_hours TEXT NOT NULL DEFAULT '09:00 AM - 09:00 PM IST',
+    turnaround_text TEXT NOT NULL DEFAULT '5-10 mins after staff approval',
+    retention_hours INTEGER NOT NULL DEFAULT 24,
+    min_free_disk_mb INTEGER NOT NULL DEFAULT 1024,
+    created_at_utc TEXT NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS users (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    username TEXT NOT NULL UNIQUE,
+    display_name TEXT NOT NULL,
+    role TEXT NOT NULL,
+    password_hash TEXT NOT NULL,
+    password_salt TEXT NOT NULL,
+    is_active INTEGER NOT NULL DEFAULT 1,
+    created_at_utc TEXT NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS admin_sessions (
+    token TEXT PRIMARY KEY,
+    csrf_token TEXT NOT NULL,
+    user_id INTEGER NOT NULL,
+    username TEXT NOT NULL,
+    role TEXT NOT NULL,
+    created_at_utc TEXT NOT NULL,
+    expires_at_utc TEXT NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS stations (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    shop_id INTEGER NOT NULL,
+    station_code TEXT NOT NULL UNIQUE,
+    display_name TEXT NOT NULL,
+    os_summary TEXT NOT NULL,
+    last_heartbeat_utc TEXT,
+    free_ram_mb INTEGER NOT NULL DEFAULT 0,
+    free_disk_mb INTEGER NOT NULL DEFAULT 0,
+    spooler_running INTEGER NOT NULL DEFAULT 1,
+    printer_ready INTEGER NOT NULL DEFAULT 1,
+    status_message TEXT
+);
+
+CREATE TABLE IF NOT EXISTS printers (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    shop_id INTEGER NOT NULL,
+    station_id INTEGER NOT NULL,
+    device_code TEXT NOT NULL UNIQUE,
+    model_name TEXT NOT NULL,
+    port_name TEXT NOT NULL,
+    supports_color INTEGER NOT NULL DEFAULT 0,
+    supports_a4 INTEGER NOT NULL DEFAULT 1,
+    supports_duplex INTEGER NOT NULL DEFAULT 0,
+    supports_page_range INTEGER NOT NULL DEFAULT 1,
+    is_enabled INTEGER NOT NULL DEFAULT 1,
+    created_at_utc TEXT NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS printer_queues (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    printer_id INTEGER NOT NULL,
+    windows_queue_name TEXT NOT NULL UNIQUE,
+    driver_name TEXT NOT NULL,
+    port_name TEXT NOT NULL,
+    is_active_selected INTEGER NOT NULL DEFAULT 0,
+    is_virtual_excluded INTEGER NOT NULL DEFAULT 0,
+    verified_status TEXT NOT NULL,
+    notes TEXT,
+    updated_at_utc TEXT NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS price_rules (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    shop_id INTEGER NOT NULL,
+    version INTEGER NOT NULL,
+    simplex_per_side_inr REAL NOT NULL,
+    duplex_per_side_inr REAL NOT NULL,
+    min_order_charge_inr REAL NOT NULL,
+    tax_percent REAL NOT NULL DEFAULT 0,
+    is_active INTEGER NOT NULL DEFAULT 1,
+    created_by TEXT NOT NULL,
+    created_at_utc TEXT NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS files (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    file_token TEXT NOT NULL UNIQUE,
+    original_filename_redacted TEXT NOT NULL,
+    storage_relative_path TEXT NOT NULL,
+    sha256_hex TEXT NOT NULL,
+    size_bytes INTEGER NOT NULL,
+    page_count INTEGER NOT NULL,
+    scan_status TEXT NOT NULL,
+    retention_deadline_utc TEXT NOT NULL,
+    is_deleted INTEGER NOT NULL DEFAULT 0,
+    deleted_at_utc TEXT,
+    created_at_utc TEXT NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS quotes (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    quote_token TEXT NOT NULL UNIQUE,
+    shop_id INTEGER NOT NULL,
+    file_id INTEGER NOT NULL,
+    price_rule_id INTEGER NOT NULL,
+    price_rule_version INTEGER NOT NULL,
+    document_pages INTEGER NOT NULL,
+    selected_pages INTEGER NOT NULL,
+    page_range_spec TEXT NOT NULL,
+    copies INTEGER NOT NULL,
+    duplex_mode TEXT NOT NULL,
+    printed_sides INTEGER NOT NULL,
+    physical_sheets INTEGER NOT NULL,
+    rate_per_side_inr REAL NOT NULL,
+    base_charge_inr REAL NOT NULL,
+    min_charge_delta_inr REAL NOT NULL,
+    tax_amount_inr REAL NOT NULL,
+    total_amount_inr REAL NOT NULL,
+    total_amount_paise INTEGER NOT NULL,
+    expires_at_utc TEXT NOT NULL,
+    created_at_utc TEXT NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS orders (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    order_code TEXT NOT NULL UNIQUE,
+    public_token TEXT NOT NULL UNIQUE,
+    pickup_code TEXT NOT NULL,
+    shop_id INTEGER NOT NULL,
+    file_id INTEGER NOT NULL,
+    quote_id INTEGER NOT NULL,
+    customer_name TEXT,
+    customer_phone TEXT,
+    consent_accepted INTEGER NOT NULL DEFAULT 1,
+    state TEXT NOT NULL,
+    payment_status TEXT NOT NULL DEFAULT 'unpaid',
+    target_printer_id INTEGER NOT NULL,
+    target_queue_name TEXT NOT NULL,
+    hold_or_reject_reason TEXT,
+    created_at_utc TEXT NOT NULL,
+    updated_at_utc TEXT NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS payments (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    order_id INTEGER NOT NULL,
+    gateway_provider TEXT NOT NULL,
+    gateway_order_id TEXT NOT NULL UNIQUE,
+    gateway_payment_id TEXT,
+    webhook_event_id TEXT UNIQUE,
+    amount_paise INTEGER NOT NULL,
+    currency TEXT NOT NULL DEFAULT 'INR',
+    status TEXT NOT NULL,
+    verified_by_webhook INTEGER NOT NULL DEFAULT 0,
+    webhook_Calls_count INTEGER NOT NULL DEFAULT 0,
+    created_at_utc TEXT NOT NULL,
+    verified_at_utc TEXT
+);
+
+CREATE TABLE IF NOT EXISTS refunds (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    order_id INTEGER NOT NULL,
+    payment_id INTEGER NOT NULL,
+    amount_paise INTEGER NOT NULL,
+    reason TEXT NOT NULL,
+    status TEXT NOT NULL,
+    initiated_by TEXT NOT NULL,
+    created_at_utc TEXT NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS approvals (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    order_id INTEGER NOT NULL,
+    admin_user_id INTEGER NOT NULL,
+    admin_username TEXT NOT NULL,
+    decision TEXT NOT NULL,
+    reason TEXT NOT NULL,
+    target_queue_name TEXT NOT NULL,
+    amount_paise_snapshot INTEGER NOT NULL,
+    printed_sides_snapshot INTEGER NOT NULL,
+    created_at_utc TEXT NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS print_jobs (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    order_id INTEGER NOT NULL UNIQUE,
+    idempotency_key TEXT NOT NULL UNIQUE,
+    station_id INTEGER NOT NULL,
+    printer_id INTEGER NOT NULL,
+    target_queue_name TEXT NOT NULL,
+    state TEXT NOT NULL,
+    lease_token TEXT,
+    lease_expires_utc TEXT,
+    attempts INTEGER NOT NULL DEFAULT 0,
+    windows_spooler_job_id INTEGER,
+    last_error TEXT,
+    created_at_utc TEXT NOT NULL,
+    updated_at_utc TEXT NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS audit_events (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    order_id INTEGER,
+    actor_type TEXT NOT NULL,
+    actor_name TEXT NOT NULL,
+    event_type TEXT NOT NULL,
+    from_state TEXT,
+    to_state TEXT,
+    details TEXT NOT NULL,
+    created_at_utc TEXT NOT NULL
+);
+";
+            _db.ExecuteNonQuery(ddl);
+
+            string now = UtcNowIso();
+            long shopCount = _db.ExecuteScalarLong("SELECT COUNT(*) FROM shops;");
+            if (shopCount == 0)
+            {
+                _db.ExecuteInsert(
+                    @"INSERT INTO shops (slug, name, tagline, intake_paused, operating_hours, turnaround_text, retention_hours, min_free_disk_mb, created_at_utc)
+                      VALUES ('printaway-pilot', 'PrintAway Pilot Shop', 'Printing ke liye pareshan ho? Just PrintAway.', 0, '09:00 AM - 09:00 PM IST', '3-5 mins after counter admin approval', 24, 1024, @now);",
+                    new Dictionary<string, object> { { "now", now } });
+            }
+
+            long userCount = _db.ExecuteScalarLong("SELECT COUNT(*) FROM users;");
+            if (userCount == 0)
+            {
+                string salt = GenerateRandomToken(16);
+                string hash = HashPassword("PrintAway@Admin2026", salt);
+                _db.ExecuteInsert(
+                    @"INSERT INTO users (username, display_name, role, password_hash, password_salt, is_active, created_at_utc)
+                      VALUES ('admin', 'Shop Owner / Lead Admin', 'admin', @hash, @salt, 1, @now);",
+                    new Dictionary<string, object> { { "hash", hash }, { "salt", salt }, { "now", now } });
+            }
+
+            long stationCount = _db.ExecuteScalarLong("SELECT COUNT(*) FROM stations;");
+            if (stationCount == 0)
+            {
+                _db.ExecuteInsert(
+                    @"INSERT INTO stations (shop_id, station_code, display_name, os_summary, last_heartbeat_utc, free_ram_mb, free_disk_mb, spooler_running, printer_ready, status_message)
+                      VALUES (1, 'STATION-PILOT-01', 'Primary Windows Host Station', 'Windows 11 Pro x64 (Build 22621)', @now, 2000, 149000, 1, 1, 'Online & Ready');",
+                    new Dictionary<string, object> { { "now", now } });
+            }
+
+            long printerCount = _db.ExecuteScalarLong("SELECT COUNT(*) FROM printers;");
+            if (printerCount == 0)
+            {
+                long pid = _db.ExecuteInsert(
+                    @"INSERT INTO printers (shop_id, station_id, device_code, model_name, port_name, supports_color, supports_a4, supports_duplex, supports_page_range, is_enabled, created_at_utc)
+                      VALUES (1, 1, 'XEROX-B1025-USB001', 'Xerox B1025 Multifunction Printer', 'USB001', 0, 1, 1, 1, 1, @now);",
+                    new Dictionary<string, object> { { "now", now } });
+
+                _db.ExecuteInsert(
+                    @"INSERT INTO printer_queues (printer_id, windows_queue_name, driver_name, port_name, is_active_selected, is_virtual_excluded, verified_status, notes, updated_at_utc)
+                      VALUES (@pid, @q1, 'Xerox Global Print Driver PCL6', 'USB001', 1, 0, 'VERIFIED_ACTIVE', 'Founder-confirmed active queue (PaperSize=A4, Color=False, OneSided)', @now);",
+                    new Dictionary<string, object> { { "pid", pid }, { "q1", VerifiedXeroxQueueName }, { "now", now } });
+
+                _db.ExecuteInsert(
+                    @"INSERT INTO printer_queues (printer_id, windows_queue_name, driver_name, port_name, is_active_selected, is_virtual_excluded, verified_status, notes, updated_at_utc)
+                      VALUES (@pid, @q2, 'Xerox B1025 Multifunction Printer V4 PCL6', 'USB001', 0, 0, 'DISABLED_DUPLICATE_USB001', 'Excluded to prevent duplicate dispatch to same USB001 physical printer', @now);",
+                    new Dictionary<string, object> { { "pid", pid }, { "q2", SecondaryXeroxQueueName }, { "now", now } });
+            }
+
+            long priceCount = _db.ExecuteScalarLong("SELECT COUNT(*) FROM price_rules;");
+            if (priceCount == 0)
+            {
+                _db.ExecuteInsert(
+                    @"INSERT INTO price_rules (shop_id, version, simplex_per_side_inr, duplex_per_side_inr, min_order_charge_inr, tax_percent, is_active, created_by, created_at_utc)
+                      VALUES (1, 1, 2.00, 1.50, 2.00, 0.0, 1, 'system-seed', @now);",
+                    new Dictionary<string, object> { { "now", now } });
+            }
+        }
+
+        public static string GenerateRandomToken(int byteCount = 16)
+        {
+            byte[] buf = new byte[byteCount];
+            using (var rng = RandomNumberGenerator.Create())
+            {
+                rng.GetBytes(buf);
+            }
+            var sb = new StringBuilder(byteCount * 2);
+            foreach (byte b in buf) sb.Append(b.ToString("x2", CultureInfo.InvariantCulture));
+            return sb.ToString();
+        }
+
+        public static string GeneratePickupCode()
+        {
+            const string chars = "23456789ABCDEFGHJKLMNPQRSTUVWXYZ";
+            byte[] buf = new byte[6];
+            using (var rng = RandomNumberGenerator.Create())
+            {
+                rng.GetBytes(buf);
+            }
+            var sb = new StringBuilder(6);
+            for (int i = 0; i < 6; i++)
+            {
+                sb.Append(chars[buf[i] % chars.Length]);
+            }
+            return sb.ToString();
+        }
+
+        public static string HashPassword(string password, string salt)
+        {
+            using (var pbkdf2 = new Rfc2898DeriveBytes(password, Encoding.UTF8.GetBytes(salt), 10000, HashAlgorithmName.SHA256))
+            {
+                return Convert.ToBase64String(pbkdf2.GetBytes(32));
+            }
+        }
+
+        public string ComputeWebhookHmac(string rawBody)
+        {
+            using (var hmac = new HMACSHA256(Encoding.UTF8.GetBytes(_webhookSecret)))
+            {
+                byte[] sig = hmac.ComputeHash(Encoding.UTF8.GetBytes(rawBody ?? ""));
+                var sb = new StringBuilder(sig.Length * 2);
+                foreach (byte b in sig) sb.Append(b.ToString("x2", CultureInfo.InvariantCulture));
+                return sb.ToString();
+            }
+        }
+
+        public void LogAudit(long? orderId, string actorType, string actorName, string eventType, string fromState, string toState, string details)
+        {
+            _db.ExecuteInsert(
+                @"INSERT INTO audit_events (order_id, actor_type, actor_name, event_type, from_state, to_state, details, created_at_utc)
+                  VALUES (@oid, @atype, @aname, @etype, @fstate, @tstate, @details, @now);",
+                new Dictionary<string, object>
+                {
+                    { "oid", orderId.HasValue ? (object)orderId.Value : null },
+                    { "atype", actorType },
+                    { "aname", actorName },
+                    { "etype", eventType },
+                    { "fstate", fromState },
+                    { "tstate", toState },
+                    { "details", details ?? "" },
+                    { "now", UtcNowIso() }
+                });
+        }
+
+        public long GetAvailableDiskMegabytes()
+        {
+            try
+            {
+                string root = Path.GetPathRoot(Path.GetFullPath(_vaultDirectory));
+                var drive = new DriveInfo(root);
+                return drive.AvailableFreeSpace / (1024L * 1024L);
+            }
+            catch
+            {
+                return 102400L;
+            }
+        }
+
+        public Dictionary<string, object> GetShopAndAvailabilityStatus()
+        {
+            var shop = _db.QuerySingle("SELECT * FROM shops WHERE id = 1;");
+            var station = _db.QuerySingle("SELECT * FROM stations WHERE id = 1;");
+            var printer = _db.QuerySingle("SELECT * FROM printers WHERE id = 1;");
+            var activeQueue = _db.QuerySingle("SELECT * FROM printer_queues WHERE is_active_selected = 1 LIMIT 1;");
+            var priceRule = _db.QuerySingle("SELECT * FROM price_rules WHERE shop_id = 1 AND is_active = 1 ORDER BY version DESC LIMIT 1;");
+
+            long freeDiskMb = GetAvailableDiskMegabytes();
+            long minDiskMb = Convert.ToInt64(shop["min_free_disk_mb"], CultureInfo.InvariantCulture);
+            bool diskLow = freeDiskMb < minDiskMb;
+            bool intakePaused = Convert.ToInt64(shop["intake_paused"], CultureInfo.InvariantCulture) != 0;
+            bool printerReady = Convert.ToInt64(station["printer_ready"], CultureInfo.InvariantCulture) != 0 &&
+                                Convert.ToInt64(station["spooler_running"], CultureInfo.InvariantCulture) != 0;
+
+            bool acceptingOrders = !intakePaused && !diskLow && printerReady;
+            string statusReason = "Open & Accepting Orders";
+            if (intakePaused) statusReason = "Order intake temporarily paused by shop admin: " + Convert.ToString(shop["pause_reason"] ?? "Maintenance");
+            else if (diskLow) statusReason = "Order intake paused: Host storage low.";
+            else if (!printerReady) statusReason = "Printer station requires attention (" + Convert.ToString(station["status_message"] ?? "Offline") + ").";
+
+            return new Dictionary<string, object>
+            {
+                { "shopName", shop["name"] },
+                { "tagline", shop["tagline"] },
+                { "operatingHours", shop["operating_hours"] },
+                { "turnaroundText", shop["turnaround_text"] },
+                { "acceptingOrders", acceptingOrders },
+                { "intakePaused", intakePaused },
+                { "diskLow", diskLow },
+                { "printerReady", printerReady },
+                { "statusReason", statusReason },
+                { "printerModel", printer["model_name"] },
+                { "activeQueueName", activeQueue != null ? activeQueue["windows_queue_name"] : VerifiedXeroxQueueName },
+                { "supportsColor", Convert.ToInt64(printer["supports_color"]) != 0 },
+                { "supportsA4", Convert.ToInt64(printer["supports_a4"]) != 0 },
+                { "supportsDuplex", Convert.ToInt64(printer["supports_duplex"]) != 0 },
+                { "supportsPageRange", Convert.ToInt64(printer["supports_page_range"]) != 0 },
+                { "pricing", new Dictionary<string, object>
+                    {
+                        { "version", priceRule["version"] },
+                        { "simplexPerSideInr", priceRule["simplex_per_side_inr"] },
+                        { "duplexPerSideInr", priceRule["duplex_per_side_inr"] },
+                        { "minOrderChargeInr", priceRule["min_order_charge_inr"] },
+                        { "taxPercent", priceRule["tax_percent"] }
+                    }
+                }
+            };
+        }
+
+        public Dictionary<string, object> SaveValidatedPdf(string originalFilename, byte[] pdfBytes, out string errorCode, out string errorMsg)
+        {
+            errorCode = null;
+            errorMsg = null;
+
+            var status = GetShopAndAvailabilityStatus();
+            if (!(bool)status["acceptingOrders"])
+            {
+                errorCode = "SHOP_UNAVAILABLE";
+                errorMsg = Convert.ToString(status["statusReason"]);
+                return null;
+            }
+
+            PdfValidationResult val = PdfAndPrinterEngine.ValidatePdf(pdfBytes);
+            if (!val.IsValid)
+            {
+                errorCode = val.ErrorCode;
+                errorMsg = val.ErrorMessage;
+                LogAudit(null, "customer", "anonymous", "UPLOAD_REJECTED", "draft", "rejected", val.ErrorCode + ": " + val.ErrorMessage);
+                return null;
+            }
+
+            string fileToken = "file_" + GenerateRandomToken(12);
+            string subDir = DateTime.UtcNow.ToString("yyyyMMdd", CultureInfo.InvariantCulture);
+            string targetDir = Path.Combine(_vaultDirectory, subDir);
+            if (!Directory.Exists(targetDir))
+            {
+                Directory.CreateDirectory(targetDir);
+            }
+
+            // Never use user-supplied filename for local path (PRD §11)
+            string safeVaultFilename = fileToken + ".pdf";
+            string fullPath = Path.Combine(targetDir, safeVaultFilename);
+            File.WriteAllBytes(fullPath, pdfBytes);
+
+            string relPath = Path.Combine(subDir, safeVaultFilename);
+            string safeDisplayFilename = SanitizeDisplayFilename(originalFilename);
+            string now = UtcNowIso();
+            string deadline = UtcNowIso(24 * 3600);
+
+            long fileId = _db.ExecuteInsert(
+                @"INSERT INTO files (file_token, original_filename_redacted, storage_relative_path, sha256_hex, size_bytes, page_count, scan_status, retention_deadline_utc, is_deleted, created_at_utc)
+                  VALUES (@token, @name, @rel, @sha, @size, @pages, 'CLEAN_VERIFIED_PDF', @deadline, 0, @now);",
+                new Dictionary<string, object>
+                {
+                    { "token", fileToken },
+                    { "name", safeDisplayFilename },
+                    { "rel", relPath },
+                    { "sha", val.Sha256Hex },
+                    { "size", val.FileSizeBytes },
+                    { "pages", val.PageCount },
+                    { "deadline", deadline },
+                    { "now", now }
+                });
+
+            LogAudit(null, "customer", "anonymous", "FILE_UPLOADED_AND_VALIDATED", "draft", "validated",
+                string.Format(CultureInfo.InvariantCulture, "FileToken={0}, Pages={1}, Size={2}B, SHA256={3}", fileToken, val.PageCount, val.FileSizeBytes, val.Sha256Hex.Substring(0, 12)));
+
+            return new Dictionary<string, object>
+            {
+                { "fileId", fileId },
+                { "fileToken", fileToken },
+                { "displayName", safeDisplayFilename },
+                { "pageCount", val.PageCount },
+                { "sizeBytes", val.FileSizeBytes },
+                { "sha256Prefix", val.Sha256Hex.Substring(0, 16) },
+                { "scanStatus", "CLEAN_VERIFIED_PDF" }
+            };
+        }
+
+        private static string SanitizeDisplayFilename(string rawName)
+        {
+            if (string.IsNullOrWhiteSpace(rawName)) return "document.pdf";
+            string baseName = Path.GetFileName(rawName);
+            var sb = new StringBuilder();
+            foreach (char c in baseName)
+            {
+                if (char.IsLetterOrDigit(c) || c == '.' || c == '-' || c == '_' || c == ' ')
+                    sb.Append(c);
+            }
+            string cleaned = sb.ToString().Trim();
+            if (string.IsNullOrEmpty(cleaned)) return "document.pdf";
+            if (cleaned.Length > 48) cleaned = cleaned.Substring(0, 48);
+            return cleaned;
+        }
+
+        public Dictionary<string, object> CreateServerQuote(string fileToken, int copies, string duplexMode, string pageRangeSpec, out string errorMsg)
+        {
+            errorMsg = null;
+            var fileRow = _db.QuerySingle("SELECT * FROM files WHERE file_token = @ft AND is_deleted = 0;",
+                new Dictionary<string, object> { { "ft", fileToken ?? "" } });
+            if (fileRow == null)
+            {
+                errorMsg = "Uploaded file not found or has expired.";
+                return null;
+            }
+
+            var printer = _db.QuerySingle("SELECT * FROM printers WHERE id = 1;");
+            bool duplexAllowed = Convert.ToInt64(printer["supports_duplex"]) != 0;
+            bool isRequestingDuplex = string.Equals(duplexMode, "TwoSidedLongEdge", StringComparison.OrdinalIgnoreCase) ||
+                                      string.Equals(duplexMode, "TwoSidedShortEdge", StringComparison.OrdinalIgnoreCase);
+            if (isRequestingDuplex && !duplexAllowed)
+            {
+                errorMsg = "Duplex printing is currently disabled by shop admin on this printer.";
+                return null;
+            }
+
+            var priceRule = _db.QuerySingle("SELECT * FROM price_rules WHERE shop_id = 1 AND is_active = 1 ORDER BY version DESC LIMIT 1;");
+            int docPages = Convert.ToInt32(fileRow["page_count"], CultureInfo.InvariantCulture);
+
+            string calcErr;
+            QuoteCalculationResult calc = PdfAndPrinterEngine.CalculateQuote(
+                docPages,
+                pageRangeSpec,
+                copies,
+                duplexMode,
+                Convert.ToDouble(priceRule["simplex_per_side_inr"], CultureInfo.InvariantCulture),
+                Convert.ToDouble(priceRule["duplex_per_side_inr"], CultureInfo.InvariantCulture),
+                Convert.ToDouble(priceRule["min_order_charge_inr"], CultureInfo.InvariantCulture),
+                Convert.ToDouble(priceRule["tax_percent"], CultureInfo.InvariantCulture),
+                out calcErr);
+
+            if (calc == null)
+            {
+                errorMsg = calcErr;
+                return null;
+            }
+
+            string quoteToken = "qt_" + GenerateRandomToken(12);
+            string now = UtcNowIso();
+            string expires = UtcNowIso(1800);
+
+            long quoteId = _db.ExecuteInsert(
+                @"INSERT INTO quotes (
+                    quote_token, shop_id, file_id, price_rule_id, price_rule_version,
+                    document_pages, selected_pages, page_range_spec, copies, duplex_mode,
+                    printed_sides, physical_sheets, rate_per_side_inr, base_charge_inr,
+                    min_charge_delta_inr, tax_amount_inr, total_amount_inr, total_amount_paise,
+                    expires_at_utc, created_at_utc
+                  ) VALUES (
+                    @qtoken, 1, @fid, @prid, @prver,
+                    @dpages, @spages, @range, @copies, @duplex,
+                    @sides, @sheets, @rate, @base,
+                    @mindelta, @tax, @totalinr, @totalpaise,
+                    @exp, @now
+                  );",
+                new Dictionary<string, object>
+                {
+                    { "qtoken", quoteToken },
+                    { "fid", fileRow["id"] },
+                    { "prid", priceRule["id"] },
+                    { "prver", priceRule["version"] },
+                    { "dpages", calc.DocumentPages },
+                    { "spages", calc.SelectedPageCount },
+                    { "range", calc.NormalizedPageRange },
+                    { "copies", calc.Copies },
+                    { "duplex", calc.DuplexMode },
+                    { "sides", calc.TotalPrintedSides },
+                    { "sheets", calc.TotalPhysicalSheets },
+                    { "rate", calc.RatePerSideInr },
+                    { "base", calc.BaseChargeInr },
+                    { "mindelta", calc.MinimumChargeAppliedInr },
+                    { "tax", calc.TaxAmountInr },
+                    { "totalinr", calc.TotalAmountInr },
+                    { "totalpaise", calc.TotalAmountPaise },
+                    { "exp", expires },
+                    { "now", now }
+                });
+
+            return new Dictionary<string, object>
+            {
+                { "quoteId", quoteId },
+                { "quoteToken", quoteToken },
+                { "fileToken", fileToken },
+                { "priceRuleVersion", priceRule["version"] },
+                { "documentPages", calc.DocumentPages },
+                { "selectedPages", calc.SelectedPageCount },
+                { "pageRange", calc.NormalizedPageRange },
+                { "copies", calc.Copies },
+                { "duplexMode", calc.DuplexMode },
+                { "printedSides", calc.TotalPrintedSides },
+                { "physicalSheets", calc.TotalPhysicalSheets },
+                { "ratePerSideInr", calc.RatePerSideInr },
+                { "baseChargeInr", calc.BaseChargeInr },
+                { "minChargeDeltaInr", calc.MinimumChargeAppliedInr },
+                { "taxAmountInr", calc.TaxAmountInr },
+                { "totalAmountInr", calc.TotalAmountInr },
+                { "totalAmountPaise", calc.TotalAmountPaise },
+                { "expiresAtUtc", expires }
+            };
+        }
+
+        public Dictionary<string, object> CreateOrderAndPaymentIntent(
+            string quoteToken,
+            string customerName,
+            string customerPhone,
+            bool consentAccepted,
+            out string errorMsg)
+        {
+            errorMsg = null;
+            if (!consentAccepted)
+            {
+                errorMsg = "You must accept the document retention and counter pickup policy to place an order.";
+                return null;
+            }
+
+            var status = GetShopAndAvailabilityStatus();
+            if (!(bool)status["acceptingOrders"])
+            {
+                errorMsg = Convert.ToString(status["statusReason"]);
+                return null;
+            }
+
+            var quote = _db.QuerySingle("SELECT * FROM quotes WHERE quote_token = @qt;",
+                new Dictionary<string, object> { { "qt", quoteToken ?? "" } });
+            if (quote == null)
+            {
+                errorMsg = "Quote not found or invalid.";
+                return null;
+            }
+
+            string orderCode = "PA-" + GenerateRandomToken(3).ToUpperInvariant();
+            string publicToken = "pub_" + GenerateRandomToken(16);
+            string pickupCode = GeneratePickupCode();
+            string gatewayOrderId = "upi_ord_" + GenerateRandomToken(10);
+            string targetQueue = Convert.ToString(status["activeQueueName"]);
+            string now = UtcNowIso();
+
+            long orderId = 0;
+            _db.RunInTransaction(() =>
+            {
+                orderId = _db.ExecuteInsert(
+                    @"INSERT INTO orders (
+                        order_code, public_token, pickup_code, shop_id, file_id, quote_id,
+                        customer_name, customer_phone, consent_accepted, state, payment_status,
+                        target_printer_id, target_queue_name, created_at_utc, updated_at_utc
+                      ) VALUES (
+                        @ocode, @ptoken, @pcode, 1, @fid, @qid,
+                        @cname, @cphone, 1, 'awaiting_payment', 'pending',
+                        1, @tqueue, @now, @now
+                      );",
+                    new Dictionary<string, object>
+                    {
+                        { "ocode", orderCode },
+                        { "ptoken", publicToken },
+                        { "pcode", pickupCode },
+                        { "fid", quote["file_id"] },
+                        { "qid", quote["id"] },
+                        { "cname", SanitizeText(customerName, 40) },
+                        { "cphone", SanitizeText(customerPhone, 20) },
+                        { "tqueue", targetQueue },
+                        { "now", now }
+                    });
+
+                _db.ExecuteInsert(
+                    @"INSERT INTO payments (
+                        order_id, gateway_provider, gateway_order_id, amount_paise, currency,
+                        status, verified_by_webhook, webhook_calls_count, created_at_utc
+                      ) VALUES (
+                        @oid, 'UPI_GATEWAY', @goid, @amt, 'INR',
+                        'created', 0, 0, @now
+                      );",
+                    new Dictionary<string, object>
+                    {
+                        { "oid", orderId },
+                        { "goid", gatewayOrderId },
+                        { "amt", quote["total_amount_paise"] },
+                        { "now", now }
+                    });
+
+                LogAudit(orderId, "customer", "customer", "ORDER_CREATED_AWAITING_PAYMENT", "quoted", "awaiting_payment",
+                    string.Format(CultureInfo.InvariantCulture, "Order={0}, GatewayOrder={1}, AmountPaise={2}", orderCode, gatewayOrderId, quote["total_amount_paise"]));
+            });
+
+            return new Dictionary<string, object>
+            {
+                { "orderId", orderId },
+                { "orderCode", orderCode },
+                { "publicToken", publicToken },
+                { "state", "awaiting_payment" },
+                { "gatewayOrderId", gatewayOrderId },
+                { "amountInr", quote["total_amount_inr"] },
+                { "amountPaise", quote["total_amount_paise"] },
+                { "upiIntentUri", string.Format(CultureInfo.InvariantCulture, "upi://pay?pa=printaway@upi&pn=PrintAway&tr={0}&am={1:0.00}&cu=INR", gatewayOrderId, quote["total_amount_inr"]) }
+            };
+        }
+
+        private static string SanitizeText(string input, int maxLen)
+        {
+            if (string.IsNullOrWhiteSpace(input)) return "";
+            string s = input.Trim();
+            return s.Length <= maxLen ? s : s.Substring(0, maxLen);
+        }
+
+        // Processes a verified payment webhook.
+        // HARD RULE (PRD §1A, §7): Payment verification ONLY transitions to 'paid_awaiting_approval'.
+        // It NEVER transitions to 'queued' or dispatches a print job!
+        public Dictionary<string, object> ProcessVerifiedPaymentWebhook(
+            string rawPayload,
+            string providedSignatureHex,
+            string eventId,
+            string gatewayOrderId,
+            string gatewayPaymentId,
+            long amountPaise,
+            string paymentOutcome,
+            out int httpStatus,
+            out string errorMsg)
+        {
+            errorMsg = null;
+            httpStatus = 200;
+
+            string expectedSig = ComputeWebhookHmac(rawPayload);
+            if (string.IsNullOrWhiteSpace(providedSignatureHex) ||
+                !CryptographicEquals(expectedSig, providedSignatureHex.Trim()))
+            {
+                httpStatus = 401;
+                errorMsg = "Invalid webhook HMAC signature.";
+                LogAudit(null, "webhook", "gateway", "WEBHOOK_SIGNATURE_REJECTED", null, null, "GatewayOrder=" + gatewayOrderId);
+                return null;
+            }
+
+            if (string.IsNullOrWhiteSpace(eventId) || string.IsNullOrWhiteSpace(gatewayOrderId))
+            {
+                httpStatus = 400;
+                errorMsg = "Missing eventId or gatewayOrderId.";
+                return null;
+            }
+
+            return _db.RunInTransaction(() =>
+            {
+                var payment = _db.QuerySingle("SELECT * FROM payments WHERE gateway_order_id = @goid;",
+                    new Dictionary<string, object> { { "goid", gatewayOrderId } });
+                if (payment == null)
+                {
+                    throw new InvalidOperationException("Unknown gatewayOrderId: " + gatewayOrderId);
+                }
+
+                long orderId = Convert.ToInt64(payment["order_id"], CultureInfo.InvariantCulture);
+                var order = _db.QuerySingle("SELECT * FROM orders WHERE id = @oid;",
+                    new Dictionary<string, object> { { "oid", orderId } });
+
+                // Idempotency check: if already verified or same eventId received again, increment counter and return current state without side effects!
+                string existingEventId = Convert.ToString(payment["webhook_event_id"] ?? "");
+                string currentPayStatus = Convert.ToString(payment["status"] ?? "");
+                string currentOrderState = Convert.ToString(order["state"] ?? "");
+
+                if (string.Equals(currentPayStatus, "verified", StringComparison.OrdinalIgnoreCase) ||
+                    (!string.IsNullOrEmpty(existingEventId) && string.Equals(existingEventId, eventId, StringComparison.Ordinal)))
+                {
+                    _db.ExecuteNonQuery(
+                        "UPDATE payments SET webhook_calls_count = webhook_calls_count + 1 WHERE id = @pid;",
+                        new Dictionary<string, object> { { "pid", payment["id"] } });
+
+                    LogAudit(orderId, "webhook", "gateway", "PAYMENT_WEBHOOK_IDEMPOTENT_DUPLICATE", currentOrderState, currentOrderState,
+                        "Duplicate webhook ignored safely. EventId=" + eventId);
+
+                    return new Dictionary<string, object>
+                    {
+                        { "idempotentDuplicate", true },
+                        { "orderCode", order["order_code"] },
+                        { "state", currentOrderState },
+                        { "paymentStatus", currentPayStatus },
+                        { "autoPrinted", false }
+                    };
+                }
+
+                long expectedPaise = Convert.ToInt64(payment["amount_paise"], CultureInfo.InvariantCulture);
+                if (amountPaise != expectedPaise)
+                {
+                    LogAudit(orderId, "webhook", "gateway", "PAYMENT_AMOUNT_MISMATCH", currentOrderState, currentOrderState,
+                        string.Format(CultureInfo.InvariantCulture, "Expected={0}, Received={1}", expectedPaise, amountPaise));
+                    throw new InvalidOperationException("Payment amount mismatch.");
+                }
+
+                string now = UtcNowIso();
+                if (string.Equals(paymentOutcome, "failed", StringComparison.OrdinalIgnoreCase))
+                {
+                    _db.ExecuteNonQuery(
+                        @"UPDATE payments SET status = 'failed', webhook_event_id = @ev, gateway_payment_id = @gpid, webhook_calls_count = webhook_calls_count + 1 WHERE id = @pid;
+                          UPDATE orders SET state = 'payment_failed', payment_status = 'failed', updated_at_utc = @now WHERE id = @oid;",
+                        new Dictionary<string, object>
+                        {
+                            { "ev", eventId },
+                            { "gpid", gatewayPaymentId ?? "pay_failed" },
+                            { "pid", payment["id"] },
+                            { "oid", orderId },
+                            { "now", now }
+                        });
+                    LogAudit(orderId, "webhook", "gateway", "PAYMENT_FAILED", currentOrderState, "payment_failed", "EventId=" + eventId);
+                    return new Dictionary<string, object>
+                    {
+                        { "idempotentDuplicate", false },
+                        { "orderCode", order["order_code"] },
+                        { "state", "payment_failed" },
+                        { "paymentStatus", "failed" },
+                        { "autoPrinted", false }
+                    };
+                }
+
+                // Transition strictly to paid_awaiting_approval
+                _db.ExecuteNonQuery(
+                    @"UPDATE payments
+                      SET status = 'verified', verified_by_webhook = 1, webhook_event_id = @ev, gateway_payment_id = @gpid,
+                          webhook_calls_count = webhook_calls_count + 1, verified_at_utc = @now
+                      WHERE id = @pid;
+                      UPDATE orders
+                      SET state = 'paid_awaiting_approval', payment_status = 'verified', updated_at_utc = @now
+                      WHERE id = @oid;",
+                    new Dictionary<string, object>
+                    {
+                        { "ev", eventId },
+                        { "gpid", gatewayPaymentId ?? ("upi_pay_" + GenerateRandomToken(6)) },
+                        { "pid", payment["id"] },
+                        { "oid", orderId },
+                        { "now", now }
+                    });
+
+                LogAudit(orderId, "webhook", "gateway", "PAYMENT_VERIFIED_AWAITING_ADMIN_APPROVAL", currentOrderState, "paid_awaiting_approval",
+                    string.Format(CultureInfo.InvariantCulture, "EventId={0}, GatewayPaymentId={1}, AmountPaise={2}. Waiting for explicit admin approval.", eventId, gatewayPaymentId, amountPaise));
+
+                return new Dictionary<string, object>
+                {
+                    { "idempotentDuplicate", false },
+                    { "orderCode", order["order_code"] },
+                    { "state", "paid_awaiting_approval" },
+                    { "paymentStatus", "verified" },
+                    { "autoPrinted", false }
+                };
+            });
+        }
+
+        private static bool CryptographicEquals(string a, string b)
+        {
+            if (a == null || b == null || a.Length != b.Length) return false;
+            int diff = 0;
+            for (int i = 0; i < a.Length; i++)
+            {
+                diff |= char.ToLowerInvariant(a[i]) ^ char.ToLowerInvariant(b[i]);
+            }
+            return diff == 0;
+        }
+
+        public Dictionary<string, object> GetOrderByPublicToken(string publicToken)
+        {
+            var row = _db.QuerySingle(
+                @"SELECT o.*, q.document_pages, q.selected_pages, q.page_range_spec, q.copies, q.duplex_mode,
+                         q.printed_sides, q.physical_sheets, q.total_amount_inr, q.rate_per_side_inr,
+                         f.original_filename_redacted, f.is_deleted,
+                         j.windows_spooler_job_id, j.state AS job_state
+                  FROM orders o
+                  JOIN quotes q ON o.quote_id = q.id
+                  JOIN files f ON o.file_id = f.id
+                  LEFT JOIN print_jobs j ON j.order_id = o.id
+                  WHERE o.public_token = @pt;",
+                new Dictionary<string, object> { { "pt", publicToken ?? "" } });
+
+            if (row == null) return null;
+
+            string state = Convert.ToString(row["state"]);
+            bool showPickupCode = state == "approved" || state == "queued" || state == "leased" ||
+                                  state == "downloading" || state == "rendering" ||
+                                  state == "submitted_to_spooler" || state == "ready_for_pickup" ||
+                                  state == "collected";
+
+            return new Dictionary<string, object>
+            {
+                { "orderCode", row["order_code"] },
+                { "publicToken", row["public_token"] },
+                { "state", state },
+                { "stateDescription", DescribeStateForCustomer(state) },
+                { "paymentStatus", row["payment_status"] },
+                { "pickupCode", showPickupCode ? row["pickup_code"] : "Issued upon approval" },
+                { "fileName", row["original_filename_redacted"] },
+                { "fileDeletedAfterCollection", Convert.ToInt64(row["is_deleted"]) != 0 },
+                { "documentPages", row["document_pages"] },
+                { "selectedPages", row["selected_pages"] },
+                { "pageRange", row["page_range_spec"] },
+                { "copies", row["copies"] },
+                { "duplexMode", row["duplex_mode"] },
+                { "printedSides", row["printed_sides"] },
+                { "physicalSheets", row["physical_sheets"] },
+                { "totalAmountInr", row["total_amount_inr"] },
+                { "holdOrRejectReason", row["hold_or_reject_reason"] },
+                { "createdAtUtc", row["created_at_utc"] },
+                { "createdAtIst", ToIstDisplay(Convert.ToString(row["created_at_utc"])) },
+                { "updatedAtUtc", row["updated_at_utc"] },
+                { "updatedAtIst", ToIstDisplay(Convert.ToString(row["updated_at_utc"])) }
+            };
+        }
+
+        private static string DescribeStateForCustomer(string state)
+        {
+            switch (state)
+            {
+                case "awaiting_payment": return "Waiting for online UPI payment confirmation.";
+                case "paid_awaiting_approval": return "UPI payment verified! Waiting for shop admin to approve print release.";
+                case "on_hold": return "Order placed on hold by shop admin. Please check with the counter.";
+                case "approved":
+                case "queued": return "Approved by admin! Queued for Xerox B1025 printer.";
+                case "leased":
+                case "downloading":
+                case "rendering": return "Printer worker is preparing and rendering your PDF.";
+                case "submitted_to_spooler": return "Sent to Windows Print Spooler (Xerox B1025). Waiting for staff to verify physical pages.";
+                case "ready_for_pickup": return "Printed & verified! Show your Pickup Code at the counter to collect your pages.";
+                case "collected": return "Collected at counter. Your source PDF has been purged from host storage.";
+                case "rejected_refund_pending":
+                case "refunded": return "Order rejected by admin; refund initiated.";
+                case "reconciliation_required": return "Printer check in progress by counter staff (preventing duplicate print).";
+                case "cancelled": return "Order cancelled.";
+                default: return state;
+            }
+        }
+
+        // Admin Authentication
+        public Dictionary<string, object> AuthenticateAdmin(string username, string password, out string errorMsg)
+        {
+            errorMsg = null;
+            var user = _db.QuerySingle("SELECT * FROM users WHERE username = @u AND is_active = 1;",
+                new Dictionary<string, object> { { "u", username ?? "" } });
+            if (user == null)
+            {
+                errorMsg = "Invalid admin credentials.";
+                LogAudit(null, "admin", username ?? "unknown", "ADMIN_LOGIN_FAILED", null, null, "Unknown username");
+                return null;
+            }
+
+            string salt = Convert.ToString(user["password_salt"]);
+            string expectedHash = Convert.ToString(user["password_hash"]);
+            string actualHash = HashPassword(password ?? "", salt);
+            if (!CryptographicEquals(expectedHash, actualHash))
+            {
+                errorMsg = "Invalid admin credentials.";
+                LogAudit(null, "admin", username, "ADMIN_LOGIN_FAILED", null, null, "Wrong password");
+                return null;
+            }
+
+            string sessionToken = "sess_" + GenerateRandomToken(20);
+            string csrfToken = "csrf_" + GenerateRandomToken(16);
+            string now = UtcNowIso();
+            string exp = UtcNowIso(8 * 3600);
+
+            _db.ExecuteInsert(
+                @"INSERT INTO admin_sessions (token, csrf_token, user_id, username, role, created_at_utc, expires_at_utc)
+                  VALUES (@tok, @csrf, @uid, @uname, @role, @now, @exp);",
+                new Dictionary<string, object>
+                {
+                    { "tok", sessionToken },
+                    { "csrf", csrfToken },
+                    { "uid", user["id"] },
+                    { "uname", user["username"] },
+                    { "role", user["role"] },
+                    { "now", now },
+                    { "exp", exp }
+                });
+
+            LogAudit(null, "admin", Convert.ToString(user["username"]), "ADMIN_LOGIN_SUCCESS", null, null, "Admin session established");
+
+            return new Dictionary<string, object>
+            {
+                { "sessionToken", sessionToken },
+                { "csrfToken", csrfToken },
+                { "userId", user["id"] },
+                { "user_id", user["id"] },
+                { "username", user["username"] },
+                { "displayName", user["display_name"] },
+                { "role", user["role"] },
+                { "expiresAtUtc", exp }
+            };
+        }
+
+        public Dictionary<string, object> ValidateAdminSession(string sessionToken, string csrfToken, bool requireCsrf)
+        {
+            if (string.IsNullOrWhiteSpace(sessionToken)) return null;
+            var sess = _db.QuerySingle("SELECT * FROM admin_sessions WHERE token = @t;",
+                new Dictionary<string, object> { { "t", sessionToken } });
+            if (sess == null) return null;
+
+            string exp = Convert.ToString(sess["expires_at_utc"]);
+            if (string.CompareOrdinal(exp, UtcNowIso()) < 0) return null;
+
+            if (requireCsrf)
+            {
+                string expectedCsrf = Convert.ToString(sess["csrf_token"]);
+                if (string.IsNullOrWhiteSpace(csrfToken) || !CryptographicEquals(expectedCsrf, csrfToken))
+                    return null;
+            }
+            return sess;
+        }
+
+        // HARD RULE: Explicit Admin Approval Gate (paid_awaiting_approval / on_hold -> approved -> queued)
+        public Dictionary<string, object> AdminApproveOrder(long orderId, Dictionary<string, object> adminSession, string reason, out int httpStatus, out string errorMsg)
+        {
+            errorMsg = null;
+            httpStatus = 200;
+            string adminUser = Convert.ToString(adminSession["username"]);
+            long adminId = Convert.ToInt64(adminSession["user_id"], CultureInfo.InvariantCulture);
+
+            try
+            {
+                return _db.RunInTransaction(() =>
+                {
+                    var order = _db.QuerySingle("SELECT * FROM orders WHERE id = @id;", new Dictionary<string, object> { { "id", orderId } });
+                    if (order == null)
+                    {
+                        throw new KeyNotFoundException("Order not found.");
+                    }
+
+                    string currentState = Convert.ToString(order["state"]);
+                    string paymentStatus = Convert.ToString(order["payment_status"]);
+
+                    // Hard Rule 3: Only a verified, non-refunded paid order can be approved
+                    if (!string.Equals(paymentStatus, "verified", StringComparison.OrdinalIgnoreCase))
+                    {
+                        throw new InvalidOperationException("Cannot approve order: payment is not verified (current payment_status=" + paymentStatus + ").");
+                    }
+
+                    // Hard Rule 4: An order cannot be approved twice or result in duplicate dispatch
+                    var existingJob = _db.QuerySingle("SELECT * FROM print_jobs WHERE order_id = @oid;", new Dictionary<string, object> { { "oid", orderId } });
+                    if (existingJob != null)
+                    {
+                        throw new InvalidOperationException("Order #" + order["order_code"] + " has already been approved and assigned PrintJob #" + existingJob["id"] + ".");
+                    }
+
+                    if (currentState != "paid_awaiting_approval" && currentState != "on_hold")
+                    {
+                        throw new InvalidOperationException("Order in state '" + currentState + "' cannot transition to approved/queued.");
+                    }
+
+                    var quote = _db.QuerySingle("SELECT * FROM quotes WHERE id = @qid;", new Dictionary<string, object> { { "qid", order["quote_id"] } });
+                    var activeQueueRow = _db.QuerySingle("SELECT * FROM printer_queues WHERE is_active_selected = 1 LIMIT 1;");
+                    string targetQueue = activeQueueRow != null ? Convert.ToString(activeQueueRow["windows_queue_name"]) : VerifiedXeroxQueueName;
+                    string now = UtcNowIso();
+                    string approvalReason = string.IsNullOrWhiteSpace(reason) ? "Approved by counter admin for Xerox B1025 dispatch" : reason.Trim();
+
+                    _db.ExecuteInsert(
+                        @"INSERT INTO approvals (order_id, admin_user_id, admin_username, decision, reason, target_queue_name, amount_paise_snapshot, printed_sides_snapshot, created_at_utc)
+                          VALUES (@oid, @auid, @auname, 'approved', @reason, @tqueue, @amt, @sides, @now);",
+                        new Dictionary<string, object>
+                        {
+                            { "oid", orderId },
+                            { "auid", adminId },
+                            { "auname", adminUser },
+                            { "reason", approvalReason },
+                            { "tqueue", targetQueue },
+                            { "amt", quote["total_amount_paise"] },
+                            { "sides", quote["printed_sides"] },
+                            { "now", now }
+                        });
+
+                    _db.ExecuteNonQuery(
+                        "UPDATE orders SET state = 'queued', target_queue_name = @tqueue, hold_or_reject_reason = NULL, updated_at_utc = @now WHERE id = @oid;",
+                        new Dictionary<string, object> { { "tqueue", targetQueue }, { "now", now }, { "oid", orderId } });
+
+                    string idempotencyKey = "job_ord_" + orderId.ToString(CultureInfo.InvariantCulture);
+                    long jobId = _db.ExecuteInsert(
+                        @"INSERT INTO print_jobs (order_id, idempotency_key, station_id, printer_id, target_queue_name, state, attempts, created_at_utc, updated_at_utc)
+                          VALUES (@oid, @ikey, 1, 1, @tqueue, 'queued', 0, @now, @now);",
+                        new Dictionary<string, object>
+                        {
+                            { "oid", orderId },
+                            { "ikey", idempotencyKey },
+                            { "tqueue", targetQueue },
+                            { "now", now }
+                        });
+
+                    LogAudit(orderId, "admin", adminUser, "ADMIN_APPROVED_AND_QUEUED", currentState, "queued",
+                        string.Format(CultureInfo.InvariantCulture, "PrintJobId={0}, TargetQueue={1}, Reason={2}", jobId, targetQueue, approvalReason));
+
+                    return new Dictionary<string, object>
+                    {
+                        { "orderId", orderId },
+                        { "orderCode", order["order_code"] },
+                        { "state", "queued" },
+                        { "printJobId", jobId },
+                        { "targetQueueName", targetQueue },
+                        { "approvedBy", adminUser },
+                        { "approvedAtUtc", now }
+                    };
+                });
+            }
+            catch (KeyNotFoundException ex)
+            {
+                httpStatus = 404;
+                errorMsg = ex.Message;
+                return null;
+            }
+            catch (InvalidOperationException ex)
+            {
+                httpStatus = 409;
+                errorMsg = ex.Message;
+                return null;
+            }
+        }
+
+        public Dictionary<string, object> AdminHoldOrder(long orderId, Dictionary<string, object> adminSession, string reason, out string errorMsg)
+        {
+            errorMsg = null;
+            string adminUser = Convert.ToString(adminSession["username"]);
+            long adminId = Convert.ToInt64(adminSession["user_id"], CultureInfo.InvariantCulture);
+            string holdReason = string.IsNullOrWhiteSpace(reason) ? "Placed on hold by admin" : reason.Trim();
+
+            try
+            {
+                return _db.RunInTransaction(() =>
+                {
+                    var order = _db.QuerySingle("SELECT * FROM orders WHERE id = @id;", new Dictionary<string, object> { { "id", orderId } });
+                    if (order == null) throw new InvalidOperationException("Order not found.");
+
+                    string currentState = Convert.ToString(order["state"]);
+                    if (currentState != "paid_awaiting_approval")
+                        throw new InvalidOperationException("Only orders in 'paid_awaiting_approval' can be placed on hold (current=" + currentState + ").");
+
+                    var quote = _db.QuerySingle("SELECT * FROM quotes WHERE id = @qid;", new Dictionary<string, object> { { "qid", order["quote_id"] } });
+                    string now = UtcNowIso();
+
+                    _db.ExecuteInsert(
+                        @"INSERT INTO approvals (order_id, admin_user_id, admin_username, decision, reason, target_queue_name, amount_paise_snapshot, printed_sides_snapshot, created_at_utc)
+                          VALUES (@oid, @auid, @auname, 'on_hold', @reason, @tqueue, @amt, @sides, @now);",
+                        new Dictionary<string, object>
+                        {
+                            { "oid", orderId },
+                            { "auid", adminId },
+                            { "auname", adminUser },
+                            { "reason", holdReason },
+                            { "tqueue", order["target_queue_name"] },
+                            { "amt", quote["total_amount_paise"] },
+                            { "sides", quote["printed_sides"] },
+                            { "now", now }
+                        });
+
+                    _db.ExecuteNonQuery(
+                        "UPDATE orders SET state = 'on_hold', hold_or_reject_reason = @reason, updated_at_utc = @now WHERE id = @oid;",
+                        new Dictionary<string, object> { { "reason", holdReason }, { "now", now }, { "oid", orderId } });
+
+                    LogAudit(orderId, "admin", adminUser, "ADMIN_ORDER_ON_HOLD", currentState, "on_hold", holdReason);
+                    return new Dictionary<string, object> { { "orderId", orderId }, { "state", "on_hold" }, { "reason", holdReason } };
+                });
+            }
+            catch (Exception ex)
+            {
+                errorMsg = ex.Message;
+                return null;
+            }
+        }
+
+        public Dictionary<string, object> AdminRejectAndRefundOrder(long orderId, Dictionary<string, object> adminSession, string reason, out string errorMsg)
+        {
+            errorMsg = null;
+            string adminUser = Convert.ToString(adminSession["username"]);
+            long adminId = Convert.ToInt64(adminSession["user_id"], CultureInfo.InvariantCulture);
+            string rejectReason = string.IsNullOrWhiteSpace(reason) ? "Rejected by admin; full refund issued" : reason.Trim();
+
+            try
+            {
+                return _db.RunInTransaction(() =>
+                {
+                    var order = _db.QuerySingle("SELECT * FROM orders WHERE id = @id;", new Dictionary<string, object> { { "id", orderId } });
+                    if (order == null) throw new InvalidOperationException("Order not found.");
+
+                    string currentState = Convert.ToString(order["state"]);
+                    if (currentState != "paid_awaiting_approval" && currentState != "on_hold" && currentState != "reconciliation_required" && currentState != "failed")
+                        throw new InvalidOperationException("Cannot reject order in state '" + currentState + "'.");
+
+                    var payment = _db.QuerySingle("SELECT * FROM payments WHERE order_id = @oid;", new Dictionary<string, object> { { "oid", orderId } });
+                    var quote = _db.QuerySingle("SELECT * FROM quotes WHERE id = @qid;", new Dictionary<string, object> { { "qid", order["quote_id"] } });
+                    string now = UtcNowIso();
+
+                    _db.ExecuteInsert(
+                        @"INSERT INTO approvals (order_id, admin_user_id, admin_username, decision, reason, target_queue_name, amount_paise_snapshot, printed_sides_snapshot, created_at_utc)
+                          VALUES (@oid, @auid, @auname, 'rejected', @reason, @tqueue, @amt, @sides, @now);",
+                        new Dictionary<string, object>
+                        {
+                            { "oid", orderId },
+                            { "auid", adminId },
+                            { "auname", adminUser },
+                            { "reason", rejectReason },
+                            { "tqueue", order["target_queue_name"] },
+                            { "amt", quote["total_amount_paise"] },
+                            { "sides", quote["printed_sides"] },
+                            { "now", now }
+                        });
+
+                    long refundId = _db.ExecuteInsert(
+                        @"INSERT INTO refunds (order_id, payment_id, amount_paise, reason, status, initiated_by, created_at_utc)
+                          VALUES (@oid, @pid, @amt, @reason, 'refunded', @by, @now);",
+                        new Dictionary<string, object>
+                        {
+                            { "oid", orderId },
+                            { "pid", payment != null ? payment["id"] : 0 },
+                            { "amt", quote["total_amount_paise"] },
+                            { "reason", rejectReason },
+                            { "by", adminUser },
+                            { "now", now }
+                        });
+
+                    _db.ExecuteNonQuery(
+                        @"UPDATE orders SET state = 'refunded', payment_status = 'refunded', hold_or_reject_reason = @reason, updated_at_utc = @now WHERE id = @oid;
+                          UPDATE payments SET status = 'refunded' WHERE order_id = @oid;
+                          UPDATE print_jobs SET state = 'cancelled', updated_at_utc = @now WHERE order_id = @oid AND state IN ('queued', 'reconciliation_required', 'failed');",
+                        new Dictionary<string, object> { { "reason", rejectReason }, { "now", now }, { "oid", orderId } });
+
+                    LogAudit(orderId, "admin", adminUser, "ADMIN_REJECTED_AND_REFUNDED", currentState, "refunded",
+                        string.Format(CultureInfo.InvariantCulture, "RefundId={0}, Reason={1}", refundId, rejectReason));
+
+                    return new Dictionary<string, object>
+                    {
+                        { "orderId", orderId },
+                        { "state", "refunded" },
+                        { "paymentStatus", "refunded" },
+                        { "refundId", refundId },
+                        { "reason", rejectReason }
+                    };
+                });
+            }
+            catch (Exception ex)
+            {
+                errorMsg = ex.Message;
+                return null;
+            }
+        }
+
+        public Dictionary<string, object> AdminCancelBeforePrint(long orderId, Dictionary<string, object> adminSession, string reason, out string errorMsg)
+        {
+            errorMsg = null;
+            string adminUser = Convert.ToString(adminSession["username"]);
+            string cancelReason = string.IsNullOrWhiteSpace(reason) ? "Cancelled by admin before print" : reason.Trim();
+
+            try
+            {
+                return _db.RunInTransaction(() =>
+                {
+                    var order = _db.QuerySingle("SELECT * FROM orders WHERE id = @id;", new Dictionary<string, object> { { "id", orderId } });
+                    if (order == null) throw new InvalidOperationException("Order not found.");
+
+                    string currentState = Convert.ToString(order["state"]);
+                    if (currentState == "submitted_to_spooler" || currentState == "ready_for_pickup" || currentState == "collected")
+                        throw new InvalidOperationException("Order has already been sent to the printer or collected.");
+
+                    string now = UtcNowIso();
+                    string newPayStatus = Convert.ToString(order["payment_status"]) == "verified" ? "refund_pending" : "cancelled";
+
+                    _db.ExecuteNonQuery(
+                        @"UPDATE orders SET state = 'cancelled', payment_status = @pstat, hold_or_reject_reason = @reason, updated_at_utc = @now WHERE id = @oid;
+                          UPDATE print_jobs SET state = 'cancelled', lease_token = NULL, updated_at_utc = @now WHERE order_id = @oid;",
+                        new Dictionary<string, object> { { "pstat", newPayStatus }, { "reason", cancelReason }, { "now", now }, { "oid", orderId } });
+
+                    LogAudit(orderId, "admin", adminUser, "ADMIN_CANCELLED_ORDER", currentState, "cancelled", cancelReason);
+                    return new Dictionary<string, object> { { "orderId", orderId }, { "state", "cancelled" }, { "paymentStatus", newPayStatus } };
+                });
+            }
+            catch (Exception ex)
+            {
+                errorMsg = ex.Message;
+                return null;
+            }
+        }
+
+        public Dictionary<string, object> AdminReconcileOrder(long orderId, Dictionary<string, object> adminSession, string resolutionAction, string reason, out string errorMsg)
+        {
+            errorMsg = null;
+            string adminUser = Convert.ToString(adminSession["username"]);
+            string recReason = string.IsNullOrWhiteSpace(reason) ? "Manual spooler/output reconciliation by admin" : reason.Trim();
+
+            try
+            {
+                return _db.RunInTransaction(() =>
+                {
+                    var order = _db.QuerySingle("SELECT * FROM orders WHERE id = @id;", new Dictionary<string, object> { { "id", orderId } });
+                    if (order == null) throw new InvalidOperationException("Order not found.");
+
+                    string currentState = Convert.ToString(order["state"]);
+                    if (currentState != "reconciliation_required" && currentState != "failed")
+                        throw new InvalidOperationException("Order is not in reconciliation_required or failed state.");
+
+                    string now = UtcNowIso();
+                    if (string.Equals(resolutionAction, "confirm_printed", StringComparison.OrdinalIgnoreCase))
+                    {
+                        _db.ExecuteNonQuery(
+                            @"UPDATE orders SET state = 'ready_for_pickup', hold_or_reject_reason = NULL, updated_at_utc = @now WHERE id = @oid;
+                              UPDATE print_jobs SET state = 'submitted_to_spooler', lease_token = NULL, updated_at_utc = @now WHERE order_id = @oid;",
+                            new Dictionary<string, object> { { "now", now }, { "oid", orderId } });
+                        LogAudit(orderId, "admin", adminUser, "RECONCILIATION_CONFIRMED_PRINTED", currentState, "ready_for_pickup", recReason);
+                        return new Dictionary<string, object> { { "orderId", orderId }, { "state", "ready_for_pickup" } };
+                    }
+                    else if (string.Equals(resolutionAction, "authorize_reprint", StringComparison.OrdinalIgnoreCase))
+                    {
+                        _db.ExecuteNonQuery(
+                            @"UPDATE orders SET state = 'queued', hold_or_reject_reason = NULL, updated_at_utc = @now WHERE id = @oid;
+                              UPDATE print_jobs SET state = 'queued', lease_token = NULL, lease_expires_utc = NULL, last_error = NULL, updated_at_utc = @now WHERE order_id = @oid;",
+                            new Dictionary<string, object> { { "now", now }, { "oid", orderId } });
+                        LogAudit(orderId, "admin", adminUser, "RECONCILIATION_AUTHORIZED_SAFE_REPRINT", currentState, "queued", recReason);
+                        return new Dictionary<string, object> { { "orderId", orderId }, { "state", "queued" } };
+                    }
+                    else
+                    {
+                        throw new InvalidOperationException("Invalid resolutionAction. Use 'confirm_printed' or 'authorize_reprint'.");
+                    }
+                });
+            }
+            catch (Exception ex)
+            {
+                errorMsg = ex.Message;
+                return null;
+            }
+        }
+
+        // Hard Rule 5: Spooler submitted != paper printed. Staff confirms physical readiness.
+        public Dictionary<string, object> AdminMarkOrderReadyForPickup(long orderId, Dictionary<string, object> adminSession, out string errorMsg)
+        {
+            errorMsg = null;
+            string adminUser = Convert.ToString(adminSession["username"]);
+            try
+            {
+                return _db.RunInTransaction(() =>
+                {
+                    var order = _db.QuerySingle("SELECT * FROM orders WHERE id = @id;", new Dictionary<string, object> { { "id", orderId } });
+                    if (order == null) throw new InvalidOperationException("Order not found.");
+
+                    string currentState = Convert.ToString(order["state"]);
+                    if (currentState != "submitted_to_spooler")
+                        throw new InvalidOperationException("Order must be in 'submitted_to_spooler' before marking 'ready_for_pickup' (current=" + currentState + ").");
+
+                    string now = UtcNowIso();
+                    _db.ExecuteNonQuery("UPDATE orders SET state = 'ready_for_pickup', updated_at_utc = @now WHERE id = @oid;",
+                        new Dictionary<string, object> { { "now", now }, { "oid", orderId } });
+
+                    LogAudit(orderId, "admin", adminUser, "STAFF_VERIFIED_PHYSICAL_PRINT_READY", currentState, "ready_for_pickup",
+                        "Physical pages verified in output tray; ready for customer counter pickup.");
+
+                    return new Dictionary<string, object>
+                    {
+                        { "orderId", orderId },
+                        { "orderCode", order["order_code"] },
+                        { "state", "ready_for_pickup" },
+                        { "pickupCode", order["pickup_code"] }
+                    };
+                });
+            }
+            catch (Exception ex)
+            {
+                errorMsg = ex.Message;
+                return null;
+            }
+        }
+
+        // Staff verifies customer's pickup code at counter and marks collected -> purges source PDF
+        public Dictionary<string, object> AdminMarkOrderCollected(long orderId, string providedPickupCode, Dictionary<string, object> adminSession, out string errorMsg)
+        {
+            errorMsg = null;
+            string adminUser = Convert.ToString(adminSession["username"]);
+            try
+            {
+                long fileIdToPurge = 0;
+                Dictionary<string, object> result = _db.RunInTransaction(() =>
+                {
+                    var order = _db.QuerySingle("SELECT * FROM orders WHERE id = @id;", new Dictionary<string, object> { { "id", orderId } });
+                    if (order == null) throw new InvalidOperationException("Order not found.");
+
+                    string currentState = Convert.ToString(order["state"]);
+                    if (currentState != "ready_for_pickup")
+                        throw new InvalidOperationException("Order must be in 'ready_for_pickup' before collection handover (current=" + currentState + ").");
+
+                    string expectedCode = Convert.ToString(order["pickup_code"]);
+                    if (string.IsNullOrWhiteSpace(providedPickupCode) ||
+                        !string.Equals(expectedCode, providedPickupCode.Trim(), StringComparison.OrdinalIgnoreCase))
+                    {
+                        LogAudit(orderId, "admin", adminUser, "PICKUP_CODE_MISMATCH", currentState, currentState, "Invalid pickup code entered");
+                        throw new InvalidOperationException("Pickup verification code mismatch! Please check the customer's 6-character pickup code.");
+                    }
+
+                    string now = UtcNowIso();
+                    _db.ExecuteNonQuery("UPDATE orders SET state = 'collected', updated_at_utc = @now WHERE id = @oid;",
+                        new Dictionary<string, object> { { "now", now }, { "oid", orderId } });
+
+                    fileIdToPurge = Convert.ToInt64(order["file_id"], CultureInfo.InvariantCulture);
+                    LogAudit(orderId, "admin", adminUser, "ORDER_COLLECTED_AT_COUNTER", currentState, "collected", "Pickup code verified; physical pages handed over.");
+
+                    return new Dictionary<string, object>
+                    {
+                        { "orderId", orderId },
+                        { "orderCode", order["order_code"] },
+                        { "state", "collected" }
+                    };
+                });
+
+                if (fileIdToPurge > 0)
+                {
+                    PurgeStoredFile(fileIdToPurge, orderId, "RETENTION_PURGE_ON_COLLECTION");
+                    result["sourcePdfPurged"] = true;
+                }
+                return result;
+            }
+            catch (Exception ex)
+            {
+                errorMsg = ex.Message;
+                return null;
+            }
+        }
+
+        public bool PurgeStoredFile(long fileId, long? orderId, string reason)
+        {
+            var fileRow = _db.QuerySingle("SELECT * FROM files WHERE id = @fid;", new Dictionary<string, object> { { "fid", fileId } });
+            if (fileRow == null) return false;
+            if (Convert.ToInt64(fileRow["is_deleted"]) != 0) return true;
+
+            string relPath = Convert.ToString(fileRow["storage_relative_path"]);
+            string fullPath = Path.Combine(_vaultDirectory, relPath);
+            try
+            {
+                if (File.Exists(fullPath))
+                {
+                    File.Delete(fullPath);
+                }
+            }
+            catch { }
+
+            string now = UtcNowIso();
+            _db.ExecuteNonQuery("UPDATE files SET is_deleted = 1, deleted_at_utc = @now WHERE id = @fid;",
+                new Dictionary<string, object> { { "now", now }, { "fid", fileId } });
+
+            LogAudit(orderId, "system", "retention-cleaner", "SOURCE_PDF_DELETED", null, null,
+                string.Format(CultureInfo.InvariantCulture, "FileId={0}, Reason={1}", fileId, reason));
+            return true;
+        }
+
+        public int RunRetentionCleanupPass()
+        {
+            string now = UtcNowIso();
+            var expiredFiles = _db.Query(
+                "SELECT id FROM files WHERE is_deleted = 0 AND retention_deadline_utc < @now;",
+                new Dictionary<string, object> { { "now", now } });
+            int count = 0;
+            foreach (var row in expiredFiles)
+            {
+                long fid = Convert.ToInt64(row["id"], CultureInfo.InvariantCulture);
+                if (PurgeStoredFile(fid, null, "TTL_RETENTION_DEADLINE_EXPIRED"))
+                    count++;
+            }
+            return count;
+        }
+
+        // Worker Heartbeat & Atomic Job Lease (A03, A04, A06, A07, A08, A10)
+        public bool ValidateWorkerToken(string providedToken)
+        {
+            return !string.IsNullOrWhiteSpace(providedToken) && CryptographicEquals(_workerSharedToken, providedToken.Trim());
+        }
+
+        public void RecordWorkerHeartbeat(int freeRamMb, int freeDiskMb, bool spoolerRunning, bool printerReady, string statusMessage)
+        {
+            string now = UtcNowIso();
+            _db.ExecuteNonQuery(
+                @"UPDATE stations
+                  SET last_heartbeat_utc = @now, free_ram_mb = @ram, free_disk_mb = @disk,
+                      spooler_running = @spool, printer_ready = @ready, status_message = @msg
+                  WHERE id = 1;",
+                new Dictionary<string, object>
+                {
+                    { "now", now },
+                    { "ram", freeRamMb },
+                    { "disk", freeDiskMb },
+                    { "spool", spoolerRunning ? 1 : 0 },
+                    { "ready", printerReady ? 1 : 0 },
+                    { "msg", statusMessage ?? "OK" }
+                });
+        }
+
+        public Dictionary<string, object> ReconcileExpiredWorkerLeases()
+        {
+            string now = UtcNowIso();
+            int recoveredToQueue = 0;
+            int flaggedForReconciliation = 0;
+
+            _db.RunInTransaction(() =>
+            {
+                var expiredJobs = _db.Query(
+                    @"SELECT * FROM print_jobs
+                      WHERE state IN ('leased', 'downloading', 'rendering')
+                        AND lease_expires_utc IS NOT NULL
+                        AND lease_expires_utc < @now;",
+                    new Dictionary<string, object> { { "now", now } });
+
+                foreach (var job in expiredJobs)
+                {
+                    long jobId = Convert.ToInt64(job["id"], CultureInfo.InvariantCulture);
+                    long orderId = Convert.ToInt64(job["order_id"], CultureInfo.InvariantCulture);
+                    string jobState = Convert.ToString(job["state"]);
+
+                    if (jobState == "leased" || jobState == "downloading")
+                    {
+                        // Safe recovery: worker disconnected before rendering/spooling started (PRD §14)
+                        _db.ExecuteNonQuery(
+                            @"UPDATE print_jobs SET state = 'queued', lease_token = NULL, lease_expires_utc = NULL, updated_at_utc = @now WHERE id = @jid;
+                              UPDATE orders SET state = 'queued', updated_at_utc = @now WHERE id = @oid;",
+                            new Dictionary<string, object> { { "now", now }, { "jid", jobId }, { "oid", orderId } });
+                        LogAudit(orderId, "system", "lease-reconciler", "STALE_LEASE_RECOVERED_PRE_RENDER", jobState, "queued",
+                            "Worker disconnected during " + jobState + " before spooler dispatch; safely returned to queue.");
+                        recoveredToQueue++;
+                    }
+                    else
+                    {
+                        // HARD RULE (A07, PRD §4.2, §14): Crash during/after rendering or spooler submission NEVER auto-retries!
+                        _db.ExecuteNonQuery(
+                            @"UPDATE print_jobs SET state = 'reconciliation_required', lease_token = NULL, last_error = 'Worker lease expired during rendering/spooling', updated_at_utc = @now WHERE id = @jid;
+                              UPDATE orders SET state = 'reconciliation_required', hold_or_reject_reason = 'Worker interrupted during print dispatch; requires staff spooler/tray inspection', updated_at_utc = @now WHERE id = @oid;",
+                            new Dictionary<string, object> { { "now", now }, { "jid", jobId }, { "oid", orderId } });
+                        LogAudit(orderId, "system", "lease-reconciler", "CRASH_AFTER_RENDER_RECONCILIATION_REQUIRED", jobState, "reconciliation_required",
+                            "No blind retry: requires staff confirmation of physical output or spooler state.");
+                        flaggedForReconciliation++;
+                    }
+                }
+            });
+
+            return new Dictionary<string, object>
+            {
+                { "recoveredToQueue", recoveredToQueue },
+                { "flaggedForReconciliation", flaggedForReconciliation }
+            };
+        }
+
+        public Dictionary<string, object> ClaimNextQueuedJob(int leaseSeconds = 30)
+        {
+            ReconcileExpiredWorkerLeases();
+
+            return _db.RunInTransaction(() =>
+            {
+                var station = _db.QuerySingle("SELECT * FROM stations WHERE id = 1;");
+                if (Convert.ToInt64(station["printer_ready"]) == 0 || Convert.ToInt64(station["spooler_running"]) == 0)
+                {
+                    return null;
+                }
+
+                // Requirement A08: Strictly one active print job at a time on pilot machine!
+                long activeCount = _db.ExecuteScalarLong(
+                    "SELECT COUNT(*) FROM print_jobs WHERE state IN ('leased', 'downloading', 'rendering');");
+                if (activeCount > 0)
+                {
+                    return null;
+                }
+
+                var nextJob = _db.QuerySingle(
+                    @"SELECT j.*, o.order_code, o.file_id, o.quote_id, o.state AS order_state, o.payment_status,
+                             q.page_range_spec, q.document_pages, q.copies, q.duplex_mode
+                      FROM print_jobs j
+                      JOIN orders o ON j.order_id = o.id
+                      JOIN quotes q ON o.quote_id = q.id
+                      WHERE j.state = 'queued' AND o.state = 'queued' AND o.payment_status = 'verified'
+                      ORDER BY j.id ASC
+                      LIMIT 1;");
+
+                if (nextJob == null) return null;
+
+                long jobId = Convert.ToInt64(nextJob["id"], CultureInfo.InvariantCulture);
+                long orderId = Convert.ToInt64(nextJob["order_id"], CultureInfo.InvariantCulture);
+                string leaseToken = "lease_" + GenerateRandomToken(16);
+                string now = UtcNowIso();
+                string leaseExp = UtcNowIso(leaseSeconds);
+
+                _db.ExecuteNonQuery(
+                    @"UPDATE print_jobs
+                      SET state = 'leased', lease_token = @ltok, lease_expires_utc = @lexp, attempts = attempts + 1, updated_at_utc = @now
+                      WHERE id = @jid;
+                      UPDATE orders
+                      SET state = 'leased', updated_at_utc = @now
+                      WHERE id = @oid;",
+                    new Dictionary<string, object>
+                    {
+                        { "ltok", leaseToken },
+                        { "lexp", leaseExp },
+                        { "now", now },
+                        { "jid", jobId },
+                        { "oid", orderId }
+                    });
+
+                LogAudit(orderId, "worker", "STATION-PILOT-01", "JOB_LEASED_BY_WORKER", "queued", "leased",
+                    string.Format(CultureInfo.InvariantCulture, "JobId={0}, LeaseExpires={1}", jobId, leaseExp));
+
+                return new Dictionary<string, object>
+                {
+                    { "jobId", jobId },
+                    { "orderId", orderId },
+                    { "orderCode", nextJob["order_code"] },
+                    { "leaseToken", leaseToken },
+                    { "leaseExpiresUtc", leaseExp },
+                    { "targetQueueName", nextJob["target_queue_name"] },
+                    { "documentPages", nextJob["document_pages"] },
+                    { "pageRange", nextJob["page_range_spec"] },
+                    { "copies", nextJob["copies"] },
+                    { "duplexMode", nextJob["duplex_mode"] },
+                    { "downloadUrl", "/api/worker/jobs/" + jobId.ToString(CultureInfo.InvariantCulture) + "/download?leaseToken=" + leaseToken }
+                };
+            });
+        }
+
+        public byte[] GetJobPdfBytesForWorker(long jobId, string leaseToken, out string errorMsg)
+        {
+            errorMsg = null;
+            var job = _db.QuerySingle(
+                @"SELECT j.*, o.file_id, f.storage_relative_path, f.is_deleted
+                  FROM print_jobs j
+                  JOIN orders o ON j.order_id = o.id
+                  JOIN files f ON o.file_id = f.id
+                  WHERE j.id = @jid;",
+                new Dictionary<string, object> { { "jid", jobId } });
+
+            if (job == null)
+            {
+                errorMsg = "Job not found.";
+                return null;
+            }
+
+            string currentLease = Convert.ToString(job["lease_token"] ?? "");
+            string leaseExp = Convert.ToString(job["lease_expires_utc"] ?? "");
+            if (string.IsNullOrWhiteSpace(leaseToken) || !CryptographicEquals(currentLease, leaseToken))
+            {
+                errorMsg = "Invalid or expired lease token.";
+                return null;
+            }
+            if (string.CompareOrdinal(leaseExp, UtcNowIso()) < 0)
+            {
+                errorMsg = "Job lease has expired.";
+                return null;
+            }
+            if (Convert.ToInt64(job["is_deleted"]) != 0)
+            {
+                errorMsg = "Source PDF has been deleted.";
+                return null;
+            }
+
+            string fullPath = Path.Combine(_vaultDirectory, Convert.ToString(job["storage_relative_path"]));
+            if (!File.Exists(fullPath))
+            {
+                errorMsg = "Source PDF file missing on host disk.";
+                return null;
+            }
+            return File.ReadAllBytes(fullPath);
+        }
+
+        public Dictionary<string, object> RecordWorkerJobEvent(
+            long jobId,
+            string leaseToken,
+            string newState,
+            int? windowsSpoolerJobId,
+            string details,
+            out string errorMsg)
+        {
+            errorMsg = null;
+            try
+            {
+                return _db.RunInTransaction(() =>
+                {
+                    var job = _db.QuerySingle("SELECT * FROM print_jobs WHERE id = @jid;", new Dictionary<string, object> { { "jid", jobId } });
+                    if (job == null) throw new InvalidOperationException("Job not found.");
+
+                    string currentLease = Convert.ToString(job["lease_token"] ?? "");
+                    if (string.IsNullOrWhiteSpace(leaseToken) || !CryptographicEquals(currentLease, leaseToken))
+                        throw new InvalidOperationException("Invalid lease token for job event.");
+
+                    long orderId = Convert.ToInt64(job["order_id"], CultureInfo.InvariantCulture);
+                    string oldState = Convert.ToString(job["state"]);
+                    string now = UtcNowIso();
+                    string renewedLeaseExp = UtcNowIso(30);
+
+                    if (newState == "downloading" || newState == "rendering")
+                    {
+                        _db.ExecuteNonQuery(
+                            @"UPDATE print_jobs SET state = @st, lease_expires_utc = @lexp, updated_at_utc = @now WHERE id = @jid;
+                              UPDATE orders SET state = @st, updated_at_utc = @now WHERE id = @oid;",
+                            new Dictionary<string, object> { { "st", newState }, { "lexp", renewedLeaseExp }, { "now", now }, { "jid", jobId }, { "oid", orderId } });
+                    }
+                    else if (newState == "submitted_to_spooler")
+                    {
+                        _db.ExecuteNonQuery(
+                            @"UPDATE print_jobs
+                              SET state = 'submitted_to_spooler', windows_spooler_job_id = @winid, lease_token = NULL, lease_expires_utc = NULL, updated_at_utc = @now
+                              WHERE id = @jid;
+                              UPDATE orders
+                              SET state = 'submitted_to_spooler', updated_at_utc = @now
+                              WHERE id = @oid;",
+                            new Dictionary<string, object>
+                            {
+                                { "winid", windowsSpoolerJobId.HasValue ? (object)windowsSpoolerJobId.Value : 1 },
+                                { "now", now },
+                                { "jid", jobId },
+                                { "oid", orderId }
+                            });
+                    }
+                    else if (newState == "reconciliation_required" || newState == "failed")
+                    {
+                        _db.ExecuteNonQuery(
+                            @"UPDATE print_jobs
+                              SET state = @st, last_error = @err, lease_token = NULL, lease_expires_utc = NULL, updated_at_utc = @now
+                              WHERE id = @jid;
+                              UPDATE orders
+                              SET state = @st, hold_or_reject_reason = @err, updated_at_utc = @now
+                              WHERE id = @oid;",
+                            new Dictionary<string, object>
+                            {
+                                { "st", newState },
+                                { "err", details ?? "Worker reported dispatch exception" },
+                                { "now", now },
+                                { "jid", jobId },
+                                { "oid", orderId }
+                            });
+                    }
+                    else
+                    {
+                        throw new InvalidOperationException("Unsupported worker event state: " + newState);
+                    }
+
+                    LogAudit(orderId, "worker", "STATION-PILOT-01", "WORKER_STATE_" + newState.ToUpperInvariant(), oldState, newState,
+                        string.Format(CultureInfo.InvariantCulture, "JobId={0}, SpoolerJobId={1}, Details={2}", jobId, windowsSpoolerJobId.HasValue ? windowsSpoolerJobId.Value.ToString() : "N/A", details ?? ""));
+
+                    return new Dictionary<string, object>
+                    {
+                        { "jobId", jobId },
+                        { "orderId", orderId },
+                        { "state", newState },
+                        { "windowsSpoolerJobId", windowsSpoolerJobId }
+                    };
+                });
+            }
+            catch (Exception ex)
+            {
+                errorMsg = ex.Message;
+                return null;
+            }
+        }
+
+        // Admin Pricing Update (M03: affects new quotes only, never confirmed past orders)
+        public Dictionary<string, object> UpdatePricingRule(
+            double simplexRateInr,
+            double duplexRateInr,
+            double minOrderInr,
+            double taxPercent,
+            string adminUsername,
+            out string errorMsg)
+        {
+            errorMsg = null;
+            if (simplexRateInr <= 0 || duplexRateInr <= 0 || minOrderInr < 0 || taxPercent < 0 || taxPercent > 50)
+            {
+                errorMsg = "Invalid pricing parameters.";
+                return null;
+            }
+
+            return _db.RunInTransaction(() =>
+            {
+                long currentMaxVer = _db.ExecuteScalarLong("SELECT COALESCE(MAX(version), 0) FROM price_rules WHERE shop_id = 1;");
+                long newVer = currentMaxVer + 1;
+                string now = UtcNowIso();
+
+                _db.ExecuteNonQuery("UPDATE price_rules SET is_active = 0 WHERE shop_id = 1;");
+                long newId = _db.ExecuteInsert(
+                    @"INSERT INTO price_rules (shop_id, version, simplex_per_side_inr, duplex_per_side_inr, min_order_charge_inr, tax_percent, is_active, created_by, created_at_utc)
+                      VALUES (1, @ver, @srate, @drate, @minc, @tax, 1, @by, @now);",
+                    new Dictionary<string, object>
+                    {
+                        { "ver", newVer },
+                        { "srate", simplexRateInr },
+                        { "drate", duplexRateInr },
+                        { "minc", minOrderInr },
+                        { "tax", taxPercent },
+                        { "by", adminUsername },
+                        { "now", now }
+                    });
+
+                LogAudit(null, "admin", adminUsername, "PRICE_RULE_VERSION_CREATED", "v" + currentMaxVer, "v" + newVer,
+                    string.Format(CultureInfo.InvariantCulture, "Simplex=INR {0:0.00}/side, Duplex=INR {1:0.00}/side, Min=INR {2:0.00}", simplexRateInr, duplexRateInr, minOrderInr));
+
+                return new Dictionary<string, object>
+                {
+                    { "priceRuleId", newId },
+                    { "version", newVer },
+                    { "simplexPerSideInr", simplexRateInr },
+                    { "duplexPerSideInr", duplexRateInr },
+                    { "minOrderChargeInr", minOrderInr },
+                    { "taxPercent", taxPercent }
+                };
+            });
+        }
+
+        public Dictionary<string, object> UpdateShopAndPrinterControls(
+            bool? intakePaused,
+            string pauseReason,
+            bool? supportsDuplex,
+            bool? printerReadyOverride,
+            string adminUsername)
+        {
+            _db.RunInTransaction(() =>
+            {
+                if (intakePaused.HasValue)
+                {
+                    _db.ExecuteNonQuery(
+                        "UPDATE shops SET intake_paused = @p, pause_reason = @r WHERE id = 1;",
+                        new Dictionary<string, object> { { "p", intakePaused.Value ? 1 : 0 }, { "r", pauseReason ?? "" } });
+                }
+                if (supportsDuplex.HasValue)
+                {
+                    _db.ExecuteNonQuery(
+                        "UPDATE printers SET supports_duplex = @d WHERE id = 1;",
+                        new Dictionary<string, object> { { "d", supportsDuplex.Value ? 1 : 0 } });
+                }
+                if (printerReadyOverride.HasValue)
+                {
+                    _db.ExecuteNonQuery(
+                        "UPDATE stations SET printer_ready = @pr, status_message = @msg WHERE id = 1;",
+                        new Dictionary<string, object>
+                        {
+                            { "pr", printerReadyOverride.Value ? 1 : 0 },
+                            { "msg", printerReadyOverride.Value ? "Online & Ready" : (pauseReason ?? "Printer Alert: Out of paper / Jam reported") }
+                        });
+                }
+                LogAudit(null, "admin", adminUsername, "SHOP_PRINTER_CONTROLS_UPDATED", null, null,
+                    string.Format(CultureInfo.InvariantCulture, "IntakePaused={0}, SupportsDuplex={1}, PrinterReady={2}", intakePaused, supportsDuplex, printerReadyOverride));
+            });
+
+            return GetShopAndAvailabilityStatus();
+        }
+
+        public Dictionary<string, object> GetAdminDashboardSummary(string stateFilter, string searchQuery)
+        {
+            var status = GetShopAndAvailabilityStatus();
+            long totalOrders = _db.ExecuteScalarLong("SELECT COUNT(*) FROM orders;");
+            long awaitingApproval = _db.ExecuteScalarLong("SELECT COUNT(*) FROM orders WHERE state = 'paid_awaiting_approval';");
+            long activeQueueCount = _db.ExecuteScalarLong("SELECT COUNT(*) FROM orders WHERE state IN ('queued', 'leased', 'downloading', 'rendering', 'submitted_to_spooler');");
+            long readyForPickup = _db.ExecuteScalarLong("SELECT COUNT(*) FROM orders WHERE state = 'ready_for_pickup';");
+            long collectedCount = _db.ExecuteScalarLong("SELECT COUNT(*) FROM orders WHERE state = 'collected';");
+            long reconciliationCount = _db.ExecuteScalarLong("SELECT COUNT(*) FROM orders WHERE state IN ('reconciliation_required', 'failed', 'on_hold');");
+            long refundedCount = _db.ExecuteScalarLong("SELECT COUNT(*) FROM orders WHERE payment_status = 'refunded';");
+
+            double verifiedRevenueInr = _db.ExecuteScalarDouble(
+                @"SELECT COALESCE(SUM(q.total_amount_inr), 0)
+                  FROM orders o JOIN quotes q ON o.quote_id = q.id
+                  WHERE o.payment_status = 'verified';");
+
+            long totalPrintedSides = _db.ExecuteScalarLong(
+                @"SELECT COALESCE(SUM(q.printed_sides), 0)
+                  FROM orders o JOIN quotes q ON o.quote_id = q.id
+                  WHERE o.state IN ('submitted_to_spooler', 'ready_for_pickup', 'collected');");
+
+            long totalPhysicalSheets = _db.ExecuteScalarLong(
+                @"SELECT COALESCE(SUM(q.physical_sheets), 0)
+                  FROM orders o JOIN quotes q ON o.quote_id = q.id
+                  WHERE o.state IN ('submitted_to_spooler', 'ready_for_pickup', 'collected');");
+
+            var sql = new StringBuilder(@"
+                SELECT o.*, q.document_pages, q.selected_pages, q.page_range_spec, q.copies, q.duplex_mode,
+                       q.printed_sides, q.physical_sheets, q.total_amount_inr, q.price_rule_version,
+                       f.original_filename_redacted, f.sha256_hex, f.size_bytes, f.is_deleted,
+                       p.gateway_order_id, p.gateway_payment_id, p.webhook_calls_count,
+                       j.id AS job_id, j.state AS job_state, j.windows_spooler_job_id, j.attempts
+                FROM orders o
+                JOIN quotes q ON o.quote_id = q.id
+                JOIN files f ON o.file_id = f.id
+                LEFT JOIN payments p ON p.order_id = o.id
+                LEFT JOIN print_jobs j ON j.order_id = o.id
+                WHERE 1=1 ");
+
+            var prms = new Dictionary<string, object>();
+            if (!string.IsNullOrWhiteSpace(stateFilter) && !string.Equals(stateFilter, "all", StringComparison.OrdinalIgnoreCase))
+            {
+                sql.Append(" AND o.state = @sf ");
+                prms["sf"] = stateFilter.Trim();
+            }
+            if (!string.IsNullOrWhiteSpace(searchQuery))
+            {
+                sql.Append(" AND (o.order_code LIKE @sq OR o.pickup_code LIKE @sq OR o.customer_name LIKE @sq) ");
+                prms["sq"] = "%" + searchQuery.Trim() + "%";
+            }
+            sql.Append(" ORDER BY o.id DESC LIMIT 100;");
+
+            var orderRows = _db.Query(sql.ToString(), prms);
+            var formattedOrders = new List<Dictionary<string, object>>();
+            foreach (var r in orderRows)
+            {
+                formattedOrders.Add(new Dictionary<string, object>
+                {
+                    { "id", r["id"] },
+                    { "orderCode", r["order_code"] },
+                    { "publicToken", r["public_token"] },
+                    { "pickupCode", r["pickup_code"] },
+                    { "customerName", r["customer_name"] },
+                    { "customerPhone", r["customer_phone"] },
+                    { "state", r["state"] },
+                    { "paymentStatus", r["payment_status"] },
+                    { "fileName", r["original_filename_redacted"] },
+                    { "sha256Prefix", Convert.ToString(r["sha256_hex"]).Substring(0, 12) },
+                    { "fileSizeBytes", r["size_bytes"] },
+                    { "fileDeleted", Convert.ToInt64(r["is_deleted"]) != 0 },
+                    { "documentPages", r["document_pages"] },
+                    { "selectedPages", r["selected_pages"] },
+                    { "pageRange", r["page_range_spec"] },
+                    { "copies", r["copies"] },
+                    { "duplexMode", r["duplex_mode"] },
+                    { "printedSides", r["printed_sides"] },
+                    { "physicalSheets", r["physical_sheets"] },
+                    { "totalAmountInr", r["total_amount_inr"] },
+                    { "priceRuleVersion", r["price_rule_version"] },
+                    { "targetQueueName", r["target_queue_name"] },
+                    { "holdOrRejectReason", r["hold_or_reject_reason"] },
+                    { "gatewayOrderId", r["gateway_order_id"] },
+                    { "gatewayPaymentId", r["gateway_payment_id"] },
+                    { "webhookCallsCount", r["webhook_calls_count"] },
+                    { "jobId", r["job_id"] },
+                    { "jobState", r["job_state"] },
+                    { "windowsSpoolerJobId", r["windows_spooler_job_id"] },
+                    { "createdAtUtc", r["created_at_utc"] },
+                    { "createdAtIst", ToIstDisplay(Convert.ToString(r["created_at_utc"])) },
+                    { "updatedAtUtc", r["updated_at_utc"] },
+                    { "updatedAtIst", ToIstDisplay(Convert.ToString(r["updated_at_utc"])) }
+                });
+            }
+
+            var recentAudits = _db.Query("SELECT * FROM audit_events ORDER BY id DESC LIMIT 40;");
+
+            return new Dictionary<string, object>
+            {
+                { "shopStatus", status },
+                { "metrics", new Dictionary<string, object>
+                    {
+                        { "totalOrders", totalOrders },
+                        { "paidAwaitingApproval", awaitingApproval },
+                        { "activePrintQueue", activeQueueCount },
+                        { "readyForPickup", readyForPickup },
+                        { "collectedOrders", collectedCount },
+                        { "reconciliationOrHold", reconciliationCount },
+                        { "refundedOrders", refundedCount },
+                        { "verifiedRevenueInr", Math.Round(verifiedRevenueInr, 2) },
+                        { "totalPrintedSides", totalPrintedSides },
+                        { "totalPhysicalSheets", totalPhysicalSheets },
+                        { "freeDiskMb", GetAvailableDiskMegabytes() }
+                    }
+                },
+                { "orders", formattedOrders },
+                { "recentAuditEvents", recentAudits }
+            };
+        }
+    }
+}

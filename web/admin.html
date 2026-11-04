@@ -1,0 +1,519 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>PrintAway Staff Admin Dashboard</title>
+  <style>
+    :root {
+      --bg: #f1f5f9;
+      --card: #ffffff;
+      --text: #0f172a;
+      --muted: #475569;
+      --border: #cbd5e1;
+      --primary: #1d4ed8;
+      --success: #15803d;
+      --warn: #b45309;
+      --danger: #b91c1c;
+    }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      line-height: 1.45;
+      padding-bottom: 48px;
+    }
+    header {
+      background: #0f172a;
+      color: #fff;
+      padding: 14px 24px;
+      border-bottom: 3px solid #3b82f6;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      flex-wrap: wrap;
+      gap: 10px;
+    }
+    .brand { font-size: 1.25rem; font-weight: 800; }
+    .brand span { color: #60a5fa; }
+    .container { max-width: 1240px; margin: 20px auto; padding: 0 16px; }
+    .card {
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      padding: 18px;
+      margin-bottom: 16px;
+    }
+    .kpi-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(165px, 1fr));
+      gap: 12px;
+      margin-bottom: 16px;
+    }
+    .kpi-box {
+      background: #fff;
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      padding: 14px;
+    }
+    .kpi-label { font-size: 0.78rem; color: var(--muted); font-weight: 600; text-transform: uppercase; }
+    .kpi-val { font-size: 1.55rem; font-weight: 800; margin-top: 4px; }
+    .btn {
+      background: var(--primary);
+      color: #fff;
+      border: none;
+      padding: 7px 13px;
+      border-radius: 6px;
+      font-weight: 600;
+      font-size: 0.83rem;
+      cursor: pointer;
+    }
+    .btn-success { background: var(--success); }
+    .btn-warn { background: var(--warn); }
+    .btn-danger { background: var(--danger); }
+    .btn-secondary { background: #e2e8f0; color: #0f172a; }
+    input, select {
+      padding: 7px 10px;
+      border: 1px solid #cbd5e1;
+      border-radius: 6px;
+      font-size: 0.88rem;
+    }
+    table { width: 100%; border-collapse: collapse; font-size: 0.85rem; }
+    th, td { padding: 10px 8px; border-bottom: 1px solid #e2e8f0; text-align: left; vertical-align: top; }
+    th { background: #f8fafc; font-weight: 700; color: var(--muted); }
+    .badge {
+      display: inline-block;
+      padding: 3px 8px;
+      border-radius: 999px;
+      font-size: 0.75rem;
+      font-weight: 700;
+      background: #e2e8f0;
+    }
+    .badge-approval { background: #fef3c7; color: #92400e; border: 1px solid #f59e0b; }
+    .badge-ready { background: #dcfce7; color: #166534; }
+    .badge-spooler { background: #dbeafe; color: #1e40af; }
+    .badge-danger { background: #fee2e2; color: #991b1b; }
+    .hidden { display: none !important; }
+    .grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+    @media (max-width: 820px) { .grid-2 { grid-template-columns: 1fr; } }
+    .alert { padding: 10px 14px; border-radius: 8px; margin-bottom: 12px; font-size: 0.88rem; }
+    .alert-error { background: #fee2e2; color: #991b1b; }
+    .alert-ok { background: #dcfce7; color: #166534; }
+  </style>
+</head>
+<body>
+  <header>
+    <div>
+      <div class="brand">Print<span>Away</span> — Staff Admin &amp; Print Release Portal</div>
+      <div style="font-size:0.8rem;color:#cbd5e1;">Active Verified Queue: <strong>Xerox B1025 Multifunction Printer PCL6 (USB001 — A4 Monochrome)</strong></div>
+    </div>
+    <div style="display:flex;gap:10px;align-items:center;">
+      <a href="/" style="color:#93c5fd;text-decoration:none;font-size:0.85rem;font-weight:600;">&larr; Customer Portal</a>
+      <button id="btnRefreshTop" class="btn btn-secondary hidden" onclick="loadDashboard()">Refresh Now</button>
+    </div>
+  </header>
+
+  <div class="container">
+    <div id="adminMsg" class="alert hidden"></div>
+
+    <!-- Admin Login Card -->
+    <div id="loginCard" class="card" style="max-width:440px;margin:40px auto;">
+      <h2 style="margin-bottom:12px;">Staff Admin Sign-In</h2>
+      <p style="font-size:0.85rem;color:var(--muted);margin-bottom:14px;">
+        Authorized staff approval is mandatory before any paid order is dispatched to the Xerox B1025 printer.
+      </p>
+      <div style="margin-bottom:10px;">
+        <label style="display:block;font-size:0.82rem;font-weight:600;margin-bottom:4px;">Username</label>
+        <input type="text" id="loginUser" value="admin" style="width:100%;" />
+      </div>
+      <div style="margin-bottom:14px;">
+        <label style="display:block;font-size:0.82rem;font-weight:600;margin-bottom:4px;">Password</label>
+        <input type="password" id="loginPass" value="PrintAway@Admin2026" style="width:100%;" />
+      </div>
+      <button class="btn" style="width:100%;padding:10px;" onclick="doAdminLogin()">Sign In to Admin Dashboard</button>
+    </div>
+
+    <!-- Authenticated Dashboard Content -->
+    <div id="dashboardContent" class="hidden">
+      <!-- KPI Row -->
+      <div class="kpi-grid">
+        <div class="kpi-box" style="border-left:4px solid #f59e0b;">
+          <div class="kpi-label">Awaiting Admin Approval</div>
+          <div class="kpi-val" id="kpiApproval">0</div>
+        </div>
+        <div class="kpi-box" style="border-left:4px solid #3b82f6;">
+          <div class="kpi-label">Active Print / Spooler</div>
+          <div class="kpi-val" id="kpiActiveQueue">0</div>
+        </div>
+        <div class="kpi-box" style="border-left:4px solid #16a34a;">
+          <div class="kpi-label">Ready for Counter Pickup</div>
+          <div class="kpi-val" id="kpiReady">0</div>
+        </div>
+        <div class="kpi-box">
+          <div class="kpi-label">Collected (PDF Purged)</div>
+          <div class="kpi-val" id="kpiCollected">0</div>
+        </div>
+        <div class="kpi-box">
+          <div class="kpi-label">Verified Revenue</div>
+          <div class="kpi-val">₹<span id="kpiRevenue">0.00</span></div>
+        </div>
+        <div class="kpi-box">
+          <div class="kpi-label">Printed Sides / Sheets</div>
+          <div class="kpi-val"><span id="kpiSides">0</span> / <span id="kpiSheets">0</span></div>
+        </div>
+      </div>
+
+      <!-- Orders & Approval Queue Card -->
+      <div class="card">
+        <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:10px;margin-bottom:12px;">
+          <h3 style="font-size:1.05rem;">Orders &amp; Mandatory Admin Approval Gate</h3>
+          <div style="display:flex;gap:8px;flex-wrap:wrap;">
+            <select id="filterState" onchange="loadDashboard()">
+              <option value="all">All Order States</option>
+              <option value="paid_awaiting_approval">Paid — Awaiting Admin Approval</option>
+              <option value="queued">Queued for Worker</option>
+              <option value="submitted_to_spooler">Submitted to Windows Spooler</option>
+              <option value="ready_for_pickup">Ready for Counter Pickup</option>
+              <option value="reconciliation_required">Reconciliation Required</option>
+              <option value="on_hold">On Hold</option>
+              <option value="collected">Collected</option>
+              <option value="refunded">Rejected / Refunded</option>
+            </select>
+            <input type="text" id="searchBox" placeholder="Search Order / Pickup code..." onkeyup="if(event.key==='Enter') loadDashboard()" />
+            <button class="btn btn-secondary" onclick="loadDashboard()">Filter</button>
+          </div>
+        </div>
+
+        <div style="overflow-x:auto;">
+          <table>
+            <thead>
+              <tr>
+                <th>Order / Time (IST)</th>
+                <th>Customer &amp; Metadata</th>
+                <th>Print Spec &amp; Quote</th>
+                <th>Payment</th>
+                <th>Current State &amp; Spooler</th>
+                <th>Staff / Admin Actions</th>
+              </tr>
+            </thead>
+            <tbody id="ordersTableBody"></tbody>
+          </table>
+        </div>
+      </div>
+
+      <!-- Station Controls & Dynamic Pricing Row -->
+      <div class="grid-2">
+        <div class="card">
+          <h3 style="font-size:1rem;margin-bottom:10px;">Printer &amp; Station Controls (Xerox B1025 — USB001)</h3>
+          <p style="font-size:0.83rem;color:var(--muted);margin-bottom:10px;">
+            Status: <strong id="lblStationStatus"></strong> | Free Host Disk: <strong id="lblFreeDisk"></strong> MB
+          </p>
+          <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:12px;">
+            <button class="btn btn-warn" onclick="updateControls({intakePaused:true, pauseReason:'Counter busy / paper reload'})">Pause Order Intake</button>
+            <button class="btn btn-success" onclick="updateControls({intakePaused:false, pauseReason:''})">Resume Order Intake</button>
+            <button class="btn btn-danger" onclick="updateControls({printerReady:false, pauseReason:'Paper Jam / Out of Paper on Xerox B1025'})">Report Printer Jam / Out of Paper</button>
+            <button class="btn btn-secondary" onclick="updateControls({printerReady:true, pauseReason:''})">Clear Printer Alert</button>
+          </div>
+          <div style="border-top:1px solid #e2e8f0;padding-top:10px;margin-top:8px;">
+            <button class="btn btn-secondary" onclick="loadLiveWindowsQueues()">Inspect Live Windows Print Queues (WMI)</button>
+            <div id="liveQueuesBox" style="margin-top:8px;font-size:0.8rem;"></div>
+          </div>
+        </div>
+
+        <div class="card">
+          <h3 style="font-size:1rem;margin-bottom:10px;">Pricing Configuration (Versioned — New Quotes Only)</h3>
+          <p style="font-size:0.8rem;color:var(--muted);margin-bottom:10px;">
+            Active Rule Version: <strong id="lblPriceVer">v1</strong> (Changing prices never alters confirmed past orders).
+          </p>
+          <div class="grid-2" style="gap:10px;margin-bottom:10px;">
+            <div>
+              <label style="font-size:0.78rem;font-weight:600;">A4 B&amp;W Simplex (₹ / side)</label>
+              <input type="number" step="0.5" id="inpSimplexRate" value="2.00" style="width:100%;" />
+            </div>
+            <div>
+              <label style="font-size:0.78rem;font-weight:600;">A4 B&amp;W Duplex (₹ / side)</label>
+              <input type="number" step="0.5" id="inpDuplexRate" value="1.50" style="width:100%;" />
+            </div>
+            <div>
+              <label style="font-size:0.78rem;font-weight:600;">Minimum Order Charge (₹)</label>
+              <input type="number" step="1" id="inpMinOrder" value="2.00" style="width:100%;" />
+            </div>
+            <div>
+              <label style="font-size:0.78rem;font-weight:600;">Tax (%)</label>
+              <input type="number" step="0.5" id="inpTax" value="0" style="width:100%;" />
+            </div>
+          </div>
+          <button class="btn" onclick="saveNewPricingRule()">Publish New Price Rule Version</button>
+        </div>
+      </div>
+
+      <!-- Immutable UTC Audit Log -->
+      <div class="card">
+        <h3 style="font-size:1rem;margin-bottom:10px;">Immutable UTC Audit &amp; Worker Event Trail</h3>
+        <div style="max-height:260px;overflow-y:auto;">
+          <table>
+            <thead>
+              <tr>
+                <th>UTC Timestamp</th>
+                <th>Order ID</th>
+                <th>Actor</th>
+                <th>Event</th>
+                <th>Transition</th>
+                <th>Details</th>
+              </tr>
+            </thead>
+            <tbody id="auditTableBody"></tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    let adminSessionToken = null;
+    let adminCsrfToken = null;
+    let dashTimer = null;
+
+    function showNotice(msg, isError) {
+      const el = document.getElementById('adminMsg');
+      if (!msg) { el.classList.add('hidden'); return; }
+      el.textContent = msg;
+      el.className = 'alert ' + (isError ? 'alert-error' : 'alert-ok');
+      el.classList.remove('hidden');
+    }
+
+    async function doAdminLogin() {
+      showNotice(null);
+      const username = document.getElementById('loginUser').value;
+      const password = document.getElementById('loginPass').value;
+      try {
+        const res = await fetch('/api/admin/login', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ username, password })
+        });
+        const data = await res.json();
+        if (!res.ok || data.error) {
+          showNotice(data.message || 'Login failed', true);
+          return;
+        }
+        adminSessionToken = data.sessionToken;
+        adminCsrfToken = data.csrfToken;
+        document.getElementById('loginCard').classList.add('hidden');
+        document.getElementById('dashboardContent').classList.remove('hidden');
+        document.getElementById('btnRefreshTop').classList.remove('hidden');
+        await loadDashboard();
+        if (dashTimer) clearInterval(dashTimer);
+        dashTimer = setInterval(loadDashboard, 3000);
+      } catch (e) {
+        showNotice('Login error: ' + e.message, true);
+      }
+    }
+
+    function adminHeaders() {
+      return {
+        'Content-Type': 'application/json',
+        'X-Admin-Session': adminSessionToken || '',
+        'X-CSRF-Token': adminCsrfToken || ''
+      };
+    }
+
+    async function loadDashboard() {
+      if (!adminSessionToken) return;
+      const st = document.getElementById('filterState').value;
+      const q = document.getElementById('searchBox').value;
+      try {
+        const res = await fetch('/api/admin/dashboard?state=' + encodeURIComponent(st) + '&q=' + encodeURIComponent(q), {
+          headers: adminHeaders()
+        });
+        const data = await res.json();
+        if (!res.ok || data.error) return;
+
+        const m = data.metrics;
+        document.getElementById('kpiApproval').textContent = m.paidAwaitingApproval;
+        document.getElementById('kpiActiveQueue').textContent = m.activePrintQueue;
+        document.getElementById('kpiReady').textContent = m.readyForPickup;
+        document.getElementById('kpiCollected').textContent = m.collectedOrders;
+        document.getElementById('kpiRevenue').textContent = Number(m.verifiedRevenueInr).toFixed(2);
+        document.getElementById('kpiSides').textContent = m.totalPrintedSides;
+        document.getElementById('kpiSheets').textContent = m.totalPhysicalSheets;
+
+        const shop = data.shopStatus;
+        document.getElementById('lblStationStatus').textContent = shop.statusReason;
+        document.getElementById('lblFreeDisk').textContent = m.freeDiskMb;
+        if (shop.pricing) {
+          document.getElementById('lblPriceVer').textContent = 'v' + shop.pricing.version;
+        }
+
+        renderOrdersTable(data.orders || []);
+        renderAuditTable(data.recentAuditEvents || []);
+      } catch (e) {
+        console.error(e);
+      }
+    }
+
+    function badgeClass(state) {
+      if (state === 'paid_awaiting_approval') return 'badge badge-approval';
+      if (state === 'ready_for_pickup' || state === 'collected') return 'badge badge-ready';
+      if (state === 'submitted_to_spooler' || state === 'queued' || state === 'rendering') return 'badge badge-spooler';
+      if (state === 'reconciliation_required' || state === 'refunded' || state === 'on_hold') return 'badge badge-danger';
+      return 'badge';
+    }
+
+    function renderOrdersTable(orders) {
+      const tbody = document.getElementById('ordersTableBody');
+      if (!orders.length) {
+        tbody.innerHTML = '<tr><td colspan="6" style="text-align:center;color:var(--muted);padding:20px;">No orders matching filter.</td></tr>';
+        return;
+      }
+      tbody.innerHTML = orders.map(o => {
+        let actions = '';
+        if (o.state === 'paid_awaiting_approval' || o.state === 'on_hold') {
+          actions += `<button class="btn btn-success" style="margin:2px;" onclick="orderAction(${o.id}, 'approve', {reason:'Approved at counter'})">✓ Approve &amp; Print</button>`;
+          if (o.state !== 'on_hold') {
+            actions += `<button class="btn btn-warn" style="margin:2px;" onclick="orderAction(${o.id}, 'hold', {reason:'Pending customer check'})">Hold</button>`;
+          }
+          actions += `<button class="btn btn-danger" style="margin:2px;" onclick="orderAction(${o.id}, 'reject', {reason:'Rejected by admin; refund issued'})">Reject &amp; Refund</button>`;
+        } else if (o.state === 'queued') {
+          actions += `<button class="btn btn-danger" style="margin:2px;" onclick="orderAction(${o.id}, 'cancel', {reason:'Cancelled before print'})">Cancel Job</button>`;
+        } else if (o.state === 'submitted_to_spooler') {
+          actions += `<button class="btn btn-success" style="margin:2px;" onclick="orderAction(${o.id}, 'ready', {})">✓ Confirm Physical Pages Ready</button>`;
+        } else if (o.state === 'ready_for_pickup') {
+          actions += `<button class="btn" style="margin:2px;" onclick="promptAndCollect(${o.id}, '${o.pickupCode}')">Verify Pickup Code (${o.pickupCode}) &amp; Hand Over</button>`;
+        } else if (o.state === 'reconciliation_required' || o.state === 'failed') {
+          actions += `<button class="btn btn-success" style="margin:2px;" onclick="orderAction(${o.id}, 'reconcile', {resolutionAction:'confirm_printed', reason:'Spooler output verified on tray'})">Confirm Printed</button>`;
+          actions += `<button class="btn btn-warn" style="margin:2px;" onclick="orderAction(${o.id}, 'reconcile', {resolutionAction:'authorize_reprint', reason:'Tray empty; safe reprint authorized'})">Authorize Reprint</button>`;
+        }
+
+        return `<tr>
+          <td>
+            <strong>${o.orderCode}</strong><br/>
+            <span style="font-size:0.75rem;color:var(--muted);">${o.createdAtIst}</span>
+          </td>
+          <td>
+            <strong>${o.customerName || 'Walk-in'}</strong><br/>
+            <span style="font-size:0.78rem;color:var(--muted);">File: ${o.fileName} ${o.fileDeleted ? '[Deleted]' : ''}</span><br/>
+            <span style="font-size:0.74rem;color:var(--muted);">SHA256: <code>${o.sha256Prefix}</code></span>
+          </td>
+          <td>
+            <strong>${o.printedSides} sides / ${o.physicalSheets} sheets</strong><br/>
+            <span style="font-size:0.78rem;color:var(--muted);">Pages: ${o.pageRange} (${o.selectedPages}/${o.documentPages}p) × ${o.copies} copy | ${o.duplexMode}</span><br/>
+            <strong style="color:var(--primary);">₹${Number(o.totalAmountInr).toFixed(2)}</strong> <span style="font-size:0.74rem;">(Rule v${o.priceRuleVersion})</span>
+          </td>
+          <td>
+            <span class="badge">${o.paymentStatus}</span><br/>
+            <span style="font-size:0.74rem;color:var(--muted);">Webhooks: ${o.webhookCallsCount || 0}</span>
+          </td>
+          <td>
+            <span class="${badgeClass(o.state)}">${o.state}</span><br/>
+            ${o.windowsSpoolerJobId ? `<span style="font-size:0.76rem;color:#1e40af;">WinSpooler Job #${o.windowsSpoolerJobId}</span><br/>` : ''}
+            <span style="font-size:0.75rem;color:var(--muted);">Pickup Code: <strong>${o.pickupCode}</strong></span>
+            ${o.holdOrRejectReason ? `<div style="font-size:0.75rem;color:#b91c1c;margin-top:2px;">Note: ${o.holdOrRejectReason}</div>` : ''}
+          </td>
+          <td>${actions || '<span style="color:var(--muted);font-size:0.78rem;">No action needed</span>'}</td>
+        </tr>`;
+      }).join('');
+    }
+
+    function renderAuditTable(events) {
+      const tbody = document.getElementById('auditTableBody');
+      tbody.innerHTML = events.map(e => `<tr>
+        <td style="white-space:nowrap;font-family:monospace;font-size:0.76rem;">${e.created_at_utc}</td>
+        <td>${e.order_id || '-'}</td>
+        <td>${e.actor_type}:${e.actor_name}</td>
+        <td><strong>${e.event_type}</strong></td>
+        <td>${e.from_state || ''} &rarr; ${e.to_state || ''}</td>
+        <td style="font-size:0.78rem;color:var(--muted);">${e.details}</td>
+      </tr>`).join('');
+    }
+
+    async function orderAction(orderId, action, payload) {
+      showNotice(null);
+      try {
+        const res = await fetch(`/api/admin/orders/${orderId}/${action}`, {
+          method: 'POST',
+          headers: adminHeaders(),
+          body: JSON.stringify(payload || {})
+        });
+        const data = await res.json();
+        if (!res.ok || data.error) {
+          showNotice(data.message || 'Action failed', true);
+          return;
+        }
+        showNotice(`Order #${orderId} action '${action}' succeeded -> state: ${data.state}`, false);
+        await loadDashboard();
+      } catch (e) {
+        showNotice('Error: ' + e.message, true);
+      }
+    }
+
+    async function promptAndCollect(orderId, expectedCode) {
+      const entered = prompt('Enter customer 6-character Pickup Code to verify handover (Expected: ' + expectedCode + '):', expectedCode);
+      if (!entered) return;
+      await orderAction(orderId, 'collected', { pickupCode: entered });
+    }
+
+    async function updateControls(payload) {
+      showNotice(null);
+      try {
+        const res = await fetch('/api/admin/printers/controls', {
+          method: 'POST',
+          headers: adminHeaders(),
+          body: JSON.stringify(payload)
+        });
+        const data = await res.json();
+        if (!res.ok || data.error) {
+          showNotice(data.message || 'Failed to update controls', true);
+          return;
+        }
+        showNotice('Updated shop/printer controls: ' + data.statusReason, false);
+        await loadDashboard();
+      } catch (e) {
+        showNotice('Error: ' + e.message, true);
+      }
+    }
+
+    async function loadLiveWindowsQueues() {
+      try {
+        const res = await fetch('/api/admin/printers', { headers: adminHeaders() });
+        const data = await res.json();
+        const box = document.getElementById('liveQueuesBox');
+        const list = (data.liveWindowsQueues || []).map(q =>
+          `<div style="padding:4px 0;border-bottom:1px dashed #cbd5e1;">
+            <strong>${q.QueueName}</strong> [${q.PortName}] — Paper: <strong>${q.DefaultPaperSize}</strong> | DuplexCapable: ${q.SupportsDuplex} |
+            ${q.IsVirtualExcluded ? '<span style="color:#b91c1c;">Excluded (Virtual)</span>' : (q.QueueName === data.activeVerifiedQueue ? '<span style="color:#15803d;font-weight:700;">★ ACTIVE VERIFIED QUEUE</span>' : '<span style="color:#b45309;">Disabled Duplicate USB001 Queue</span>')}
+          </div>`
+        ).join('');
+        box.innerHTML = list;
+      } catch (e) {
+        console.error(e);
+      }
+    }
+
+    async function saveNewPricingRule() {
+      const simplexPerSideInr = parseFloat(document.getElementById('inpSimplexRate').value);
+      const duplexPerSideInr = parseFloat(document.getElementById('inpDuplexRate').value);
+      const minOrderChargeInr = parseFloat(document.getElementById('inpMinOrder').value);
+      const taxPercent = parseFloat(document.getElementById('inpTax').value);
+      try {
+        const res = await fetch('/api/admin/pricing', {
+          method: 'POST',
+          headers: adminHeaders(),
+          body: JSON.stringify({ simplexPerSideInr, duplexPerSideInr, minOrderChargeInr, taxPercent })
+        });
+        const data = await res.json();
+        if (!res.ok || data.error) {
+          showNotice(data.message || 'Failed to update pricing', true);
+          return;
+        }
+        showNotice(`Published Price Rule v${data.version} (Simplex ₹${data.simplexPerSideInr}/side, Duplex ₹${data.duplexPerSideInr}/side)`, false);
+        await loadDashboard();
+      } catch (e) {
+        showNotice('Error: ' + e.message, true);
+      }
+    }
+  </script>
+</body>
+</html>
+

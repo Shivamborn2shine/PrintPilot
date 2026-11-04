@@ -1,0 +1,10 @@
+# Runtime SQLite database, WAL/SHM locks, and private PDF vault
+data/
+*.db
+*.db-wal
+*.db-shm
+
+# Temporary OS files
+Thumbs.db
+.DS_Store
+

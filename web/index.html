@@ -1,0 +1,632 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>PrintAway — Upload. Configure. Pay. Print. Collect.</title>
+  <style>
+    :root {
+      --bg: #f8fafc;
+      --card: #ffffff;
+      --text: #0f172a;
+      --muted: #475569;
+      --border: #e2e8f0;
+      --primary: #1d4ed8;
+      --primary-hover: #1e40af;
+      --success: #15803d;
+      --success-bg: #dcfce7;
+      --warn: #b45309;
+      --warn-bg: #fef3c7;
+      --danger: #b91c1c;
+      --danger-bg: #fee2e2;
+    }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      line-height: 1.5;
+      padding-bottom: 48px;
+    }
+    header {
+      background: #0f172a;
+      color: #fff;
+      padding: 18px 20px;
+      border-bottom: 3px solid #3b82f6;
+    }
+    .header-inner {
+      max-width: 760px;
+      margin: 0 auto;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      flex-wrap: wrap;
+      gap: 10px;
+    }
+    .brand-title { font-size: 1.45rem; font-weight: 800; letter-spacing: -0.02em; }
+    .brand-title span { color: #60a5fa; }
+    .brand-sub { font-size: 0.85rem; color: #cbd5e1; }
+    .nav-links a {
+      color: #93c5fd;
+      text-decoration: none;
+      font-size: 0.85rem;
+      font-weight: 600;
+      padding: 6px 12px;
+      border: 1px solid #334155;
+      border-radius: 6px;
+    }
+    .container { max-width: 760px; margin: 20px auto; padding: 0 16px; }
+    .card {
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 20px;
+      margin-bottom: 16px;
+      box-shadow: 0 1px 3px rgba(0,0,0,0.04);
+    }
+    .status-banner {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      flex-wrap: wrap;
+      gap: 8px;
+      padding: 12px 16px;
+      border-radius: 10px;
+      font-size: 0.9rem;
+      margin-bottom: 16px;
+      font-weight: 600;
+    }
+    .status-open { background: var(--success-bg); color: var(--success); border: 1px solid #86efac; }
+    .status-closed { background: var(--danger-bg); color: var(--danger); border: 1px solid #fca5a5; }
+    h2 { font-size: 1.15rem; margin-bottom: 12px; display: flex; align-items: center; gap: 8px; }
+    .step-badge {
+      background: var(--primary);
+      color: #fff;
+      font-size: 0.75rem;
+      width: 24px;
+      height: 24px;
+      border-radius: 50%;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      font-weight: 700;
+    }
+    .upload-zone {
+      border: 2px dashed #94a3b8;
+      border-radius: 10px;
+      padding: 24px;
+      text-align: center;
+      background: #f8fafc;
+      cursor: pointer;
+    }
+    .upload-zone:hover { border-color: var(--primary); background: #eff6ff; }
+    .btn {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      background: var(--primary);
+      color: #fff;
+      border: none;
+      padding: 10px 18px;
+      border-radius: 8px;
+      font-weight: 600;
+      font-size: 0.95rem;
+      cursor: pointer;
+      text-decoration: none;
+    }
+    .btn:hover { background: var(--primary-hover); }
+    .btn:disabled { opacity: 0.5; cursor: not-allowed; }
+    .btn-secondary { background: #e2e8f0; color: #1e293b; }
+    .btn-secondary:hover { background: #cbd5e1; }
+    .btn-success { background: var(--success); color: #fff; }
+    .grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+    @media (max-width: 560px) { .grid-2 { grid-template-columns: 1fr; } }
+    label { display: block; font-size: 0.85rem; font-weight: 600; color: var(--muted); margin-bottom: 4px; }
+    input[type="text"], input[type="number"], select {
+      width: 100%;
+      padding: 9px 12px;
+      border: 1px solid #cbd5e1;
+      border-radius: 8px;
+      font-size: 0.95rem;
+      background: #fff;
+    }
+    .quote-box {
+      background: #f1f5f9;
+      border-radius: 10px;
+      padding: 14px 16px;
+      margin-top: 14px;
+      border-left: 4px solid var(--primary);
+    }
+    .quote-row { display: flex; justify-content: space-between; font-size: 0.9rem; margin-bottom: 6px; }
+    .quote-total {
+      display: flex;
+      justify-content: space-between;
+      font-size: 1.15rem;
+      font-weight: 800;
+      border-top: 1px solid #cbd5e1;
+      padding-top: 8px;
+      margin-top: 6px;
+      color: var(--primary);
+    }
+    .alert { padding: 12px 14px; border-radius: 8px; font-size: 0.9rem; margin: 10px 0; }
+    .alert-error { background: var(--danger-bg); color: var(--danger); border: 1px solid #fca5a5; }
+    .alert-info { background: #eff6ff; color: #1e40af; border: 1px solid #bfdbfe; }
+    .alert-warn { background: var(--warn-bg); color: var(--warn); border: 1px solid #fde68a; }
+    .pickup-badge {
+      font-size: 1.6rem;
+      font-weight: 900;
+      letter-spacing: 0.14em;
+      background: #0f172a;
+      color: #38bdf8;
+      padding: 10px 18px;
+      border-radius: 10px;
+      display: inline-block;
+      margin: 8px 0;
+    }
+    .hidden { display: none !important; }
+    .meta-pill {
+      display: inline-block;
+      background: #e0f2fe;
+      color: #0369a1;
+      padding: 3px 10px;
+      border-radius: 999px;
+      font-size: 0.8rem;
+      font-weight: 600;
+      margin-right: 6px;
+      margin-top: 4px;
+    }
+  </style>
+</head>
+<body>
+  <header>
+    <div class="header-inner">
+      <div>
+        <div class="brand-title">Print<span>Away</span></div>
+        <div class="brand-sub" id="shopTagline">Printing ke liye pareshan ho? Just PrintAway.</div>
+      </div>
+      <div class="nav-links">
+        <a href="/" onclick="resetToNewOrder(); return false;">New Order</a>
+        <a href="/admin">Staff Admin</a>
+      </div>
+    </div>
+  </header>
+
+  <div class="container">
+    <div id="shopBanner" class="status-banner status-open">
+      <span id="shopStatusText">Checking shop &amp; Xerox B1025 availability...</span>
+      <span id="shopTurnaround" style="font-weight:400;font-size:0.82rem;"></span>
+    </div>
+
+    <div id="globalError" class="alert alert-error hidden"></div>
+
+    <!-- Track Existing Order Bar -->
+    <div class="card" style="padding:14px 18px;">
+      <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;">
+        <span style="font-size:0.88rem;font-weight:600;color:var(--muted);">Have a tracking token?</span>
+        <input type="text" id="trackTokenInput" placeholder="Paste pub_... tracking token" style="flex:1;min-width:180px;" />
+        <button class="btn btn-secondary" onclick="lookupTrackedOrder()">Track Order</button>
+      </div>
+    </div>
+
+    <!-- Order Creation Wizard -->
+    <div id="orderWizard">
+      <!-- STEP 1: Upload PDF -->
+      <div class="card">
+        <h2><span class="step-badge">1</span> Upload PDF Document (PDF Only)</h2>
+        <div class="upload-zone" onclick="document.getElementById('pdfInput').click()">
+          <input type="file" id="pdfInput" accept=".pdf,application/pdf" class="hidden" onchange="handleFileSelected(this)" />
+          <div style="font-weight:700;font-size:1rem;margin-bottom:4px;">Tap to Select PDF File (Max 20 MB, 100 Pages)</div>
+          <div style="font-size:0.83rem;color:var(--muted);">Server validates PDF signature, page count &amp; encryption state automatically.</div>
+        </div>
+        <div style="margin-top:10px;display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px;">
+          <span style="font-size:0.8rem;color:var(--muted);">Quick local test documents:</span>
+          <div style="display:flex;gap:8px;flex-wrap:wrap;">
+            <button type="button" class="btn" style="font-size:0.82rem;padding:6px 12px;" onclick="loadFounderPdf()">Use 'FIRST SUCCESSFUL DOCUMENT.pdf' (1 Page)</button>
+            <button type="button" class="btn btn-secondary" style="font-size:0.82rem;padding:6px 12px;" onclick="generateSamplePdf(5)">Generate 5-Page Sample PDF</button>
+          </div>
+        </div>
+
+        <div id="uploadedFileInfo" class="alert alert-info hidden" style="margin-top:12px;">
+          <div><strong>Validated PDF:</strong> <span id="lblFileName"></span></div>
+          <div style="margin-top:4px;">
+            <span class="meta-pill">Server Page Count: <strong id="lblPageCount">0</strong> pages</span>
+            <span class="meta-pill">Size: <span id="lblFileSize">0</span> KB</span>
+            <span class="meta-pill">SHA-256: <code id="lblSha"></code></span>
+          </div>
+        </div>
+      </div>
+
+      <!-- STEP 2: Configure & Server Quote -->
+      <div id="configCard" class="card hidden">
+        <h2><span class="step-badge">2</span> Configure Print Settings &amp; Server Quote</h2>
+        <div class="grid-2">
+          <div>
+            <label>Paper Size &amp; Mode (Hardware Verified)</label>
+            <input type="text" value="ISO A4 (210 × 297 mm) — Black & White Laser" disabled style="background:#f1f5f9;color:#475569;" />
+          </div>
+          <div>
+            <label for="copiesInput">Number of Copies (1–20)</label>
+            <input type="number" id="copiesInput" min="1" max="20" value="1" onchange="requestServerQuote()" />
+          </div>
+          <div>
+            <label for="duplexSelect">Sides (Simplex / Duplex)</label>
+            <select id="duplexSelect" onchange="requestServerQuote()">
+              <option value="OneSided">Single-Sided (Simplex — 1 side per sheet)</option>
+              <option value="TwoSidedLongEdge" id="optDuplexLong">Double-Sided (Duplex — 2 sides per sheet)</option>
+            </select>
+          </div>
+          <div>
+            <label for="pageRangeInput">Pages to Print ("all" or e.g. "1-3,5")</label>
+            <input type="text" id="pageRangeInput" value="all" onchange="requestServerQuote()" />
+          </div>
+        </div>
+
+        <div id="quoteBox" class="quote-box hidden">
+          <div class="quote-row">
+            <span>Selected Pages per Copy:</span>
+            <strong><span id="qSelectedPages">0</span> of <span id="qDocPages">0</span> pages (<span id="qRange">all</span>)</strong>
+          </div>
+          <div class="quote-row">
+            <span>Total Printed Sides:</span>
+            <strong><span id="qPrintedSides">0</span> sides (at ₹<span id="qRate">0.00</span>/side)</strong>
+          </div>
+          <div class="quote-row">
+            <span>Physical A4 Sheets Required:</span>
+            <strong><span id="qPhysicalSheets">0</span> sheets</strong>
+          </div>
+          <div class="quote-total">
+            <span>Authoritative Server Quote:</span>
+            <span>₹<span id="qTotalInr">0.00</span></span>
+          </div>
+        </div>
+      </div>
+
+      <!-- STEP 3: Customer Details, Consent & Online UPI Payment -->
+      <div id="checkoutCard" class="card hidden">
+        <h2><span class="step-badge">3</span> Review Policy &amp; Pay via Online UPI</h2>
+        <div class="grid-2" style="margin-bottom:12px;">
+          <div>
+            <label for="custName">Your Name (for counter pickup)</label>
+            <input type="text" id="custName" placeholder="e.g. Vikash / Student Name" value="Walk-in Customer" />
+          </div>
+          <div>
+            <label for="custPhone">Mobile Number (optional)</label>
+            <input type="text" id="custPhone" placeholder="10-digit mobile number" />
+          </div>
+        </div>
+        <div class="alert alert-warn" style="margin-bottom:12px;">
+          <strong>Important Counter Pickup &amp; Approval Notice:</strong><br/>
+          1. Online UPI payment verifies your order, but <strong>printing begins only after counter staff approval</strong>.<br/>
+          2. Physical pages are collected from staff at the counter using your <strong>6-character Pickup Code</strong>.<br/>
+          3. Your uploaded PDF is stored privately on the shop host and automatically deleted upon collection (or within 24 hours).
+        </div>
+        <label style="display:flex;align-items:center;gap:8px;cursor:pointer;margin-bottom:14px;color:var(--text);">
+          <input type="checkbox" id="consentCheck" checked />
+          <span>I agree to the document retention policy and staff-verified counter pickup.</span>
+        </label>
+        <button id="btnCreateOrder" class="btn" style="width:100%;padding:13px;" onclick="createOrderAndStartUpi()">
+          Confirm Order &amp; Proceed to UPI Payment
+        </button>
+      </div>
+    </div>
+
+    <!-- STEP 4: Payment & Live Order Status Tracker -->
+    <div id="trackingCard" class="card hidden">
+      <h2>Order Status &amp; Counter Pickup Tracker</h2>
+      <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px;margin-bottom:12px;">
+        <div>
+          <div style="font-size:0.82rem;color:var(--muted);">Order Reference</div>
+          <div style="font-size:1.25rem;font-weight:800;" id="trkOrderCode">PA-XXXX</div>
+        </div>
+        <div>
+          <span class="meta-pill" id="trkStateBadge" style="font-size:0.9rem;padding:5px 12px;">state</span>
+        </div>
+      </div>
+
+      <div id="trkStateDesc" class="alert alert-info"></div>
+
+      <!-- Payment Action Box (shown only when awaiting_payment) -->
+      <div id="upiPaymentBox" class="card hidden" style="background:#f8fafc;border:2px solid #3b82f6;">
+        <h3 style="font-size:1rem;margin-bottom:8px;">Complete Online UPI Payment</h3>
+        <p style="font-size:0.88rem;color:var(--muted);margin-bottom:10px;">
+          Gateway Order ID: <code id="lblGatewayOrder"></code> | Amount: <strong>₹<span id="lblPayAmount"></span></strong>
+        </p>
+        <div style="display:flex;gap:10px;flex-wrap:wrap;">
+          <button class="btn btn-success" onclick="simulateVerifiedUpiWebhook()">
+            Simulate Verified UPI Payment Webhook (Local Pilot Test)
+          </button>
+        </div>
+        <p style="font-size:0.78rem;color:var(--muted);margin-top:8px;">
+          Note: Sends an HMAC-SHA256 signed webhook event to <code>POST /api/payments/webhook</code>. Per PRD §1A, payment moves the order to <code>paid_awaiting_approval</code> and never auto-prints without admin approval.
+        </p>
+      </div>
+
+      <!-- Pickup Code Box -->
+      <div style="text-align:center;padding:12px;background:#f8fafc;border-radius:10px;margin:12px 0;">
+        <div style="font-size:0.82rem;font-weight:600;color:var(--muted);">COUNTER PICKUP VERIFICATION CODE</div>
+        <div class="pickup-badge" id="trkPickupCode">------</div>
+        <div style="font-size:0.8rem;color:var(--muted);">Show this code to the staff operator at the counter when status is <strong>ready_for_pickup</strong>.</div>
+      </div>
+
+      <div class="quote-box">
+        <div class="quote-row"><span>Document:</span><strong id="trkFileName"></strong></div>
+        <div class="quote-row"><span>Configuration:</span><strong id="trkConfig"></strong></div>
+        <div class="quote-row"><span>Sides / Physical Sheets:</span><strong id="trkSidesSheets"></strong></div>
+        <div class="quote-row"><span>Total Paid / Quoted:</span><strong>₹<span id="trkTotal"></span> (<span id="trkPayStatus"></span>)</strong></div>
+        <div class="quote-row"><span>Last Updated (IST):</span><strong id="trkUpdatedIst"></strong></div>
+        <div class="quote-row"><span>Private Tracking Token:</span><code id="trkPubToken" style="font-size:0.78rem;"></code></div>
+      </div>
+
+      <div style="margin-top:14px;display:flex;gap:10px;">
+        <button class="btn btn-secondary" onclick="refreshCurrentOrder()">Refresh Status</button>
+        <a href="/admin" target="_blank" class="btn">Open Staff Admin Dashboard to Approve &rarr;</a>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    let currentFileToken = null;
+    let currentQuoteToken = null;
+    let currentOrder = null;
+    let pollTimer = null;
+
+    function showError(msg) {
+      const el = document.getElementById('globalError');
+      if (!msg) { el.classList.add('hidden'); el.textContent = ''; return; }
+      el.textContent = msg;
+      el.classList.remove('hidden');
+    }
+
+    async function loadShopStatus() {
+      try {
+        const res = await fetch('/api/shop/status');
+        const data = await res.json();
+        document.getElementById('shopTagline').textContent = data.tagline || '';
+        const banner = document.getElementById('shopBanner');
+        const txt = document.getElementById('shopStatusText');
+        const turn = document.getElementById('shopTurnaround');
+        if (data.acceptingOrders) {
+          banner.className = 'status-banner status-open';
+          txt.textContent = '● ' + data.statusReason + ' — ' + data.printerModel + ' (A4 B&W)';
+          turn.textContent = 'Est. turnaround: ' + data.turnaroundText;
+        } else {
+          banner.className = 'status-banner status-closed';
+          txt.textContent = '● ' + data.statusReason;
+          turn.textContent = 'Uploads & checkout disabled while station unavailable';
+        }
+        const optDuplex = document.getElementById('optDuplexLong');
+        if (optDuplex) optDuplex.disabled = !data.supportsDuplex;
+      } catch (e) {
+        console.error(e);
+      }
+    }
+
+    async function handleFileSelected(input) {
+      showError(null);
+      if (!input.files || !input.files[0]) return;
+      const file = input.files[0];
+      try {
+        const buf = await file.arrayBuffer();
+        const res = await fetch('/api/uploads?filename=' + encodeURIComponent(file.name), {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/pdf', 'X-File-Name': file.name },
+          body: buf
+        });
+        const data = await res.json();
+        if (!res.ok || data.error) {
+          showError(data.message || 'Upload validation failed.');
+          return;
+        }
+        onFileValidated(data);
+      } catch (e) {
+        showError('Failed to upload PDF: ' + e.message);
+      }
+    }
+
+    async function loadFounderPdf() {
+      showError(null);
+      try {
+        const res = await fetch('/api/uploads/sample', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ preset: 'first-successful-document' })
+        });
+        const data = await res.json();
+        if (!res.ok || data.error) {
+          showError(data.message || 'Could not load FIRST SUCCESSFUL DOCUMENT.pdf.');
+          return;
+        }
+        onFileValidated(data);
+      } catch (e) {
+        showError('Error: ' + e.message);
+      }
+    }
+
+    async function generateSamplePdf(pages) {
+      showError(null);
+      try {
+        const res = await fetch('/api/uploads/sample', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ pages: pages, title: 'Sample_A4_PrintAway_Test' })
+        });
+        const data = await res.json();
+        if (!res.ok || data.error) {
+          showError(data.message || 'Could not generate sample PDF.');
+          return;
+        }
+        onFileValidated(data);
+      } catch (e) {
+        showError('Error: ' + e.message);
+      }
+    }
+
+    function onFileValidated(data) {
+      currentFileToken = data.fileToken;
+      document.getElementById('lblFileName').textContent = data.displayName;
+      document.getElementById('lblPageCount').textContent = data.pageCount;
+      document.getElementById('lblFileSize').textContent = Math.max(1, Math.round(data.sizeBytes / 1024));
+      document.getElementById('lblSha').textContent = data.sha256Prefix + '...';
+      document.getElementById('uploadedFileInfo').classList.remove('hidden');
+      document.getElementById('configCard').classList.remove('hidden');
+      requestServerQuote();
+    }
+
+    async function requestServerQuote() {
+      if (!currentFileToken) return;
+      showError(null);
+      const copies = parseInt(document.getElementById('copiesInput').value || '1', 10);
+      const duplexMode = document.getElementById('duplexSelect').value;
+      const pageRange = document.getElementById('pageRangeInput').value || 'all';
+
+      try {
+        const res = await fetch('/api/orders/quote', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ fileToken: currentFileToken, copies, duplexMode, pageRange })
+        });
+        const data = await res.json();
+        if (!res.ok || data.error) {
+          showError(data.message || 'Quote calculation failed.');
+          document.getElementById('quoteBox').classList.add('hidden');
+          document.getElementById('checkoutCard').classList.add('hidden');
+          return;
+        }
+        currentQuoteToken = data.quoteToken;
+        document.getElementById('qSelectedPages').textContent = data.selectedPages;
+        document.getElementById('qDocPages').textContent = data.documentPages;
+        document.getElementById('qRange').textContent = data.pageRange;
+        document.getElementById('qPrintedSides').textContent = data.printedSides;
+        document.getElementById('qRate').textContent = Number(data.ratePerSideInr).toFixed(2);
+        document.getElementById('qPhysicalSheets').textContent = data.physicalSheets;
+        document.getElementById('qTotalInr').textContent = Number(data.totalAmountInr).toFixed(2);
+        document.getElementById('quoteBox').classList.remove('hidden');
+        document.getElementById('checkoutCard').classList.remove('hidden');
+      } catch (e) {
+        showError('Quote error: ' + e.message);
+      }
+    }
+
+    async function createOrderAndStartUpi() {
+      showError(null);
+      if (!currentQuoteToken) return;
+      const consent = document.getElementById('consentCheck').checked;
+      const customerName = document.getElementById('custName').value;
+      const customerPhone = document.getElementById('custPhone').value;
+
+      try {
+        const res = await fetch('/api/orders', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ quoteToken: currentQuoteToken, customerName, customerPhone, consentAccepted: consent })
+        });
+        const data = await res.json();
+        if (!res.ok || data.error) {
+          showError(data.message || 'Order creation failed.');
+          return;
+        }
+        currentOrder = data;
+        document.getElementById('trackTokenInput').value = data.publicToken;
+        document.getElementById('orderWizard').classList.add('hidden');
+        document.getElementById('trackingCard').classList.remove('hidden');
+        await refreshCurrentOrder();
+        if (pollTimer) clearInterval(pollTimer);
+        pollTimer = setInterval(refreshCurrentOrder, 2500);
+      } catch (e) {
+        showError('Order error: ' + e.message);
+      }
+    }
+
+    async function simulateVerifiedUpiWebhook() {
+      if (!currentOrder || !currentOrder.gatewayOrderId) return;
+      showError(null);
+      try {
+        const res = await fetch('/api/payments/simulate-upi', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            gatewayOrderId: currentOrder.gatewayOrderId,
+            amountPaise: currentOrder.amountPaise
+          })
+        });
+        const data = await res.json();
+        if (!res.ok || data.error) {
+          showError(data.message || 'Webhook simulation failed.');
+          return;
+        }
+        await refreshCurrentOrder();
+      } catch (e) {
+        showError('Payment simulation error: ' + e.message);
+      }
+    }
+
+    async function lookupTrackedOrder() {
+      const tok = document.getElementById('trackTokenInput').value.trim();
+      if (!tok) return;
+      currentOrder = currentOrder || {};
+      currentOrder.publicToken = tok;
+      document.getElementById('orderWizard').classList.add('hidden');
+      document.getElementById('trackingCard').classList.remove('hidden');
+      await refreshCurrentOrder();
+      if (pollTimer) clearInterval(pollTimer);
+      pollTimer = setInterval(refreshCurrentOrder, 2500);
+    }
+
+    async function refreshCurrentOrder() {
+      if (!currentOrder || !currentOrder.publicToken) return;
+      try {
+        const res = await fetch('/api/orders/' + encodeURIComponent(currentOrder.publicToken));
+        const data = await res.json();
+        if (!res.ok || data.error) {
+          showError(data.message || 'Could not load order status.');
+          return;
+        }
+        document.getElementById('trkOrderCode').textContent = data.orderCode;
+        document.getElementById('trkStateBadge').textContent = data.state;
+        document.getElementById('trkStateDesc').textContent = data.stateDescription + (data.holdOrRejectReason ? ' (' + data.holdOrRejectReason + ')' : '');
+        document.getElementById('trkPickupCode').textContent = data.pickupCode;
+        document.getElementById('trkFileName').textContent = data.fileName + (data.fileDeletedAfterCollection ? ' [Purged from Disk]' : '');
+        document.getElementById('trkConfig').textContent = 'A4 B&W | ' + data.duplexMode + ' | ' + data.copies + ' copy(s) | Pages: ' + data.pageRange;
+        document.getElementById('trkSidesSheets').textContent = data.printedSides + ' printed sides / ' + data.physicalSheets + ' physical sheets';
+        document.getElementById('trkTotal').textContent = Number(data.totalAmountInr).toFixed(2);
+        document.getElementById('trkPayStatus').textContent = data.paymentStatus;
+        document.getElementById('trkUpdatedIst').textContent = data.updatedAtIst;
+        document.getElementById('trkPubToken').textContent = data.publicToken;
+
+        const upiBox = document.getElementById('upiPaymentBox');
+        if (data.state === 'awaiting_payment' && currentOrder.gatewayOrderId) {
+          document.getElementById('lblGatewayOrder').textContent = currentOrder.gatewayOrderId;
+          document.getElementById('lblPayAmount').textContent = Number(data.totalAmountInr).toFixed(2);
+          upiBox.classList.remove('hidden');
+        } else {
+          upiBox.classList.add('hidden');
+        }
+      } catch (e) {
+        console.error(e);
+      }
+    }
+
+    function resetToNewOrder() {
+      if (pollTimer) clearInterval(pollTimer);
+      currentFileToken = null;
+      currentQuoteToken = null;
+      currentOrder = null;
+      document.getElementById('uploadedFileInfo').classList.add('hidden');
+      document.getElementById('configCard').classList.add('hidden');
+      document.getElementById('checkoutCard').classList.add('hidden');
+      document.getElementById('trackingCard').classList.add('hidden');
+      document.getElementById('orderWizard').classList.remove('hidden');
+      showError(null);
+    }
+
+    window.addEventListener('DOMContentLoaded', () => {
+      loadShopStatus();
+      if (window.location.pathname.startsWith('/track/pub_')) {
+        const tok = window.location.pathname.substring('/track/'.Length);
+        document.getElementById('trackTokenInput').value = tok;
+        lookupTrackedOrder();
+      }
+    });
+  </script>
+</body>
+</html>
