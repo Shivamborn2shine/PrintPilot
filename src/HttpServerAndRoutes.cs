@@ -61,7 +61,18 @@ namespace PrintAway.Web
                 try
                 {
                     HttpListenerContext ctx = _listener.GetContext();
-                    ThreadPool.QueueUserWorkItem(_ => HandleContext(ctx));
+                    ThreadPool.QueueUserWorkItem(_ =>
+                    {
+                        try
+                        {
+                            HandleContext(ctx);
+                        }
+                        catch (Exception ex)
+                        {
+                            Console.WriteLine("[HttpServer] Unhandled request exception: " + ex.Message);
+                            try { ctx.Response.Abort(); } catch { }
+                        }
+                    });
                 }
                 catch (HttpListenerException)
                 {
@@ -98,6 +109,7 @@ namespace PrintAway.Web
             res.Headers["X-Frame-Options"] = "DENY";
             res.Headers["Referrer-Policy"] = "no-referrer";
             res.Headers["Cache-Control"] = "no-store";
+            res.KeepAlive = false;
             res.Headers["Access-Control-Allow-Origin"] = "*";
             res.Headers["Access-Control-Allow-Methods"] = "GET, POST, OPTIONS, PUT, DELETE";
             res.Headers["Access-Control-Allow-Headers"] = "Content-Type, X-Admin-Session, X-CSRF-Token, X-Worker-Token, X-File-Name, X-PrintAway-Signature, Authorization";
@@ -590,11 +602,7 @@ namespace PrintAway.Web
                             WriteError(res, 403, "DOWNLOAD_DENIED", dlErr);
                             return;
                         }
-                        res.StatusCode = 200;
-                        res.ContentType = "application/pdf";
-                        res.ContentLength64 = pdfBytes.Length;
-                        res.OutputStream.Write(pdfBytes, 0, pdfBytes.Length);
-                        res.OutputStream.Close();
+                        WriteBytes(res, 200, "application/pdf", pdfBytes);
                         return;
                     }
 
@@ -659,11 +667,7 @@ namespace PrintAway.Web
                 return;
             }
             byte[] bytes = File.ReadAllBytes(fullPath);
-            res.StatusCode = 200;
-            res.ContentType = "text/html; charset=utf-8";
-            res.ContentLength64 = bytes.Length;
-            res.OutputStream.Write(bytes, 0, bytes.Length);
-            res.OutputStream.Close();
+            WriteBytes(res, 200, "text/html; charset=utf-8", bytes);
         }
 
         private static string ReadRawBody(HttpListenerRequest req)
@@ -681,25 +685,51 @@ namespace PrintAway.Web
             return _json.Deserialize<Dictionary<string, object>>(raw) ?? new Dictionary<string, object>();
         }
 
+        private void WriteBytes(HttpListenerResponse res, int statusCode, string contentType, byte[] bytes)
+        {
+            try
+            {
+                res.StatusCode = statusCode;
+                res.ContentType = contentType;
+                res.ContentLength64 = bytes.Length;
+                res.OutputStream.Write(bytes, 0, bytes.Length);
+                res.OutputStream.Close();
+            }
+            catch
+            {
+                try { res.Abort(); } catch { }
+            }
+        }
+
         private void WriteJson(HttpListenerResponse res, int statusCode, object payload)
         {
-            string json = _json.Serialize(payload);
-            byte[] bytes = Encoding.UTF8.GetBytes(json);
-            res.StatusCode = statusCode;
-            res.ContentType = "application/json; charset=utf-8";
-            res.ContentLength64 = bytes.Length;
-            res.OutputStream.Write(bytes, 0, bytes.Length);
-            res.OutputStream.Close();
+            try
+            {
+                string json = _json.Serialize(payload);
+                byte[] bytes = new UTF8Encoding(false).GetBytes(json);
+                WriteBytes(res, statusCode, "application/json; charset=utf-8", bytes);
+            }
+            catch
+            {
+                try { res.Abort(); } catch { }
+            }
         }
 
         private void WriteError(HttpListenerResponse res, int statusCode, string errorCode, string message)
         {
-            WriteJson(res, statusCode, new Dictionary<string, object>
+            try
             {
-                { "error", true },
-                { "errorCode", errorCode },
-                { "message", message }
-            });
+                WriteJson(res, statusCode, new Dictionary<string, object>
+                {
+                    { "error", true },
+                    { "errorCode", errorCode },
+                    { "message", message }
+                });
+            }
+            catch
+            {
+                try { res.Abort(); } catch { }
+            }
         }
 
         private static string GetString(Dictionary<string, object> dict, string key, string defaultVal)
