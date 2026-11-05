@@ -4,7 +4,11 @@ data/
 *.db-wal
 *.db-shm
 
-# Temporary OS files
+# Temporary OS & scratch files
 Thumbs.db
 .DS_Store
+*.png
+*.jpg
 
+# Tunnel binary
+bin/cloudflared.exe

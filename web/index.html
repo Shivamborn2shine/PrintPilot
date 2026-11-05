@@ -1031,10 +1031,16 @@
       document.getElementById('trackingCard').classList.add('hidden');
       document.getElementById('orderWizard').classList.remove('hidden');
       showError(null);
+      // Auto-detect ?station=https://... query parameter for seamless Netlify integration
+      const sp = new URLSearchParams(window.location.search).get('station');
+      if (sp) localStorage.setItem('printaway_api_base', sp.trim().replace(/\/+$/, ''));
       loadShopStatus();
     }
 
     window.addEventListener('DOMContentLoaded', () => {
+      // Auto-detect ?station=https://... query parameter for seamless Netlify integration
+      const sp = new URLSearchParams(window.location.search).get('station');
+      if (sp) localStorage.setItem('printaway_api_base', sp.trim().replace(/\/+$/, ''));
       loadShopStatus();
       if (window.location.pathname.startsWith('/track/pub_')) {
         const tok = window.location.pathname.substring('/track/'.length);

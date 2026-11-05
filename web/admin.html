@@ -406,6 +406,12 @@
   </div>
 
   <script>
+    // Auto-detect ?station=https://... query parameter for seamless Netlify integration
+    const adminStationParam = new URLSearchParams(window.location.search).get('station');
+    if (adminStationParam) {
+      localStorage.setItem('printaway_api_base', adminStationParam.trim().replace(/\/+$/, ''));
+    }
+
     function apiUrl(path) {
       const base = (localStorage.getItem('printaway_api_base') || '').trim();
       if (!base) return path;
