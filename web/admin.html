@@ -206,6 +206,18 @@
       <div class="grid-2">
         <div class="card">
           <h3 style="font-size:1rem;margin-bottom:10px;">Printer &amp; Station Controls (Xerox B1025 — USB001)</h3>
+          
+          <div style="background:#eff6ff;border:1px solid #bfdbfe;border-radius:8px;padding:10px 12px;margin-bottom:12px;display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px;">
+            <div>
+              <div style="font-size:0.75rem;font-weight:700;color:#1e40af;text-transform:uppercase;">Worker Print Dispatch Mode</div>
+              <div style="font-size:0.92rem;font-weight:800;color:#15803d;" id="lblDispatchModeText">● LIVE PHYSICAL PRINT (Xerox B1025 USB001)</div>
+            </div>
+            <div style="display:flex;gap:6px;">
+              <button class="btn btn-success" id="btnSetPhysical" onclick="setDispatchMode('physical')">● Live Physical Print</button>
+              <button class="btn btn-secondary" id="btnSetSimulation" onclick="setDispatchMode('simulation')">Simulation Mode</button>
+            </div>
+          </div>
+
           <p style="font-size:0.83rem;color:var(--muted);margin-bottom:10px;">
             Status: <strong id="lblStationStatus"></strong> | Free Host Disk: <strong id="lblFreeDisk"></strong> MB
           </p>
@@ -346,6 +358,13 @@
           document.getElementById('lblPriceVer').textContent = 'v' + shop.pricing.version;
         }
 
+        const isPhysical = (shop.dispatchMode !== 'simulation');
+        const txtDisp = document.getElementById('lblDispatchModeText');
+        if (txtDisp) {
+          txtDisp.textContent = isPhysical ? '● LIVE PHYSICAL PRINT (Xerox B1025 USB001)' : '○ SAFE SIMULATION MODE (No physical paper)';
+          txtDisp.style.color = isPhysical ? '#15803d' : '#b45309';
+        }
+
         renderOrdersTable(data.orders || []);
         renderAuditTable(data.recentAuditEvents || []);
       } catch (e) {
@@ -442,6 +461,26 @@
           return;
         }
         showNotice(`Order #${orderId} action '${action}' succeeded -> state: ${data.state}`, false);
+        await loadDashboard();
+      } catch (e) {
+        showNotice('Error: ' + e.message, true);
+      }
+    }
+
+    async function setDispatchMode(mode) {
+      showNotice(null);
+      try {
+        const res = await fetch('/api/admin/printers/dispatch-mode', {
+          method: 'POST',
+          headers: adminHeaders(),
+          body: JSON.stringify({ mode: mode })
+        });
+        const data = await res.json();
+        if (!res.ok || data.error) {
+          showNotice(data.message || 'Failed to update dispatch mode', true);
+          return;
+        }
+        showNotice('Dispatch mode updated to: ' + data.dispatchMode.toUpperCase(), false);
         await loadDashboard();
       } catch (e) {
         showNotice('Error: ' + e.message, true);

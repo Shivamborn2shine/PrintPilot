@@ -395,6 +395,18 @@ namespace PrintAway.Web
                         return;
                     }
 
+                    if (method == "POST" && path == "/api/admin/printers/dispatch-mode")
+                    {
+                        var body = ReadJsonBody(req);
+                        string mode = GetString(body, "mode", "physical");
+                        _repo.SetDispatchMode(mode, Convert.ToString(adminSess["username"]));
+                        WriteJson(res, 200, new Dictionary<string, object>
+                        {
+                            { "dispatchMode", _repo.GetDispatchMode() }
+                        });
+                        return;
+                    }
+
                     if (method == "POST" && path == "/api/admin/pricing")
                     {
                         var body = ReadJsonBody(req);

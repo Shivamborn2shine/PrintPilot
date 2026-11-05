@@ -305,13 +305,13 @@ namespace PrintAway
                     string errCode, errMsg;
                     var saved = repo.SaveValidatedPdf("FIRST SUCCESSFUL DOCUMENT.pdf", founderBytes, out errCode, out errMsg);
                     Assert(saved != null, "FIRST SUCCESSFUL DOCUMENT.pdf must pass PDF validation: " + errMsg);
-                    Assert(Convert.ToInt32(saved["pageCount"]) == 1, "FIRST SUCCESSFUL DOCUMENT.pdf must report exactly 1 page");
-                    Assert(Convert.ToInt64(saved["sizeBytes"]) == 188371L, "FIRST SUCCESSFUL DOCUMENT.pdf size must match 188371 bytes");
+                    Assert(Convert.ToInt32(saved["pageCount"]) == 2, "FIRST SUCCESSFUL DOCUMENT.pdf must report exactly 2 pages");
+                    Assert(Convert.ToInt64(saved["sizeBytes"]) == 31508L, "FIRST SUCCESSFUL DOCUMENT.pdf size must match 31508 bytes");
 
                     string qErr;
                     var quote = repo.CreateServerQuote(Convert.ToString(saved["fileToken"]), 1, "OneSided", "all", out qErr);
-                    Assert(quote != null && Convert.ToInt32(quote["printedSides"]) == 1 && Convert.ToInt32(quote["physicalSheets"]) == 1,
-                        "Quote for FIRST SUCCESSFUL DOCUMENT.pdf must be 1 side and 1 sheet");
+                    Assert(quote != null && Convert.ToInt32(quote["printedSides"]) == 2 && Convert.ToInt32(quote["physicalSheets"]) == 2,
+                        "Quote for FIRST SUCCESSFUL DOCUMENT.pdf (2 pages simplex) must be 2 sides and 2 sheets");
 
                     string oErr;
                     var order = repo.CreateOrderAndPaymentIntent(Convert.ToString(quote["quoteToken"]), "Founder Test", "9876543210", true, out oErr);

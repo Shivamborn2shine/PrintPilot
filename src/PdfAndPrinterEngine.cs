@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Diagnostics;
 using System.Drawing;
 using System.Drawing.Printing;
 using System.Globalization;
@@ -548,29 +549,97 @@ namespace PrintAway.Engine
                 return result;
             }
 
-            // Real physical dispatch to verified Windows queue
-            int pageIdx = 0;
-            printDoc.PrintPage += (sender, e) =>
+            // Real physical dispatch to verified Windows queue:
+            // Renders actual PDF pages using Windows 11 native WinRT and draws them directly onto each printed sheet!
+            string tempPdfPath = Path.Combine(Path.GetTempPath(), "printaway_" + Guid.NewGuid().ToString("N") + ".pdf");
+            string tempRenderDir = Path.Combine(Path.GetTempPath(), "printaway_render_" + Guid.NewGuid().ToString("N"));
+            try
             {
-                int pageNum = pagesToPrint[pageIdx];
-                pageIdx++;
-                e.Graphics.Clear(Color.White);
-                using (var headerFont = new Font("Arial", 14, FontStyle.Bold))
-                using (var bodyFont = new Font("Arial", 10, FontStyle.Regular))
-                using (var pen = new Pen(Color.Black, 1.5f))
-                {
-                    e.Graphics.DrawRectangle(pen, 40, 40, e.MarginBounds.Width, e.MarginBounds.Height);
-                    e.Graphics.DrawString("PrintAway Order: " + orderCode + " (Page " + pageNum + " of " + pagesToPrint.Count + ")", headerFont, Brushes.Black, 60, 60);
-                    e.Graphics.DrawString("Queue: " + targetQueueName + " | Paper: A4 Monochrome | Duplex: " + duplexMode, bodyFont, Brushes.Black, 60, 95);
-                }
-                e.HasMorePages = (pageIdx < pagesToPrint.Count);
-            };
+                File.WriteAllBytes(tempPdfPath, pdfBytes);
+                RenderPdfPagesToPng(tempPdfPath, pagesToPrint, tempRenderDir);
 
-            printDoc.Print();
-            int? spoolerId = FindLatestSpoolerJobId(targetQueueName, spoolDocName);
-            result.Dispatched = true;
-            result.WindowsSpoolerJobId = spoolerId ?? 1;
-            return result;
+                int pageIdx = 0;
+                printDoc.PrintPage += (sender, e) =>
+                {
+                    int pageNum = pagesToPrint[pageIdx];
+                    pageIdx++;
+                    e.Graphics.Clear(Color.White);
+
+                    string pngPath = Path.Combine(tempRenderDir, "page_" + pageNum + ".png");
+                    if (File.Exists(pngPath))
+                    {
+                        using (var fs = new FileStream(pngPath, FileMode.Open, FileAccess.Read, FileShare.Read))
+                        using (var img = Image.FromStream(fs))
+                        {
+                            e.Graphics.DrawImage(img, e.PageBounds);
+                        }
+                    }
+                    else
+                    {
+                        using (var headerFont = new Font("Arial", 14, FontStyle.Bold))
+                        using (var bodyFont = new Font("Arial", 10, FontStyle.Regular))
+                        using (var pen = new Pen(Color.Black, 1.5f))
+                        {
+                            e.Graphics.DrawRectangle(pen, 40, 40, e.MarginBounds.Width, e.MarginBounds.Height);
+                            e.Graphics.DrawString("PrintAway Order: " + orderCode + " (Page " + pageNum + " of " + pagesToPrint.Count + ")", headerFont, Brushes.Black, 60, 60);
+                            e.Graphics.DrawString("Queue: " + targetQueueName + " | Paper: A4 Monochrome | Duplex: " + duplexMode, bodyFont, Brushes.Black, 60, 95);
+                        }
+                    }
+                    e.HasMorePages = (pageIdx < pagesToPrint.Count);
+                };
+
+                printDoc.Print();
+                int? spoolerId = FindLatestSpoolerJobId(targetQueueName, spoolDocName);
+                result.Dispatched = true;
+                result.WindowsSpoolerJobId = spoolerId ?? 1;
+                return result;
+            }
+            finally
+            {
+                try { if (File.Exists(tempPdfPath)) File.Delete(tempPdfPath); } catch { }
+                try { if (Directory.Exists(tempRenderDir)) Directory.Delete(tempRenderDir, true); } catch { }
+            }
+        }
+
+        public static bool RenderPdfPagesToPng(string pdfPath, List<int> pages, string outDir)
+        {
+            try
+            {
+                if (!Directory.Exists(outDir)) Directory.CreateDirectory(outDir);
+                string repoRoot = AppDomain.CurrentDomain.BaseDirectory;
+                string scriptPath = Path.Combine(repoRoot, "..", "scripts", "render-pdf.ps1");
+                if (!File.Exists(scriptPath))
+                {
+                    scriptPath = Path.Combine(Directory.GetCurrentDirectory(), "scripts", "render-pdf.ps1");
+                }
+                if (!File.Exists(scriptPath))
+                {
+                    scriptPath = @"C:\Users\Vikash\Documents\PrintAway\scripts\render-pdf.ps1";
+                }
+
+                string pageArg = (pages == null || pages.Count == 0) ? "all" : string.Join(",", pages);
+                var psi = new ProcessStartInfo
+                {
+                    FileName = "powershell.exe",
+                    Arguments = string.Format(CultureInfo.InvariantCulture,
+                        "-NoProfile -ExecutionPolicy Bypass -File \"{0}\" -PdfPath \"{1}\" -OutDir \"{2}\" -Pages \"{3}\"",
+                        scriptPath, Path.GetFullPath(pdfPath), Path.GetFullPath(outDir), pageArg),
+                    UseShellExecute = false,
+                    CreateNoWindow = true,
+                    RedirectStandardOutput = true,
+                    RedirectStandardError = true
+                };
+
+                using (var proc = Process.Start(psi))
+                {
+                    proc.WaitForExit(35000);
+                    return proc.ExitCode == 0;
+                }
+            }
+            catch
+            {
+                return false;
+            }
         }
 
         public static byte[] GenerateSamplePdfBytes(int pageCount, string title)

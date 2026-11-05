@@ -20,7 +20,7 @@ namespace PrintAway
             }
 
             bool runSelfTest = false;
-            bool realPhysicalPrint = false;
+            bool forceSimulation = false;
             int port = 8080;
 
             if (args != null)
@@ -30,8 +30,8 @@ namespace PrintAway
                     string a = args[i] ?? "";
                     if (string.Equals(a, "--self-test", StringComparison.OrdinalIgnoreCase))
                         runSelfTest = true;
-                    else if (string.Equals(a, "--real-print", StringComparison.OrdinalIgnoreCase))
-                        realPhysicalPrint = true;
+                    else if (string.Equals(a, "--simulation", StringComparison.OrdinalIgnoreCase) || string.Equals(a, "--dry-run", StringComparison.OrdinalIgnoreCase))
+                        forceSimulation = true;
                     else if (string.Equals(a, "--port", StringComparison.OrdinalIgnoreCase) && i + 1 < args.Length)
                     {
                         int.TryParse(args[++i], NumberStyles.Integer, CultureInfo.InvariantCulture, out port);
@@ -59,7 +59,7 @@ namespace PrintAway
             using (var sqlite = new SqliteDatabase(dbPath))
             {
                 var repo = new PrintAwayRepository(sqlite, vaultDir, webhookSecret, workerToken);
-                var worker = new LocalPrintWorker(repo, simulateSpoolerOnly: !realPhysicalPrint);
+                var worker = new LocalPrintWorker(repo, simulateSpoolerOnly: forceSimulation);
                 worker.StartBackground(1500);
 
                 using (var server = new PrintAwayHttpServer(port, repo, worker, webRoot))
@@ -74,7 +74,7 @@ namespace PrintAway
                     Console.WriteLine("  Staff Admin Dashboard:       http://127.0.0.1:" + port + "/admin");
                     Console.WriteLine("  Default Admin Login:         admin / PrintAway@Admin2026");
                     Console.WriteLine("  Active Verified Queue:       " + PrintAwayRepository.VerifiedXeroxQueueName + " (USB001)");
-                    Console.WriteLine("  Worker Dispatch Mode:        " + (realPhysicalPrint ? "PHYSICAL PRINT TO XEROX B1025 PCL6" : "SAFE SPOOLER SIMULATION (Pass --real-print for physical pages)"));
+                    Console.WriteLine("  Worker Dispatch Mode:        " + (forceSimulation ? "SAFE SPOOLER SIMULATION (--simulation)" : "LIVE PHYSICAL PRINT TO XEROX B1025 PCL6 (Default)"));
                     Console.WriteLine("  SQLite WAL Database:         " + dbPath);
                     Console.WriteLine("  Private PDF Vault:           " + vaultDir);
                     Console.WriteLine("======================================================================");

@@ -1,16 +1,16 @@
 <#
 .SYNOPSIS
     Starts the PrintAway Local Host Web Server & Print Worker on http://127.0.0.1:8080/
-.PARAMETER RealPrint
-    When specified, approved print jobs are physically dispatched to 'Xerox B1025 Multifunction Printer PCL6' (USB001).
-    By default, runs in safe spooler simulation mode so testing the UI does not waste physical paper unless requested.
+.PARAMETER Simulation
+    When specified, runs in safe spooler simulation mode (dry-run without physical paper).
+    By default, LIVE PHYSICAL PRINTING to 'Xerox B1025 Multifunction Printer PCL6' (USB001) is ENABLED.
 .PARAMETER Port
     Local loopback port to bind (default: 8080).
 #>
 
 [CmdletBinding()]
 param(
-    [switch]$RealPrint,
+    [switch]$Simulation,
     [int]$Port = 8080
 )
 
@@ -25,8 +25,8 @@ if (-not (Test-Path $exePath)) {
 }
 
 $argsList = @("--port", $Port.ToString())
-if ($RealPrint) {
-    $argsList += "--real-print"
+if ($Simulation) {
+    $argsList += "--simulation"
 }
 
 & $exePath @argsList

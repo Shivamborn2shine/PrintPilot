@@ -104,6 +104,7 @@ CREATE TABLE IF NOT EXISTS stations (
     free_disk_mb INTEGER NOT NULL DEFAULT 0,
     spooler_running INTEGER NOT NULL DEFAULT 1,
     printer_ready INTEGER NOT NULL DEFAULT 1,
+    dispatch_mode TEXT NOT NULL DEFAULT 'physical',
     status_message TEXT
 );
 
@@ -277,6 +278,7 @@ CREATE TABLE IF NOT EXISTS audit_events (
 );
 ";
             _db.ExecuteNonQuery(ddl);
+            try { _db.ExecuteNonQuery("ALTER TABLE stations ADD COLUMN dispatch_mode TEXT NOT NULL DEFAULT 'physical';"); } catch { }
 
             string now = UtcNowIso();
             long shopCount = _db.ExecuteScalarLong("SELECT COUNT(*) FROM shops;");
@@ -447,6 +449,7 @@ CREATE TABLE IF NOT EXISTS audit_events (
                 { "intakePaused", intakePaused },
                 { "diskLow", diskLow },
                 { "printerReady", printerReady },
+                { "dispatchMode", GetDispatchMode() },
                 { "statusReason", statusReason },
                 { "printerModel", printer["model_name"] },
                 { "activeQueueName", activeQueue != null ? activeQueue["windows_queue_name"] : VerifiedXeroxQueueName },
@@ -1882,6 +1885,27 @@ CREATE TABLE IF NOT EXISTS audit_events (
             });
 
             return GetShopAndAvailabilityStatus();
+        }
+
+        public string GetDispatchMode()
+        {
+            try
+            {
+                string mode = _db.ExecuteScalarString("SELECT dispatch_mode FROM stations WHERE id = 1;", null, "physical");
+                return string.Equals(mode, "simulation", StringComparison.OrdinalIgnoreCase) ? "simulation" : "physical";
+            }
+            catch
+            {
+                return "physical";
+            }
+        }
+
+        public void SetDispatchMode(string mode, string adminUser = "admin")
+        {
+            string val = string.Equals(mode, "simulation", StringComparison.OrdinalIgnoreCase) ? "simulation" : "physical";
+            _db.ExecuteNonQuery("UPDATE stations SET dispatch_mode = @m WHERE id = 1;",
+                new Dictionary<string, object> { { "m", val } });
+            LogAudit(null, "admin", adminUser, "DISPATCH_MODE_CHANGED", null, val, "Print dispatch mode set to " + val);
         }
 
         public Dictionary<string, object> GetAdminDashboardSummary(string stateFilter, string searchQuery)

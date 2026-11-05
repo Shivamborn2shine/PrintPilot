@@ -14,7 +14,7 @@ namespace PrintAway.Worker
         private volatile bool _running;
         private Thread _workerThread;
 
-        public LocalPrintWorker(PrintAwayRepository repo, bool simulateSpoolerOnly = true)
+        public LocalPrintWorker(PrintAwayRepository repo, bool simulateSpoolerOnly = false)
         {
             _repo = repo;
             _simulateSpoolerOnly = simulateSpoolerOnly;
@@ -109,6 +109,8 @@ namespace PrintAway.Worker
             string rangeErr;
             List<int> pagesToPrint = PdfAndPrinterEngine.ParseAndValidatePageRange(pageRange, docPages, out normRange, out rangeErr);
 
+            bool effectiveSimulate = _simulateSpoolerOnly || string.Equals(_repo.GetDispatchMode(), "simulation", StringComparison.OrdinalIgnoreCase);
+
             PrintDispatchResult dispatch = PdfAndPrinterEngine.DispatchPrintJob(
                 targetQueue,
                 orderCode,
@@ -116,7 +118,7 @@ namespace PrintAway.Worker
                 pagesToPrint,
                 copies,
                 duplexMode,
-                _simulateSpoolerOnly);
+                effectiveSimulate);
 
             if (!dispatch.Dispatched)
             {
