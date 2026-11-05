@@ -1,0 +1,25 @@
+# Netlify Configuration for PrintAway
+[build]
+  # Directory where the public static files are located
+  publish = "web"
+  command = ""
+
+# Rewrite /admin to /admin.html
+[[redirects]]
+  from = "/admin"
+  to = "/admin.html"
+  status = 200
+
+# Rewrite customer tracking URLs /track/:token to /index.html
+[[redirects]]
+  from = "/track/*"
+  to = "/index.html"
+  status = 200
+
+# Security headers for Netlify deployment
+[[headers]]
+  for = "/*"
+  [headers.values]
+    X-Frame-Options = "DENY"
+    X-Content-Type-Options = "nosniff"
+    Referrer-Policy = "no-referrer"

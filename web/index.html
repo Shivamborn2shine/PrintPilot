@@ -239,6 +239,7 @@
       <div class="nav-links">
         <a href="/" onclick="resetToNewOrder(); return false;">New Order</a>
         <a href="/admin">Staff Admin &amp; Printer Controls</a>
+        <a href="#" onclick="configureStationUrl(); return false;" id="btnStationConfig" style="border-color:#38bdf8;color:#38bdf8;">⚙️ Station URL</a>
       </div>
     </div>
   </header>
@@ -521,6 +522,28 @@
   </div>
 
   <script>
+    function apiUrl(path) {
+      const base = (localStorage.getItem('printaway_api_base') || '').trim();
+      if (!base) return path;
+      return base.replace(/\/+$/, '') + path;
+    }
+
+    function configureStationUrl() {
+      const cur = localStorage.getItem('printaway_api_base') || '';
+      const entered = prompt(
+        "Enter your PrintAway Station Backend URL (e.g., https://your-tunnel.trycloudflare.com or https://...ngrok-free.app or leave empty to use current host):",
+        cur
+      );
+      if (entered !== null) {
+        if (entered.trim()) {
+          localStorage.setItem('printaway_api_base', entered.trim());
+        } else {
+          localStorage.removeItem('printaway_api_base');
+        }
+        location.reload();
+      }
+    }
+
     let currentFileToken = null;
     let currentDocPages = 1;
     let selectedChipPages = new Set([1]);
@@ -538,7 +561,7 @@
 
     async function loadShopStatus() {
       try {
-        const res = await fetch('/api/shop/status');
+        const res = await fetch(apiUrl('/api/shop/status'));
         const data = await res.json();
         shopCapabilities = data;
         document.getElementById('shopTagline').textContent = data.tagline || '';
@@ -603,6 +626,12 @@
         }
       } catch (e) {
         console.error(e);
+        const banner = document.getElementById('shopBanner');
+        banner.className = 'status-banner status-closed';
+        document.getElementById('shopStatusText').textContent = '● Printer Station Offline / Unreachable';
+        document.getElementById('shopTurnaround').textContent = (window.location.hostname !== 'localhost' && window.location.hostname !== '127.0.0.1')
+          ? 'Running on Netlify? Click "⚙️ Station URL" above to connect to your workstation tunnel.'
+          : 'Make sure PrintAway.exe is running on http://127.0.0.1:8080';
       }
     }
 
@@ -623,7 +652,7 @@
       const file = input.files[0];
       try {
         const buf = await file.arrayBuffer();
-        const res = await fetch('/api/uploads?filename=' + encodeURIComponent(file.name), {
+        const res = await fetch(apiUrl('/api/uploads?filename=' + encodeURIComponent(file.name)), {
           method: 'POST',
           headers: { 'Content-Type': 'application/pdf', 'X-File-Name': file.name },
           body: buf
@@ -642,7 +671,7 @@
     async function loadFounderPdf() {
       showError(null);
       try {
-        const res = await fetch('/api/uploads/sample', {
+        const res = await fetch(apiUrl('/api/uploads/sample'), {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ preset: 'first-successful-document' })
@@ -661,7 +690,7 @@
     async function generateSamplePdf(pages) {
       showError(null);
       try {
-        const res = await fetch('/api/uploads/sample', {
+        const res = await fetch(apiUrl('/api/uploads/sample'), {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ pages: pages, title: 'Sample_A4_PrintAway_Test' })
@@ -840,7 +869,7 @@
       const collate = document.getElementById('collateCheck').checked;
 
       try {
-        const res = await fetch('/api/orders/quote', {
+        const res = await fetch(apiUrl('/api/orders/quote'), {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
@@ -896,7 +925,7 @@
       const customerPhone = document.getElementById('custPhone').value;
 
       try {
-        const res = await fetch('/api/orders', {
+        const res = await fetch(apiUrl('/api/orders'), {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ quoteToken: currentQuoteToken, customerName, customerPhone, consentAccepted: consent })
@@ -922,7 +951,7 @@
       if (!currentOrder || !currentOrder.gatewayOrderId) return;
       showError(null);
       try {
-        const res = await fetch('/api/payments/simulate-upi', {
+        const res = await fetch(apiUrl('/api/payments/simulate-upi'), {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
@@ -956,7 +985,7 @@
     async function refreshCurrentOrder() {
       if (!currentOrder || !currentOrder.publicToken) return;
       try {
-        const res = await fetch('/api/orders/' + encodeURIComponent(currentOrder.publicToken));
+        const res = await fetch(apiUrl('/api/orders/' + encodeURIComponent(currentOrder.publicToken)));
         const data = await res.json();
         if (!res.ok || data.error) {
           showError(data.message || 'Could not load order status.');

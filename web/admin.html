@@ -135,6 +135,7 @@
     </div>
     <div style="display:flex;gap:10px;align-items:center;">
       <a href="/" style="color:#93c5fd;text-decoration:none;font-size:0.85rem;font-weight:600;">&larr; Customer Portal</a>
+      <a href="#" onclick="configureStationUrl(); return false;" style="color:#38bdf8;text-decoration:none;font-size:0.85rem;font-weight:600;border:1px solid #0284c7;padding:4px 8px;border-radius:6px;">⚙️ Station URL</a>
       <button id="btnRefreshTop" class="btn btn-secondary hidden" onclick="loadDashboard()">Refresh Now</button>
     </div>
   </header>
@@ -405,6 +406,28 @@
   </div>
 
   <script>
+    function apiUrl(path) {
+      const base = (localStorage.getItem('printaway_api_base') || '').trim();
+      if (!base) return path;
+      return base.replace(/\/+$/, '') + path;
+    }
+
+    function configureStationUrl() {
+      const cur = localStorage.getItem('printaway_api_base') || '';
+      const entered = prompt(
+        "Enter your PrintAway Station Backend URL (e.g., https://your-tunnel.trycloudflare.com or https://...ngrok-free.app or leave empty to use current host):",
+        cur
+      );
+      if (entered !== null) {
+        if (entered.trim()) {
+          localStorage.setItem('printaway_api_base', entered.trim());
+        } else {
+          localStorage.removeItem('printaway_api_base');
+        }
+        location.reload();
+      }
+    }
+
     let adminSessionToken = null;
     let adminCsrfToken = null;
     let dashTimer = null;
@@ -423,7 +446,7 @@
       const username = document.getElementById('loginUser').value;
       const password = document.getElementById('loginPass').value;
       try {
-        const res = await fetch('/api/admin/login', {
+        const res = await fetch(apiUrl('/api/admin/login'), {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ username, password })
@@ -460,7 +483,7 @@
       const st = document.getElementById('filterState').value;
       const q = document.getElementById('searchBox').value;
       try {
-        const res = await fetch('/api/admin/dashboard?state=' + encodeURIComponent(st) + '&q=' + encodeURIComponent(q), {
+        const res = await fetch(apiUrl('/api/admin/dashboard?state=' + encodeURIComponent(st) + '&q=' + encodeURIComponent(q)), {
           headers: adminHeaders()
         });
         const data = await res.json();
@@ -624,7 +647,7 @@
 
       showNotice(null);
       try {
-        const res = await fetch(`/api/admin/orders/${orderId}/override-settings`, {
+        const res = await fetch(apiUrl(`/api/admin/orders/${orderId}/override-settings`), {
           method: 'POST',
           headers: adminHeaders(),
           body: JSON.stringify({ pageRange, copies, colorMode, duplexMode, paperSize, pagesPerSheet, collate: true })
@@ -645,7 +668,7 @@
     async function orderAction(orderId, action, payload) {
       showNotice(null);
       try {
-        const res = await fetch(`/api/admin/orders/${orderId}/${action}`, {
+        const res = await fetch(apiUrl(`/api/admin/orders/${orderId}/${action}`), {
           method: 'POST',
           headers: adminHeaders(),
           body: JSON.stringify(payload || {})
@@ -665,7 +688,7 @@
     async function setDispatchMode(mode) {
       showNotice(null);
       try {
-        const res = await fetch('/api/admin/printers/dispatch-mode', {
+        const res = await fetch(apiUrl('/api/admin/printers/dispatch-mode'), {
           method: 'POST',
           headers: adminHeaders(),
           body: JSON.stringify({ mode: mode })
@@ -691,7 +714,7 @@
     async function updateControls(payload) {
       showNotice(null);
       try {
-        const res = await fetch('/api/admin/printers/controls', {
+        const res = await fetch(apiUrl('/api/admin/printers/controls'), {
           method: 'POST',
           headers: adminHeaders(),
           body: JSON.stringify(payload)
@@ -724,7 +747,7 @@
 
     async function loadLiveWindowsQueues() {
       try {
-        const res = await fetch('/api/admin/printers', { headers: adminHeaders() });
+        const res = await fetch(apiUrl('/api/admin/printers'), { headers: adminHeaders() });
         const data = await res.json();
         const box = document.getElementById('liveQueuesBox');
         const selSwitch = document.getElementById('selQueueSwitch');
@@ -754,7 +777,7 @@
       const minOrderChargeInr = parseFloat(document.getElementById('inpMinOrder').value);
       const taxPercent = parseFloat(document.getElementById('inpTax').value);
       try {
-        const res = await fetch('/api/admin/pricing', {
+        const res = await fetch(apiUrl('/api/admin/pricing'), {
           method: 'POST',
           headers: adminHeaders(),
           body: JSON.stringify({

@@ -93,15 +93,26 @@ namespace PrintAway.Web
             HttpListenerRequest req = ctx.Request;
             HttpListenerResponse res = ctx.Response;
 
-            // Security Headers
+            // Security & CORS Headers
             res.Headers["X-Content-Type-Options"] = "nosniff";
             res.Headers["X-Frame-Options"] = "DENY";
             res.Headers["Referrer-Policy"] = "no-referrer";
             res.Headers["Cache-Control"] = "no-store";
+            res.Headers["Access-Control-Allow-Origin"] = "*";
+            res.Headers["Access-Control-Allow-Methods"] = "GET, POST, OPTIONS, PUT, DELETE";
+            res.Headers["Access-Control-Allow-Headers"] = "Content-Type, X-Admin-Session, X-CSRF-Token, X-Worker-Token, X-File-Name, X-PrintAway-Signature, Authorization";
 
             string path = (req.Url.AbsolutePath ?? "/").TrimEnd('/');
             if (path.Length == 0) path = "/";
             string method = req.HttpMethod.ToUpperInvariant();
+
+            // Handle CORS preflight requests
+            if (method == "OPTIONS")
+            {
+                res.StatusCode = 204;
+                res.Close();
+                return;
+            }
 
             try
             {
