@@ -213,9 +213,14 @@ namespace PrintAway.Web
                     int copies = GetInt(body, "copies", 1);
                     string duplexMode = GetString(body, "duplexMode", "OneSided");
                     string pageRange = GetString(body, "pageRange", "all");
+                    string colorMode = GetString(body, "colorMode", "bw");
+                    string paperSize = GetString(body, "paperSize", "A4");
+                    string orientation = GetString(body, "orientation", "auto");
+                    int pagesPerSheet = GetInt(body, "pagesPerSheet", 1);
+                    bool collate = GetBool(body, "collate", true);
 
                     string errMsg;
-                    var quote = _repo.CreateServerQuote(fileToken, copies, duplexMode, pageRange, out errMsg);
+                    var quote = _repo.CreateServerQuote(fileToken, copies, duplexMode, pageRange, out errMsg, colorMode, paperSize, orientation, pagesPerSheet, collate);
                     if (quote == null)
                     {
                         WriteError(res, 400, "INVALID_QUOTE_REQUEST", errMsg);
@@ -387,10 +392,16 @@ namespace PrintAway.Web
                         bool? intakePaused = body.ContainsKey("intakePaused") ? (bool?)GetBool(body, "intakePaused", false) : null;
                         string pauseReason = GetString(body, "pauseReason", "");
                         bool? supportsDuplex = body.ContainsKey("supportsDuplex") ? (bool?)GetBool(body, "supportsDuplex", false) : null;
+                        bool? supportsColor = body.ContainsKey("supportsColor") ? (bool?)GetBool(body, "supportsColor", true) : null;
+                        bool? supportsPageRange = body.ContainsKey("supportsPageRange") ? (bool?)GetBool(body, "supportsPageRange", true) : null;
+                        string allowedPaperSizes = body.ContainsKey("allowedPaperSizes") ? GetString(body, "allowedPaperSizes", null) : null;
+                        int? maxCopies = body.ContainsKey("maxCopies") ? (int?)GetInt(body, "maxCopies", 50) : null;
+                        string activeQueueName = body.ContainsKey("activeQueueName") ? GetString(body, "activeQueueName", null) : null;
                         bool? printerReady = body.ContainsKey("printerReady") ? (bool?)GetBool(body, "printerReady", true) : null;
 
                         var updated = _repo.UpdateShopAndPrinterControls(
-                            intakePaused, pauseReason, supportsDuplex, printerReady, Convert.ToString(adminSess["username"]));
+                            intakePaused, pauseReason, supportsDuplex, printerReady, Convert.ToString(adminSess["username"]),
+                            supportsColor, supportsPageRange, allowedPaperSizes, maxCopies, activeQueueName);
                         WriteJson(res, 200, updated);
                         return;
                     }
@@ -412,11 +423,13 @@ namespace PrintAway.Web
                         var body = ReadJsonBody(req);
                         double sRate = GetDouble(body, "simplexPerSideInr", 2.0);
                         double dRate = GetDouble(body, "duplexPerSideInr", 1.5);
+                        double csRate = GetDouble(body, "colorSimplexPerSideInr", 10.0);
+                        double cdRate = GetDouble(body, "colorDuplexPerSideInr", 8.0);
                         double minCharge = GetDouble(body, "minOrderChargeInr", 2.0);
                         double tax = GetDouble(body, "taxPercent", 0.0);
 
                         string errMsg;
-                        var pr = _repo.UpdatePricingRule(sRate, dRate, minCharge, tax, Convert.ToString(adminSess["username"]), out errMsg);
+                        var pr = _repo.UpdatePricingRule(sRate, dRate, minCharge, tax, Convert.ToString(adminSess["username"]), out errMsg, csRate, cdRate);
                         if (pr == null)
                         {
                             WriteError(res, 400, "INVALID_PRICING", errMsg);
@@ -512,6 +525,25 @@ namespace PrintAway.Web
                                 var colRes = _repo.AdminMarkOrderCollected(orderId, pickupCode, adminSess, out err);
                                 if (colRes == null) { WriteError(res, 400, "COLLECTION_FAILED", err); return; }
                                 WriteJson(res, 200, colRes);
+                                return;
+                            }
+                            if (action == "override-settings")
+                            {
+                                string pageRange = GetString(body, "pageRange", "all");
+                                int copies = GetInt(body, "copies", 1);
+                                string duplexMode = GetString(body, "duplexMode", "OneSided");
+                                string colorMode = GetString(body, "colorMode", "bw");
+                                string paperSize = GetString(body, "paperSize", "A4");
+                                string orientation = GetString(body, "orientation", "auto");
+                                int pagesPerSheet = GetInt(body, "pagesPerSheet", 1);
+                                bool collate = GetBool(body, "collate", true);
+
+                                string err;
+                                var ovRes = _repo.AdminOverrideOrderPrintSettings(
+                                    orderId, pageRange, copies, duplexMode, colorMode, paperSize, orientation, pagesPerSheet, collate,
+                                    Convert.ToString(adminSess["username"]), out err);
+                                if (ovRes == null) { WriteError(res, 400, "OVERRIDE_FAILED", err); return; }
+                                WriteJson(res, 200, ovRes);
                                 return;
                             }
                         }

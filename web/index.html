@@ -35,7 +35,7 @@
       border-bottom: 3px solid #3b82f6;
     }
     .header-inner {
-      max-width: 760px;
+      max-width: 820px;
       margin: 0 auto;
       display: flex;
       justify-content: space-between;
@@ -55,7 +55,7 @@
       border: 1px solid #334155;
       border-radius: 6px;
     }
-    .container { max-width: 760px; margin: 20px auto; padding: 0 16px; }
+    .container { max-width: 820px; margin: 20px auto; padding: 0 16px; }
     .card {
       background: var(--card);
       border: 1px solid var(--border);
@@ -119,29 +119,76 @@
     .btn-secondary { background: #e2e8f0; color: #1e293b; }
     .btn-secondary:hover { background: #cbd5e1; }
     .btn-success { background: var(--success); color: #fff; }
-    .grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
-    @media (max-width: 560px) { .grid-2 { grid-template-columns: 1fr; } }
-    label { display: block; font-size: 0.85rem; font-weight: 600; color: var(--muted); margin-bottom: 4px; }
+    .grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
+    .grid-3 { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 12px; }
+    @media (max-width: 640px) {
+      .grid-2, .grid-3 { grid-template-columns: 1fr; }
+    }
+    label { display: block; font-size: 0.84rem; font-weight: 600; color: var(--muted); margin-bottom: 5px; }
     input[type="text"], input[type="number"], select {
       width: 100%;
       padding: 9px 12px;
       border: 1px solid #cbd5e1;
       border-radius: 8px;
-      font-size: 0.95rem;
+      font-size: 0.94rem;
       background: #fff;
+    }
+    .mode-card-group {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 10px;
+    }
+    .mode-option {
+      border: 2px solid #cbd5e1;
+      border-radius: 10px;
+      padding: 12px;
+      cursor: pointer;
+      background: #fff;
+      transition: all 0.15s ease;
+    }
+    .mode-option.active {
+      border-color: var(--primary);
+      background: #eff6ff;
+      box-shadow: 0 0 0 1px var(--primary);
+    }
+    .mode-option.disabled {
+      opacity: 0.5;
+      cursor: not-allowed;
+      background: #f1f5f9;
+    }
+    .page-chip {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      min-width: 64px;
+      padding: 6px 10px;
+      margin: 3px;
+      border-radius: 8px;
+      font-size: 0.82rem;
+      font-weight: 700;
+      border: 2px solid #cbd5e1;
+      background: #f8fafc;
+      color: #475569;
+      cursor: pointer;
+      user-select: none;
+    }
+    .page-chip.selected {
+      border-color: var(--primary);
+      background: #dbeafe;
+      color: #1e40af;
     }
     .quote-box {
       background: #f1f5f9;
       border-radius: 10px;
       padding: 14px 16px;
-      margin-top: 14px;
+      margin-top: 16px;
       border-left: 4px solid var(--primary);
     }
     .quote-row { display: flex; justify-content: space-between; font-size: 0.9rem; margin-bottom: 6px; }
     .quote-total {
       display: flex;
       justify-content: space-between;
-      font-size: 1.15rem;
+      font-size: 1.18rem;
       font-weight: 800;
       border-top: 1px solid #cbd5e1;
       padding-top: 8px;
@@ -175,6 +222,11 @@
       margin-right: 6px;
       margin-top: 4px;
     }
+    .section-divider {
+      border-top: 1px solid #e2e8f0;
+      margin: 14px 0;
+      padding-top: 14px;
+    }
   </style>
 </head>
 <body>
@@ -186,7 +238,7 @@
       </div>
       <div class="nav-links">
         <a href="/" onclick="resetToNewOrder(); return false;">New Order</a>
-        <a href="/admin">Staff Admin</a>
+        <a href="/admin">Staff Admin &amp; Printer Controls</a>
       </div>
     </div>
   </header>
@@ -216,62 +268,166 @@
         <div class="upload-zone" onclick="document.getElementById('pdfInput').click()">
           <input type="file" id="pdfInput" accept=".pdf,application/pdf" class="hidden" onchange="handleFileSelected(this)" />
           <div style="font-weight:700;font-size:1rem;margin-bottom:4px;">Tap to Select PDF File (Max 20 MB, 100 Pages)</div>
-          <div style="font-size:0.83rem;color:var(--muted);">Server validates PDF signature, page count &amp; encryption state automatically.</div>
+          <div style="font-size:0.83rem;color:var(--muted);">Server validates PDF signature, exact page count &amp; security automatically.</div>
         </div>
         <div style="margin-top:10px;display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px;">
           <span style="font-size:0.8rem;color:var(--muted);">Quick local test documents:</span>
           <div style="display:flex;gap:8px;flex-wrap:wrap;">
             <button type="button" class="btn" style="font-size:0.82rem;padding:6px 12px;" onclick="loadFounderPdf()">Use 'FIRST SUCCESSFUL DOCUMENT.pdf' (2 Pages)</button>
             <button type="button" class="btn btn-secondary" style="font-size:0.82rem;padding:6px 12px;" onclick="generateSamplePdf(5)">Generate 5-Page Sample PDF</button>
+            <button type="button" class="btn btn-secondary" style="font-size:0.82rem;padding:6px 12px;" onclick="generateSamplePdf(10)">Generate 10-Page Sample PDF</button>
           </div>
         </div>
 
         <div id="uploadedFileInfo" class="alert alert-info hidden" style="margin-top:12px;">
           <div><strong>Validated PDF:</strong> <span id="lblFileName"></span></div>
           <div style="margin-top:4px;">
-            <span class="meta-pill">Server Page Count: <strong id="lblPageCount">0</strong> pages</span>
+            <span class="meta-pill">Total Document Pages: <strong id="lblPageCount">0</strong> pages</span>
             <span class="meta-pill">Size: <span id="lblFileSize">0</span> KB</span>
             <span class="meta-pill">SHA-256: <code id="lblSha"></code></span>
           </div>
         </div>
       </div>
 
-      <!-- STEP 2: Configure & Server Quote -->
+      <!-- STEP 2: Full Printer & Page Controls + Server Quote -->
       <div id="configCard" class="card hidden">
-        <h2><span class="step-badge">2</span> Configure Print Settings &amp; Server Quote</h2>
-        <div class="grid-2">
-          <div>
-            <label>Paper Size &amp; Mode (Hardware Verified)</label>
-            <input type="text" value="ISO A4 (210 × 297 mm) — Black & White Laser" disabled style="background:#f1f5f9;color:#475569;" />
+        <h2><span class="step-badge">2</span> Customize Print Settings (Color, Pages, Duplex &amp; Layout)</h2>
+
+        <!-- 2A: Color Mode (Black & White vs Full Color) -->
+        <div style="margin-bottom:14px;">
+          <label>Color Mode (Black &amp; White vs Coloured)</label>
+          <div class="mode-card-group">
+            <div id="cardModeBw" class="mode-option active" onclick="selectColorMode('bw')">
+              <div style="font-weight:800;font-size:0.98rem;">⚫ Black &amp; White (Monochrome)</div>
+              <div style="font-size:0.8rem;color:var(--muted);" id="lblBwRates">Simplex: ₹2.00/side | Duplex: ₹1.50/side</div>
+            </div>
+            <div id="cardModeColor" class="mode-option" onclick="selectColorMode('color')">
+              <div style="font-weight:800;font-size:0.98rem;">🎨 Full Colour Print</div>
+              <div style="font-size:0.8rem;color:var(--muted);" id="lblColorRates">Simplex: ₹10.00/side | Duplex: ₹8.00/side</div>
+            </div>
           </div>
-          <div>
-            <label for="copiesInput">Number of Copies (1–20)</label>
-            <input type="number" id="copiesInput" min="1" max="20" value="1" onchange="requestServerQuote()" />
+          <input type="hidden" id="colorModeInput" value="bw" />
+        </div>
+
+        <!-- 2B: Granular Page Selection ("No. of Pages") -->
+        <div class="section-divider">
+          <label for="pageSelectionMode">Which Pages Do You Want to Print? (Document has <span id="lblInlineTotalPages">1</span> pages)</label>
+          <div class="grid-2" style="align-items:start;">
+            <div>
+              <select id="pageSelectionMode" onchange="onPageModeChanged()">
+                <option value="all">All Pages (Entire Document)</option>
+                <option value="first_n">First N Pages Only (e.g., First 1, 2, 3... pages)</option>
+                <option value="from_to">Page Range (From Page X to Page Y)</option>
+                <option value="custom_chips">Pick Individual Pages / Custom Range (e.g., 1-3, 5)</option>
+                <option value="odd">Odd Pages Only (1, 3, 5...)</option>
+                <option value="even">Even Pages Only (2, 4, 6...)</option>
+              </select>
+            </div>
+
+            <!-- Dynamic sub-control based on selected mode -->
+            <div id="subPageFirstN" class="hidden">
+              <div style="display:flex;align-items:center;gap:8px;">
+                <span style="font-size:0.86rem;font-weight:600;white-space:nowrap;">Print First</span>
+                <input type="number" id="inpFirstN" min="1" value="1" onchange="syncPageRangeAndQuote()" onkeyup="syncPageRangeAndQuote()" />
+                <span style="font-size:0.86rem;font-weight:600;white-space:nowrap;">page(s)</span>
+              </div>
+            </div>
+
+            <div id="subPageFromTo" class="hidden">
+              <div style="display:flex;align-items:center;gap:6px;">
+                <span style="font-size:0.84rem;font-weight:600;">From</span>
+                <input type="number" id="inpPageFrom" min="1" value="1" onchange="syncPageRangeAndQuote()" />
+                <span style="font-size:0.84rem;font-weight:600;">To</span>
+                <input type="number" id="inpPageTo" min="1" value="1" onchange="syncPageRangeAndQuote()" />
+              </div>
+            </div>
+
+            <div id="subPageCustomText" class="hidden">
+              <input type="text" id="pageRangeInput" value="all" placeholder="e.g. 1-3, 5, 8-10" onchange="onCustomRangeTextEdited()" onkeyup="if(event.key==='Enter') onCustomRangeTextEdited()" />
+            </div>
           </div>
-          <div>
-            <label for="duplexSelect">Sides (Simplex / Duplex)</label>
-            <select id="duplexSelect" onchange="requestServerQuote()">
-              <option value="OneSided">Single-Sided (Simplex — 1 side per sheet)</option>
-              <option value="TwoSidedLongEdge" id="optDuplexLong">Double-Sided (Duplex — 2 sides per sheet)</option>
-            </select>
-          </div>
-          <div>
-            <label for="pageRangeInput">Pages to Print ("all" or e.g. "1-3,5")</label>
-            <input type="text" id="pageRangeInput" value="all" onchange="requestServerQuote()" />
+
+          <!-- Interactive Visual Page Chip Selector -->
+          <div id="visualPagePickerWrap" style="margin-top:10px;background:#f8fafc;border:1px solid #e2e8f0;border-radius:8px;padding:10px;">
+            <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:6px;margin-bottom:6px;">
+              <span style="font-size:0.78rem;font-weight:700;color:var(--muted);">INTERACTIVE PAGE SELECTOR (Click any page to toggle it on/off):</span>
+              <div style="display:flex;gap:6px;">
+                <button type="button" class="btn btn-secondary" style="padding:3px 8px;font-size:0.74rem;" onclick="quickSelectPages('all')">Select All</button>
+                <button type="button" class="btn btn-secondary" style="padding:3px 8px;font-size:0.74rem;" onclick="quickSelectPages('first1')">Only Page 1</button>
+                <button type="button" class="btn btn-secondary" style="padding:3px 8px;font-size:0.74rem;" onclick="quickSelectPages('odd')">Odd</button>
+                <button type="button" class="btn btn-secondary" style="padding:3px 8px;font-size:0.74rem;" onclick="quickSelectPages('even')">Even</button>
+              </div>
+            </div>
+            <div id="pageChipsContainer"></div>
           </div>
         </div>
 
+        <!-- 2C: Copies, Duplex (1-Sided / 2-Sided), Pages per Sheet (N-Up), Orientation, Paper Size, Collate -->
+        <div class="section-divider grid-3">
+          <div>
+            <label for="copiesInput">Number of Copies (1–<span id="lblMaxCopies">50</span>)</label>
+            <input type="number" id="copiesInput" min="1" max="50" value="1" onchange="requestServerQuote()" />
+          </div>
+          <div>
+            <label for="duplexSelect">Sides (One-Sided / Two-Sided)</label>
+            <select id="duplexSelect" onchange="requestServerQuote()">
+              <option value="OneSided">Single-Sided (1 Side per Sheet)</option>
+              <option value="TwoSidedLongEdge" id="optDuplexLong">Double-Sided — Long Edge (Book)</option>
+              <option value="TwoSidedShortEdge" id="optDuplexShort">Double-Sided — Short Edge (Flip)</option>
+            </select>
+          </div>
+          <div>
+            <label for="pagesPerSheetSelect">Pages per Side (N-Up Layout)</label>
+            <select id="pagesPerSheetSelect" onchange="requestServerQuote()">
+              <option value="1">1 Page per Side (Standard 100%)</option>
+              <option value="2">2 Pages per Side (2-in-1 Compact)</option>
+              <option value="4">4 Pages per Side (4-in-1 Handout)</option>
+            </select>
+          </div>
+          <div>
+            <label for="orientationSelect">Page Orientation</label>
+            <select id="orientationSelect" onchange="requestServerQuote()">
+              <option value="auto">Auto-Detect (Match PDF)</option>
+              <option value="portrait">Portrait (Vertical)</option>
+              <option value="landscape">Landscape (Horizontal)</option>
+            </select>
+          </div>
+          <div>
+            <label for="paperSizeSelect">Paper Size</label>
+            <select id="paperSizeSelect" onchange="requestServerQuote()">
+              <option value="A4">ISO A4 (210 × 297 mm)</option>
+              <option value="Legal">Legal (216 × 356 mm)</option>
+              <option value="Letter">US Letter (216 × 279 mm)</option>
+            </select>
+          </div>
+          <div style="display:flex;flex-direction:column;justify-content:end;">
+            <label style="display:flex;align-items:center;gap:8px;cursor:pointer;padding:9px 10px;border:1px solid #cbd5e1;border-radius:8px;background:#fff;color:var(--text);margin-bottom:0;">
+              <input type="checkbox" id="collateCheck" checked onchange="requestServerQuote()" />
+              <span style="font-size:0.86rem;font-weight:600;">Collate Copies (1-2-3, 1-2-3)</span>
+            </label>
+          </div>
+        </div>
+
+        <!-- Live Authoritative Quote Box -->
         <div id="quoteBox" class="quote-box hidden">
+          <div class="quote-row">
+            <span>Print Mode &amp; Paper:</span>
+            <strong id="qModeSummary">A4 Black &amp; White | OneSided</strong>
+          </div>
           <div class="quote-row">
             <span>Selected Pages per Copy:</span>
             <strong><span id="qSelectedPages">0</span> of <span id="qDocPages">0</span> pages (<span id="qRange">all</span>)</strong>
+          </div>
+          <div class="quote-row">
+            <span>Layout &amp; Copies:</span>
+            <strong><span id="qLayoutInfo">1 page/side × 1 copy</span></strong>
           </div>
           <div class="quote-row">
             <span>Total Printed Sides:</span>
             <strong><span id="qPrintedSides">0</span> sides (at ₹<span id="qRate">0.00</span>/side)</strong>
           </div>
           <div class="quote-row">
-            <span>Physical A4 Sheets Required:</span>
+            <span>Physical Paper Sheets Required:</span>
             <strong><span id="qPhysicalSheets">0</span> sheets</strong>
           </div>
           <div class="quote-total">
@@ -305,7 +461,7 @@
           <span>I agree to the document retention policy and staff-verified counter pickup.</span>
         </label>
         <button id="btnCreateOrder" class="btn" style="width:100%;padding:13px;" onclick="createOrderAndStartUpi()">
-          Confirm Order &amp; Proceed to UPI Payment
+          Confirm Print Settings &amp; Proceed to UPI Payment
         </button>
       </div>
     </div>
@@ -366,8 +522,11 @@
 
   <script>
     let currentFileToken = null;
+    let currentDocPages = 1;
+    let selectedChipPages = new Set([1]);
     let currentQuoteToken = null;
     let currentOrder = null;
+    let shopCapabilities = { supportsColor: true, supportsDuplex: true, supportsPageRange: true, maxCopies: 50 };
     let pollTimer = null;
 
     function showError(msg) {
@@ -381,24 +540,81 @@
       try {
         const res = await fetch('/api/shop/status');
         const data = await res.json();
+        shopCapabilities = data;
         document.getElementById('shopTagline').textContent = data.tagline || '';
         const banner = document.getElementById('shopBanner');
         const txt = document.getElementById('shopStatusText');
         const turn = document.getElementById('shopTurnaround');
+
+        const capTags = [];
+        capTags.push('B&W');
+        if (data.supportsColor) capTags.push('Color');
+        if (data.supportsDuplex) capTags.push('Duplex');
+        capTags.push(data.allowedPaperSizes || 'A4');
+
         if (data.acceptingOrders) {
           banner.className = 'status-banner status-open';
-          txt.textContent = '● ' + data.statusReason + ' — ' + data.printerModel + ' (A4 B&W)';
+          txt.textContent = '● ' + data.statusReason + ' — ' + data.printerModel + ' (' + capTags.join(' / ') + ')';
           turn.textContent = 'Est. turnaround: ' + data.turnaroundText;
         } else {
           banner.className = 'status-banner status-closed';
           txt.textContent = '● ' + data.statusReason;
           turn.textContent = 'Uploads & checkout disabled while station unavailable';
         }
-        const optDuplex = document.getElementById('optDuplexLong');
-        if (optDuplex) optDuplex.disabled = !data.supportsDuplex;
+
+        // Update pricing labels on B&W and Color cards
+        if (data.pricing) {
+          const p = data.pricing;
+          document.getElementById('lblBwRates').textContent =
+            `Simplex: ₹${Number(p.simplexPerSideInr).toFixed(2)}/side | Duplex: ₹${Number(p.duplexPerSideInr).toFixed(2)}/side`;
+          document.getElementById('lblColorRates').textContent =
+            `Simplex: ₹${Number(p.colorSimplexPerSideInr || 10).toFixed(2)}/side | Duplex: ₹${Number(p.colorDuplexPerSideInr || 8).toFixed(2)}/side`;
+        }
+
+        const cardColor = document.getElementById('cardModeColor');
+        if (!data.supportsColor) {
+          cardColor.classList.add('disabled');
+          if (document.getElementById('colorModeInput').value === 'color') {
+            selectColorMode('bw');
+          }
+        } else {
+          cardColor.classList.remove('disabled');
+        }
+
+        const optDuplexLong = document.getElementById('optDuplexLong');
+        const optDuplexShort = document.getElementById('optDuplexShort');
+        if (optDuplexLong) optDuplexLong.disabled = !data.supportsDuplex;
+        if (optDuplexShort) optDuplexShort.disabled = !data.supportsDuplex;
+
+        if (data.maxCopies) {
+          document.getElementById('lblMaxCopies').textContent = data.maxCopies;
+          document.getElementById('copiesInput').max = data.maxCopies;
+        }
+
+        if (data.allowedPaperSizes) {
+          const allowed = data.allowedPaperSizes.split(',').map(s => s.trim()).filter(Boolean);
+          const sel = document.getElementById('paperSizeSelect');
+          const curVal = sel.value || 'A4';
+          sel.innerHTML = allowed.map(p => {
+            const desc = p === 'A4' ? 'ISO A4 (210 × 297 mm)' : (p === 'Legal' ? 'Legal (216 × 356 mm)' : (p === 'Letter' ? 'US Letter (216 × 279 mm)' : p));
+            return `<option value="${p}">${desc}</option>`;
+          }).join('');
+          if (allowed.includes(curVal)) sel.value = curVal;
+        }
       } catch (e) {
         console.error(e);
       }
+    }
+
+    function selectColorMode(mode) {
+      if (mode === 'color' && !shopCapabilities.supportsColor) {
+        showError('Color printing is currently disabled by the shop admin on this printer. You can enable it in Staff Admin.');
+        return;
+      }
+      document.getElementById('colorModeInput').value = mode;
+      document.getElementById('cardModeBw').classList.toggle('active', mode === 'bw');
+      document.getElementById('cardModeColor').classList.toggle('active', mode === 'color');
+      requestServerQuote();
     }
 
     async function handleFileSelected(input) {
@@ -463,12 +679,151 @@
 
     function onFileValidated(data) {
       currentFileToken = data.fileToken;
+      currentDocPages = data.pageCount || 1;
       document.getElementById('lblFileName').textContent = data.displayName;
-      document.getElementById('lblPageCount').textContent = data.pageCount;
+      document.getElementById('lblPageCount').textContent = currentDocPages;
+      document.getElementById('lblInlineTotalPages').textContent = currentDocPages;
       document.getElementById('lblFileSize').textContent = Math.max(1, Math.round(data.sizeBytes / 1024));
       document.getElementById('lblSha').textContent = data.sha256Prefix + '...';
+
+      // Initialize page controls for this document's page count
+      const inpFirstN = document.getElementById('inpFirstN');
+      inpFirstN.max = currentDocPages;
+      inpFirstN.value = Math.min(currentDocPages, 1);
+
+      const inpFrom = document.getElementById('inpPageFrom');
+      const inpTo = document.getElementById('inpPageTo');
+      inpFrom.max = currentDocPages;
+      inpFrom.value = 1;
+      inpTo.max = currentDocPages;
+      inpTo.value = currentDocPages;
+
+      selectedChipPages = new Set();
+      for (let i = 1; i <= currentDocPages; i++) selectedChipPages.add(i);
+
+      document.getElementById('pageSelectionMode').value = 'all';
+      document.getElementById('pageRangeInput').value = 'all';
+      renderPageChips();
+      onPageModeChanged();
+
       document.getElementById('uploadedFileInfo').classList.remove('hidden');
       document.getElementById('configCard').classList.remove('hidden');
+    }
+
+    function renderPageChips() {
+      const container = document.getElementById('pageChipsContainer');
+      const maxChips = Math.min(currentDocPages, 60);
+      let html = '';
+      for (let p = 1; p <= maxChips; p++) {
+        const isSel = selectedChipPages.has(p);
+        html += `<div class="page-chip ${isSel ? 'selected' : ''}" onclick="togglePageChip(${p})">${isSel ? '✓ ' : ''}Page ${p}</div>`;
+      }
+      if (currentDocPages > maxChips) {
+        html += `<span style="font-size:0.78rem;color:var(--muted);margin-left:6px;">(+${currentDocPages - maxChips} more pages — use range box above)</span>`;
+      }
+      container.innerHTML = html;
+    }
+
+    function togglePageChip(pageNum) {
+      if (selectedChipPages.has(pageNum)) {
+        if (selectedChipPages.size <= 1) {
+          showError('At least 1 page must remain selected.');
+          return;
+        }
+        selectedChipPages.delete(pageNum);
+      } else {
+        selectedChipPages.add(pageNum);
+      }
+      document.getElementById('pageSelectionMode').value = 'custom_chips';
+      document.getElementById('subPageFirstN').classList.add('hidden');
+      document.getElementById('subPageFromTo').classList.add('hidden');
+      document.getElementById('subPageCustomText').classList.remove('hidden');
+
+      const spec = compressPagesToRangeString(Array.from(selectedChipPages).sort((a, b) => a - b));
+      document.getElementById('pageRangeInput').value = spec;
+      renderPageChips();
+      requestServerQuote();
+    }
+
+    function quickSelectPages(preset) {
+      selectedChipPages.clear();
+      if (preset === 'all') {
+        for (let i = 1; i <= currentDocPages; i++) selectedChipPages.add(i);
+        document.getElementById('pageSelectionMode').value = 'all';
+      } else if (preset === 'first1') {
+        selectedChipPages.add(1);
+        document.getElementById('pageSelectionMode').value = 'first_n';
+        document.getElementById('inpFirstN').value = 1;
+      } else if (preset === 'odd') {
+        for (let i = 1; i <= currentDocPages; i += 2) selectedChipPages.add(i);
+        document.getElementById('pageSelectionMode').value = 'odd';
+      } else if (preset === 'even') {
+        for (let i = 2; i <= currentDocPages; i += 2) selectedChipPages.add(i);
+        if (selectedChipPages.size === 0) selectedChipPages.add(1);
+        document.getElementById('pageSelectionMode').value = 'even';
+      }
+      onPageModeChanged();
+    }
+
+    function compressPagesToRangeString(sortedPages) {
+      if (!sortedPages.length) return '1';
+      if (sortedPages.length === currentDocPages) return 'all';
+      const parts = [];
+      let start = sortedPages[0];
+      let prev = start;
+      for (let i = 1; i < sortedPages.length; i++) {
+        const cur = sortedPages[i];
+        if (cur === prev + 1) {
+          prev = cur;
+        } else {
+          parts.push(start === prev ? `${start}` : `${start}-${prev}`);
+          start = cur;
+          prev = cur;
+        }
+      }
+      parts.push(start === prev ? `${start}` : `${start}-${prev}`);
+      return parts.join(',');
+    }
+
+    function onPageModeChanged() {
+      const mode = document.getElementById('pageSelectionMode').value;
+      document.getElementById('subPageFirstN').classList.toggle('hidden', mode !== 'first_n');
+      document.getElementById('subPageFromTo').classList.toggle('hidden', mode !== 'from_to');
+      document.getElementById('subPageCustomText').classList.toggle('hidden', mode !== 'custom_chips');
+      syncPageRangeAndQuote();
+    }
+
+    function syncPageRangeAndQuote() {
+      const mode = document.getElementById('pageSelectionMode').value;
+      selectedChipPages.clear();
+
+      if (mode === 'all') {
+        for (let i = 1; i <= currentDocPages; i++) selectedChipPages.add(i);
+        document.getElementById('pageRangeInput').value = 'all';
+      } else if (mode === 'first_n') {
+        let n = parseInt(document.getElementById('inpFirstN').value || '1', 10);
+        n = Math.max(1, Math.min(currentDocPages, n));
+        for (let i = 1; i <= n; i++) selectedChipPages.add(i);
+        document.getElementById('pageRangeInput').value = 'first:' + n;
+      } else if (mode === 'from_to') {
+        let f = parseInt(document.getElementById('inpPageFrom').value || '1', 10);
+        let t = parseInt(document.getElementById('inpPageTo').value || String(currentDocPages), 10);
+        f = Math.max(1, Math.min(currentDocPages, f));
+        t = Math.max(f, Math.min(currentDocPages, t));
+        for (let i = f; i <= t; i++) selectedChipPages.add(i);
+        document.getElementById('pageRangeInput').value = `${f}-${t}`;
+      } else if (mode === 'odd') {
+        for (let i = 1; i <= currentDocPages; i += 2) selectedChipPages.add(i);
+        document.getElementById('pageRangeInput').value = 'odd';
+      } else if (mode === 'even') {
+        for (let i = 2; i <= currentDocPages; i += 2) selectedChipPages.add(i);
+        document.getElementById('pageRangeInput').value = 'even';
+      }
+      renderPageChips();
+      requestServerQuote();
+    }
+
+    function onCustomRangeTextEdited() {
       requestServerQuote();
     }
 
@@ -478,12 +833,27 @@
       const copies = parseInt(document.getElementById('copiesInput').value || '1', 10);
       const duplexMode = document.getElementById('duplexSelect').value;
       const pageRange = document.getElementById('pageRangeInput').value || 'all';
+      const colorMode = document.getElementById('colorModeInput').value || 'bw';
+      const paperSize = document.getElementById('paperSizeSelect').value || 'A4';
+      const orientation = document.getElementById('orientationSelect').value || 'auto';
+      const pagesPerSheet = parseInt(document.getElementById('pagesPerSheetSelect').value || '1', 10);
+      const collate = document.getElementById('collateCheck').checked;
 
       try {
         const res = await fetch('/api/orders/quote', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ fileToken: currentFileToken, copies, duplexMode, pageRange })
+          body: JSON.stringify({
+            fileToken: currentFileToken,
+            copies,
+            duplexMode,
+            pageRange,
+            colorMode,
+            paperSize,
+            orientation,
+            pagesPerSheet,
+            collate
+          })
         });
         const data = await res.json();
         if (!res.ok || data.error) {
@@ -493,9 +863,20 @@
           return;
         }
         currentQuoteToken = data.quoteToken;
+
+        // Sync chips if server returned resolvedPages
+        if (Array.isArray(data.resolvedPages)) {
+          selectedChipPages = new Set(data.resolvedPages);
+          renderPageChips();
+        }
+
+        const modeLabel = data.colorMode === 'color' ? '🎨 Full Colour' : '⚫ Black & White';
+        const duplexLabel = data.duplexMode === 'OneSided' ? 'Single-Sided (Simplex)' : `Double-Sided (${data.duplexMode})`;
+        document.getElementById('qModeSummary').textContent = `${data.paperSize} ${modeLabel} | ${duplexLabel} | Orientation: ${data.orientation}`;
         document.getElementById('qSelectedPages').textContent = data.selectedPages;
         document.getElementById('qDocPages').textContent = data.documentPages;
         document.getElementById('qRange').textContent = data.pageRange;
+        document.getElementById('qLayoutInfo').textContent = `${data.pagesPerSheet} page(s)/side × ${data.copies} copy(s) (${data.collate ? 'Collated' : 'Uncollated'})`;
         document.getElementById('qPrintedSides').textContent = data.printedSides;
         document.getElementById('qRate').textContent = Number(data.ratePerSideInr).toFixed(2);
         document.getElementById('qPhysicalSheets').textContent = data.physicalSheets;
@@ -586,7 +967,11 @@
         document.getElementById('trkStateDesc').textContent = data.stateDescription + (data.holdOrRejectReason ? ' (' + data.holdOrRejectReason + ')' : '');
         document.getElementById('trkPickupCode').textContent = data.pickupCode;
         document.getElementById('trkFileName').textContent = data.fileName + (data.fileDeletedAfterCollection ? ' [Purged from Disk]' : '');
-        document.getElementById('trkConfig').textContent = 'A4 B&W | ' + data.duplexMode + ' | ' + data.copies + ' copy(s) | Pages: ' + data.pageRange;
+        const cMode = data.colorMode === 'color' ? 'Colour' : 'B&W';
+        const pSize = data.paperSize || 'A4';
+        const nUp = (data.pagesPerSheet && data.pagesPerSheet > 1) ? ` | ${data.pagesPerSheet}-Up` : '';
+        const ori = (data.orientation && data.orientation !== 'auto') ? ` | ${data.orientation}` : '';
+        document.getElementById('trkConfig').textContent = `${pSize} ${cMode} | ${data.duplexMode}${nUp}${ori} | ${data.copies} copy(s) | Pages: ${data.pageRange} (${data.selectedPages}/${data.documentPages}p)`;
         document.getElementById('trkSidesSheets').textContent = data.printedSides + ' printed sides / ' + data.physicalSheets + ' physical sheets';
         document.getElementById('trkTotal').textContent = Number(data.totalAmountInr).toFixed(2);
         document.getElementById('trkPayStatus').textContent = data.paymentStatus;
@@ -617,12 +1002,13 @@
       document.getElementById('trackingCard').classList.add('hidden');
       document.getElementById('orderWizard').classList.remove('hidden');
       showError(null);
+      loadShopStatus();
     }
 
     window.addEventListener('DOMContentLoaded', () => {
       loadShopStatus();
       if (window.location.pathname.startsWith('/track/pub_')) {
-        const tok = window.location.pathname.substring('/track/'.Length);
+        const tok = window.location.pathname.substring('/track/'.length);
         document.getElementById('trackTokenInput').value = tok;
         lookupTrackedOrder();
       }

@@ -345,6 +345,37 @@ namespace PrintAway
                     Assert(col != null && Convert.ToString(col["state"]) == "collected" && (bool)col["sourcePdfPurged"],
                         "Collected and purged FIRST SUCCESSFUL DOCUMENT.pdf copy from vault");
                 });
+
+                // Test 10: Expanded Printer & Page Controls (B&W vs Color, First N Pages, Odd/Even, Custom Range, 2-up/4-up N-Up, Orientation, Admin Override)
+                runTest("T10: Granular Page Selection (first:N, odd, even, custom), Color vs B&W pricing, 2-up/4-up N-Up & Admin Override", () =>
+                {
+                    string errCode, errMsg, qErr;
+                    byte[] pdf8 = PdfAndPrinterEngine.GenerateSamplePdfBytes(8, "Eight Page Control Test");
+                    var saved8 = repo.SaveValidatedPdf("eight-page.pdf", pdf8, out errCode, out errMsg);
+                    string ft = Convert.ToString(saved8["fileToken"]);
+
+                    // First 3 pages ("first:3") in Color Simplex
+                    var qFirst3Color = repo.CreateServerQuote(ft, 1, "OneSided", "first:3", out qErr, "color", "A4", "portrait", 1, true);
+                    Assert(qFirst3Color != null && Convert.ToInt32(qFirst3Color["selectedPages"]) == 3 && Convert.ToString(qFirst3Color["colorMode"]) == "color",
+                        "first:3 in color mode must select 3 pages and set colorMode=color");
+
+                    // Odd pages ("odd") on 8-page doc -> 4 pages (1,3,5,7), 2-up (2 pages per side) -> 2 printed sides, 2 sheets
+                    var qOdd2Up = repo.CreateServerQuote(ft, 1, "OneSided", "odd", out qErr, "bw", "A4", "landscape", 2, true);
+                    Assert(qOdd2Up != null && Convert.ToInt32(qOdd2Up["selectedPages"]) == 4 && Convert.ToInt32(qOdd2Up["printedSides"]) == 2 && Convert.ToInt32(qOdd2Up["physicalSheets"]) == 2,
+                        "8-page odd with 2-up simplex must equal 4 selected pages, 2 printed sides, and 2 physical sheets");
+
+                    // Even pages ("even") on 8-page doc -> 4 pages (2,4,6,8), 4-up (4 pages per side) -> 1 printed side, 1 sheet
+                    var qEven4Up = repo.CreateServerQuote(ft, 2, "OneSided", "even", out qErr, "bw", "Legal", "auto", 4, false);
+                    Assert(qEven4Up != null && Convert.ToInt32(qEven4Up["selectedPages"]) == 4 && Convert.ToInt32(qEven4Up["printedSides"]) == 2 && Convert.ToInt32(qEven4Up["physicalSheets"]) == 2,
+                        "8-page even with 4-up x 2 copies must equal 2 total printed sides and 2 sheets");
+
+                    // Admin override print settings on an existing order before approving
+                    long overrideOrderId = CreatePaidAwaitingApprovalOrder(repo, 6, 1);
+                    string ovErr;
+                    var ov = repo.AdminOverrideOrderPrintSettings(overrideOrderId, "1-2,5", 2, "TwoSidedLongEdge", "color", "A4", "portrait", 1, true, "admin", out ovErr);
+                    Assert(ov != null && Convert.ToInt32(ov["selectedPages"]) == 3 && Convert.ToInt32(ov["printedSides"]) == 6 && Convert.ToInt32(ov["physicalSheets"]) == 4 && Convert.ToString(ov["colorMode"]) == "color",
+                        "Admin override (3 selected pages x 2 copies duplex in color) must update quote to 6 sides and 4 physical sheets");
+                });
             }
 
             Console.WriteLine("------------------------------------------------------------------");

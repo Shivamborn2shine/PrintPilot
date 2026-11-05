@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Diagnostics;
 using System.Drawing;
+using System.Drawing.Imaging;
 using System.Drawing.Printing;
 using System.Globalization;
 using System.IO;
@@ -32,6 +33,11 @@ namespace PrintAway.Engine
         public List<int> ResolvedPages { get; set; }
         public int Copies { get; set; }
         public string DuplexMode { get; set; }
+        public string ColorMode { get; set; }
+        public string PaperSize { get; set; }
+        public string Orientation { get; set; }
+        public int PagesPerSheet { get; set; }
+        public bool Collate { get; set; }
         public int PrintedSidesPerCopy { get; set; }
         public int TotalPrintedSides { get; set; }
         public int SheetsPerCopy { get; set; }
@@ -210,16 +216,49 @@ namespace PrintAway.Engine
                 return pages;
             }
 
-            if (string.IsNullOrWhiteSpace(pageRangeSpec) ||
-                string.Equals(pageRangeSpec.Trim(), "all", StringComparison.OrdinalIgnoreCase))
+            string rawTrim = string.IsNullOrWhiteSpace(pageRangeSpec) ? "all" : pageRangeSpec.Trim();
+            if (string.Equals(rawTrim, "all", StringComparison.OrdinalIgnoreCase))
             {
                 for (int i = 1; i <= totalPages; i++) pages.Add(i);
                 normalizedSpec = "1-" + totalPages.ToString(CultureInfo.InvariantCulture);
                 return pages;
             }
 
+            if (string.Equals(rawTrim, "odd", StringComparison.OrdinalIgnoreCase))
+            {
+                for (int i = 1; i <= totalPages; i += 2) pages.Add(i);
+                normalizedSpec = "odd (" + string.Join(",", pages) + ")";
+                return pages;
+            }
+
+            if (string.Equals(rawTrim, "even", StringComparison.OrdinalIgnoreCase))
+            {
+                for (int i = 2; i <= totalPages; i += 2) pages.Add(i);
+                if (pages.Count == 0)
+                {
+                    error = "Document has only 1 page; there are no even pages to print.";
+                    return pages;
+                }
+                normalizedSpec = "even (" + string.Join(",", pages) + ")";
+                return pages;
+            }
+
+            if (rawTrim.StartsWith("first:", StringComparison.OrdinalIgnoreCase))
+            {
+                int firstN;
+                string numStr = rawTrim.Substring("first:".Length).Trim();
+                if (!int.TryParse(numStr, NumberStyles.Integer, CultureInfo.InvariantCulture, out firstN) || firstN < 1 || firstN > totalPages)
+                {
+                    error = string.Format(CultureInfo.InvariantCulture, "Invalid 'First N Pages' count '{0}'. Must be between 1 and {1}.", numStr, totalPages);
+                    return pages;
+                }
+                for (int i = 1; i <= firstN; i++) pages.Add(i);
+                normalizedSpec = firstN == 1 ? "1" : ("1-" + firstN.ToString(CultureInfo.InvariantCulture));
+                return pages;
+            }
+
             var seen = new HashSet<int>();
-            string[] parts = pageRangeSpec.Split(new[] { ',' }, StringSplitOptions.RemoveEmptyEntries);
+            string[] parts = rawTrim.Split(new[] { ',' }, StringSplitOptions.RemoveEmptyEntries);
             if (parts.Length == 0)
             {
                 error = "Invalid page range format.";
@@ -263,7 +302,7 @@ namespace PrintAway.Engine
             }
 
             pages.Sort();
-            normalizedSpec = pageRangeSpec.Trim();
+            normalizedSpec = rawTrim;
             return pages;
         }
 
@@ -276,12 +315,26 @@ namespace PrintAway.Engine
             double duplexRatePerSideInr,
             double minOrderChargeInr,
             double taxPercent,
-            out string validationError)
+            out string validationError,
+            string colorMode = "bw",
+            double colorSimplexRatePerSideInr = 10.0,
+            double colorDuplexRatePerSideInr = 8.0,
+            string paperSize = "A4",
+            string orientation = "auto",
+            int pagesPerSheet = 1,
+            bool collate = true,
+            int maxCopies = 50)
         {
             validationError = null;
-            if (copies < 1 || copies > 20)
+            if (copies < 1 || copies > maxCopies)
             {
-                validationError = "Copies must be between 1 and 20.";
+                validationError = string.Format(CultureInfo.InvariantCulture, "Copies must be between 1 and {0}.", maxCopies);
+                return null;
+            }
+
+            if (pagesPerSheet != 1 && pagesPerSheet != 2 && pagesPerSheet != 4)
+            {
+                validationError = "Pages per sheet (N-Up) must be 1, 2, or 4.";
                 return null;
             }
 
@@ -300,16 +353,35 @@ namespace PrintAway.Engine
                 ? (string.Equals(duplexMode, "TwoSidedShortEdge", StringComparison.OrdinalIgnoreCase) ? "TwoSidedShortEdge" : "TwoSidedLongEdge")
                 : "OneSided";
 
+            bool isColor = string.Equals(colorMode, "color", StringComparison.OrdinalIgnoreCase) ||
+                           string.Equals(colorMode, "colour", StringComparison.OrdinalIgnoreCase);
+            string canonicalColor = isColor ? "color" : "bw";
+
+            string canonicalPaper = string.IsNullOrWhiteSpace(paperSize) ? "A4" : paperSize.Trim();
+            string canonicalOrientation = "auto";
+            if (string.Equals(orientation, "portrait", StringComparison.OrdinalIgnoreCase)) canonicalOrientation = "portrait";
+            else if (string.Equals(orientation, "landscape", StringComparison.OrdinalIgnoreCase)) canonicalOrientation = "landscape";
+
             int selectedPages = resolvedPages.Count;
-            int printedSidesPerCopy = selectedPages;
+            // N-Up support: 1, 2, or 4 document pages tiled per printed side
+            int printedSidesPerCopy = (int)Math.Ceiling(selectedPages / (double)pagesPerSheet);
             int totalPrintedSides = printedSidesPerCopy * copies;
 
             // Per PRD §10: Each copy starts on a fresh physical sheet!
             // Example: 5-page PDF x 2 copies simplex = 10 sides, 10 sheets; duplex = 10 sides, 6 sheets (3 sheets per copy * 2).
-            int sheetsPerCopy = isDuplex ? (int)Math.Ceiling(selectedPages / 2.0) : selectedPages;
+            int sheetsPerCopy = isDuplex ? (int)Math.Ceiling(printedSidesPerCopy / 2.0) : printedSidesPerCopy;
             int totalPhysicalSheets = sheetsPerCopy * copies;
 
-            double ratePerSide = isDuplex ? duplexRatePerSideInr : simplexRatePerSideInr;
+            double ratePerSide;
+            if (isColor)
+            {
+                ratePerSide = isDuplex ? colorDuplexRatePerSideInr : colorSimplexRatePerSideInr;
+            }
+            else
+            {
+                ratePerSide = isDuplex ? duplexRatePerSideInr : simplexRatePerSideInr;
+            }
+
             double baseCharge = Math.Round(totalPrintedSides * ratePerSide, 2, MidpointRounding.AwayFromZero);
             double subtotalAfterMin = Math.Max(baseCharge, minOrderChargeInr);
             double minDelta = Math.Round(subtotalAfterMin - baseCharge, 2, MidpointRounding.AwayFromZero);
@@ -325,6 +397,11 @@ namespace PrintAway.Engine
                 ResolvedPages = resolvedPages,
                 Copies = copies,
                 DuplexMode = canonicalDuplex,
+                ColorMode = canonicalColor,
+                PaperSize = canonicalPaper,
+                Orientation = canonicalOrientation,
+                PagesPerSheet = pagesPerSheet,
+                Collate = collate,
                 PrintedSidesPerCopy = printedSidesPerCopy,
                 TotalPrintedSides = totalPrintedSides,
                 SheetsPerCopy = sheetsPerCopy,
@@ -483,7 +560,12 @@ namespace PrintAway.Engine
             List<int> pagesToPrint,
             int copies,
             string duplexMode,
-            bool simulateSpoolerOnly)
+            bool simulateSpoolerOnly,
+            string colorMode = "bw",
+            string paperSize = "A4",
+            string orientation = "auto",
+            int pagesPerSheet = 1,
+            bool collate = true)
         {
             var result = new PrintDispatchResult
             {
@@ -498,11 +580,16 @@ namespace PrintAway.Engine
                 return result;
             }
 
+            if (pagesPerSheet != 1 && pagesPerSheet != 2 && pagesPerSheet != 4) pagesPerSheet = 1;
             bool isDuplex = string.Equals(duplexMode, "TwoSidedLongEdge", StringComparison.OrdinalIgnoreCase) ||
                             string.Equals(duplexMode, "TwoSidedShortEdge", StringComparison.OrdinalIgnoreCase);
+            bool isColor = string.Equals(colorMode, "color", StringComparison.OrdinalIgnoreCase) ||
+                           string.Equals(colorMode, "colour", StringComparison.OrdinalIgnoreCase);
+
             int selectedCount = (pagesToPrint != null && pagesToPrint.Count > 0) ? pagesToPrint.Count : 1;
-            result.PrintedSides = selectedCount * copies;
-            result.PhysicalSheets = (isDuplex ? (int)Math.Ceiling(selectedCount / 2.0) : selectedCount) * copies;
+            int printedSidesPerCopy = (int)Math.Ceiling(selectedCount / (double)pagesPerSheet);
+            result.PrintedSides = printedSidesPerCopy * copies;
+            result.PhysicalSheets = (isDuplex ? (int)Math.Ceiling(printedSidesPerCopy / 2.0) : printedSidesPerCopy) * copies;
 
             string spoolDocName = "PrintAway_" + orderCode;
             result.SpoolerDocumentName = spoolDocName;
@@ -519,9 +606,9 @@ namespace PrintAway.Engine
                 return result;
             }
 
-            // Enforce A4 paper size, Monochrome (Color = false), Copies, and Duplex mode
-            printDoc.PrinterSettings.Copies = (short)Math.Max(1, Math.Min(20, copies));
-            printDoc.PrinterSettings.Collate = true;
+            // Enforce Paper Size, Color vs Monochrome, Copies, Collate, Orientation, and Duplex mode
+            printDoc.PrinterSettings.Copies = (short)Math.Max(1, Math.Min(50, copies));
+            printDoc.PrinterSettings.Collate = collate;
             if (string.Equals(duplexMode, "TwoSidedLongEdge", StringComparison.OrdinalIgnoreCase))
                 printDoc.PrinterSettings.Duplex = Duplex.Vertical;
             else if (string.Equals(duplexMode, "TwoSidedShortEdge", StringComparison.OrdinalIgnoreCase))
@@ -529,10 +616,20 @@ namespace PrintAway.Engine
             else
                 printDoc.PrinterSettings.Duplex = Duplex.Simplex;
 
-            printDoc.DefaultPageSettings.Color = false;
+            printDoc.DefaultPageSettings.Color = isColor;
+            if (string.Equals(orientation, "landscape", StringComparison.OrdinalIgnoreCase))
+                printDoc.DefaultPageSettings.Landscape = true;
+            else if (string.Equals(orientation, "portrait", StringComparison.OrdinalIgnoreCase))
+                printDoc.DefaultPageSettings.Landscape = false;
+
+            string targetPaper = string.IsNullOrWhiteSpace(paperSize) ? "A4" : paperSize.Trim();
             foreach (PaperSize ps in printDoc.PrinterSettings.PaperSizes)
             {
-                if (ps.Kind == PaperKind.A4 || ps.PaperName.IndexOf("A4", StringComparison.OrdinalIgnoreCase) >= 0)
+                if (ps.PaperName.IndexOf(targetPaper, StringComparison.OrdinalIgnoreCase) >= 0 ||
+                    (string.Equals(targetPaper, "A4", StringComparison.OrdinalIgnoreCase) && ps.Kind == PaperKind.A4) ||
+                    (string.Equals(targetPaper, "Letter", StringComparison.OrdinalIgnoreCase) && ps.Kind == PaperKind.Letter) ||
+                    (string.Equals(targetPaper, "Legal", StringComparison.OrdinalIgnoreCase) && ps.Kind == PaperKind.Legal) ||
+                    (string.Equals(targetPaper, "A3", StringComparison.OrdinalIgnoreCase) && ps.Kind == PaperKind.A3))
                 {
                     printDoc.DefaultPageSettings.PaperSize = ps;
                     break;
@@ -542,7 +639,6 @@ namespace PrintAway.Engine
             if (simulateSpoolerOnly)
             {
                 // Safe deterministic simulation mode for automated test suite or dry-run validation:
-                // Verifies queue validity, A4 paper resolution, duplex capability, and generates a deterministic spooler correlation ID
                 int simulatedJobId = Math.Abs((orderCode + DateTime.UtcNow.Ticks.ToString()).GetHashCode() % 9000) + 1000;
                 result.Dispatched = true;
                 result.WindowsSpoolerJobId = simulatedJobId;
@@ -550,7 +646,8 @@ namespace PrintAway.Engine
             }
 
             // Real physical dispatch to verified Windows queue:
-            // Renders actual PDF pages using Windows 11 native WinRT and draws them directly onto each printed sheet!
+            // Renders actual PDF pages using Windows 11 native WinRT and draws them onto each printed side (1-up, 2-up, or 4-up)
+            // with either full RGB color or true grayscale conversion for Black & White mode!
             string tempPdfPath = Path.Combine(Path.GetTempPath(), "printaway_" + Guid.NewGuid().ToString("N") + ".pdf");
             string tempRenderDir = Path.Combine(Path.GetTempPath(), "printaway_render_" + Guid.NewGuid().ToString("N"));
             try
@@ -561,30 +658,59 @@ namespace PrintAway.Engine
                 int pageIdx = 0;
                 printDoc.PrintPage += (sender, e) =>
                 {
-                    int pageNum = pagesToPrint[pageIdx];
-                    pageIdx++;
                     e.Graphics.Clear(Color.White);
+                    Rectangle bounds = e.PageBounds;
 
-                    string pngPath = Path.Combine(tempRenderDir, "page_" + pageNum + ".png");
-                    if (File.Exists(pngPath))
+                    if (pagesPerSheet == 1)
                     {
-                        using (var fs = new FileStream(pngPath, FileMode.Open, FileAccess.Read, FileShare.Read))
-                        using (var img = Image.FromStream(fs))
+                        int pageNum = pagesToPrint[pageIdx];
+                        pageIdx++;
+                        DrawRenderedPdfPageSlot(e.Graphics, tempRenderDir, pageNum, bounds, isColor, orderCode, targetQueueName, duplexMode, pagesToPrint.Count);
+                    }
+                    else if (pagesPerSheet == 2)
+                    {
+                        // 2-in-1: split page into 2 slots (top/bottom in portrait, left/right in landscape)
+                        Rectangle slot1, slot2;
+                        if (bounds.Width >= bounds.Height)
                         {
-                            e.Graphics.DrawImage(img, e.PageBounds);
+                            int halfW = bounds.Width / 2;
+                            slot1 = new Rectangle(bounds.X, bounds.Y, halfW, bounds.Height);
+                            slot2 = new Rectangle(bounds.X + halfW, bounds.Y, halfW, bounds.Height);
+                        }
+                        else
+                        {
+                            int halfH = bounds.Height / 2;
+                            slot1 = new Rectangle(bounds.X, bounds.Y, bounds.Width, halfH);
+                            slot2 = new Rectangle(bounds.X, bounds.Y + halfH, bounds.Width, halfH);
+                        }
+
+                        if (pageIdx < pagesToPrint.Count)
+                        {
+                            DrawRenderedPdfPageSlot(e.Graphics, tempRenderDir, pagesToPrint[pageIdx++], slot1, isColor, orderCode, targetQueueName, duplexMode, pagesToPrint.Count);
+                        }
+                        if (pageIdx < pagesToPrint.Count)
+                        {
+                            DrawRenderedPdfPageSlot(e.Graphics, tempRenderDir, pagesToPrint[pageIdx++], slot2, isColor, orderCode, targetQueueName, duplexMode, pagesToPrint.Count);
                         }
                     }
                     else
                     {
-                        using (var headerFont = new Font("Arial", 14, FontStyle.Bold))
-                        using (var bodyFont = new Font("Arial", 10, FontStyle.Regular))
-                        using (var pen = new Pen(Color.Black, 1.5f))
+                        // 4-in-1: 2x2 grid
+                        int halfW = bounds.Width / 2;
+                        int halfH = bounds.Height / 2;
+                        Rectangle[] slots = new[]
                         {
-                            e.Graphics.DrawRectangle(pen, 40, 40, e.MarginBounds.Width, e.MarginBounds.Height);
-                            e.Graphics.DrawString("PrintAway Order: " + orderCode + " (Page " + pageNum + " of " + pagesToPrint.Count + ")", headerFont, Brushes.Black, 60, 60);
-                            e.Graphics.DrawString("Queue: " + targetQueueName + " | Paper: A4 Monochrome | Duplex: " + duplexMode, bodyFont, Brushes.Black, 60, 95);
+                            new Rectangle(bounds.X, bounds.Y, halfW, halfH),
+                            new Rectangle(bounds.X + halfW, bounds.Y, halfW, halfH),
+                            new Rectangle(bounds.X, bounds.Y + halfH, halfW, halfH),
+                            new Rectangle(bounds.X + halfW, bounds.Y + halfH, halfW, halfH)
+                        };
+                        for (int s = 0; s < 4 && pageIdx < pagesToPrint.Count; s++)
+                        {
+                            DrawRenderedPdfPageSlot(e.Graphics, tempRenderDir, pagesToPrint[pageIdx++], slots[s], isColor, orderCode, targetQueueName, duplexMode, pagesToPrint.Count);
                         }
                     }
+
                     e.HasMorePages = (pageIdx < pagesToPrint.Count);
                 };
 
@@ -598,6 +724,69 @@ namespace PrintAway.Engine
             {
                 try { if (File.Exists(tempPdfPath)) File.Delete(tempPdfPath); } catch { }
                 try { if (Directory.Exists(tempRenderDir)) Directory.Delete(tempRenderDir, true); } catch { }
+            }
+        }
+
+        private static void DrawRenderedPdfPageSlot(
+            Graphics g,
+            string tempRenderDir,
+            int pageNum,
+            Rectangle destSlot,
+            bool isColor,
+            string orderCode,
+            string targetQueueName,
+            string duplexMode,
+            int totalSelected)
+        {
+            string pngPath = Path.Combine(tempRenderDir, "page_" + pageNum + ".png");
+            if (File.Exists(pngPath))
+            {
+                using (var fs = new FileStream(pngPath, FileMode.Open, FileAccess.Read, FileShare.Read))
+                using (var img = Image.FromStream(fs))
+                {
+                    // Fit proportionally inside destSlot
+                    double scaleX = (double)destSlot.Width / img.Width;
+                    double scaleY = (double)destSlot.Height / img.Height;
+                    double scale = Math.Min(scaleX, scaleY);
+                    int drawW = Math.Max(1, (int)Math.Round(img.Width * scale));
+                    int drawH = Math.Max(1, (int)Math.Round(img.Height * scale));
+                    int drawX = destSlot.X + (destSlot.Width - drawW) / 2;
+                    int drawY = destSlot.Y + (destSlot.Height - drawH) / 2;
+                    var fitRect = new Rectangle(drawX, drawY, drawW, drawH);
+
+                    if (isColor)
+                    {
+                        g.DrawImage(img, fitRect);
+                    }
+                    else
+                    {
+                        // Apply ITU-R BT.601 luminance grayscale matrix when Black & White is selected
+                        using (var attrs = new ImageAttributes())
+                        {
+                            var grayMatrix = new ColorMatrix(new float[][]
+                            {
+                                new float[] { 0.299f, 0.299f, 0.299f, 0, 0 },
+                                new float[] { 0.587f, 0.587f, 0.587f, 0, 0 },
+                                new float[] { 0.114f, 0.114f, 0.114f, 0, 0 },
+                                new float[] { 0,      0,      0,      1, 0 },
+                                new float[] { 0,      0,      0,      0, 1 }
+                            });
+                            attrs.SetColorMatrix(grayMatrix);
+                            g.DrawImage(img, fitRect, 0, 0, img.Width, img.Height, GraphicsUnit.Pixel, attrs);
+                        }
+                    }
+                }
+            }
+            else
+            {
+                using (var headerFont = new Font("Arial", 12, FontStyle.Bold))
+                using (var bodyFont = new Font("Arial", 9, FontStyle.Regular))
+                using (var pen = new Pen(Color.Black, 1.0f))
+                {
+                    g.DrawRectangle(pen, destSlot.X + 20, destSlot.Y + 20, Math.Max(40, destSlot.Width - 40), Math.Max(40, destSlot.Height - 40));
+                    g.DrawString("PrintAway Order: " + orderCode + " (Page " + pageNum + " of " + totalSelected + ")", headerFont, Brushes.Black, destSlot.X + 35, destSlot.Y + 35);
+                    g.DrawString("Queue: " + targetQueueName + " | Mode: " + (isColor ? "Color" : "B&W") + " | Duplex: " + duplexMode, bodyFont, Brushes.Black, destSlot.X + 35, destSlot.Y + 65);
+                }
             }
         }
 

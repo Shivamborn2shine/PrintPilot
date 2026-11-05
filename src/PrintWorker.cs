@@ -72,6 +72,11 @@ namespace PrintAway.Worker
             string pageRange = Convert.ToString(claimed["pageRange"]);
             int copies = Convert.ToInt32(claimed["copies"], CultureInfo.InvariantCulture);
             string duplexMode = Convert.ToString(claimed["duplexMode"]);
+            string colorMode = claimed.ContainsKey("colorMode") && claimed["colorMode"] != null ? Convert.ToString(claimed["colorMode"]) : "bw";
+            string paperSize = claimed.ContainsKey("paperSize") && claimed["paperSize"] != null ? Convert.ToString(claimed["paperSize"]) : "A4";
+            string orientation = claimed.ContainsKey("orientation") && claimed["orientation"] != null ? Convert.ToString(claimed["orientation"]) : "auto";
+            int pagesPerSheet = claimed.ContainsKey("pagesPerSheet") && claimed["pagesPerSheet"] != null ? Convert.ToInt32(claimed["pagesPerSheet"], CultureInfo.InvariantCulture) : 1;
+            bool collate = !claimed.ContainsKey("collate") || claimed["collate"] == null || Convert.ToBoolean(claimed["collate"]);
 
             string evErr;
             _repo.RecordWorkerJobEvent(jobId, leaseToken, "downloading", null, "Downloading validated PDF from host vault", out evErr);
@@ -103,7 +108,9 @@ namespace PrintAway.Worker
                 };
             }
 
-            _repo.RecordWorkerJobEvent(jobId, leaseToken, "rendering", null, "Rendering PDF for " + targetQueue + " (A4, B&W)", out evErr);
+            _repo.RecordWorkerJobEvent(jobId, leaseToken, "rendering", null,
+                string.Format(CultureInfo.InvariantCulture, "Rendering PDF for {0} ({1}, {2}, {3}-up, {4})",
+                    targetQueue, paperSize, colorMode == "color" ? "Color" : "B&W", pagesPerSheet, orientation), out evErr);
 
             string normRange;
             string rangeErr;
@@ -118,7 +125,12 @@ namespace PrintAway.Worker
                 pagesToPrint,
                 copies,
                 duplexMode,
-                effectiveSimulate);
+                effectiveSimulate,
+                colorMode,
+                paperSize,
+                orientation,
+                pagesPerSheet,
+                collate);
 
             if (!dispatch.Dispatched)
             {

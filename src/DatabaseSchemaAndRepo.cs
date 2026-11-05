@@ -176,6 +176,11 @@ CREATE TABLE IF NOT EXISTS quotes (
     page_range_spec TEXT NOT NULL,
     copies INTEGER NOT NULL,
     duplex_mode TEXT NOT NULL,
+    color_mode TEXT NOT NULL DEFAULT 'bw',
+    paper_size TEXT NOT NULL DEFAULT 'A4',
+    orientation TEXT NOT NULL DEFAULT 'auto',
+    pages_per_sheet INTEGER NOT NULL DEFAULT 1,
+    is_collated INTEGER NOT NULL DEFAULT 1,
     printed_sides INTEGER NOT NULL,
     physical_sheets INTEGER NOT NULL,
     rate_per_side_inr REAL NOT NULL,
@@ -279,6 +284,15 @@ CREATE TABLE IF NOT EXISTS audit_events (
 ";
             _db.ExecuteNonQuery(ddl);
             try { _db.ExecuteNonQuery("ALTER TABLE stations ADD COLUMN dispatch_mode TEXT NOT NULL DEFAULT 'physical';"); } catch { }
+            try { _db.ExecuteNonQuery("ALTER TABLE printers ADD COLUMN allowed_paper_sizes TEXT NOT NULL DEFAULT 'A4,Legal,Letter';"); } catch { }
+            try { _db.ExecuteNonQuery("ALTER TABLE printers ADD COLUMN max_copies INTEGER NOT NULL DEFAULT 50;"); } catch { }
+            try { _db.ExecuteNonQuery("ALTER TABLE price_rules ADD COLUMN color_simplex_per_side_inr REAL NOT NULL DEFAULT 10.00;"); } catch { }
+            try { _db.ExecuteNonQuery("ALTER TABLE price_rules ADD COLUMN color_duplex_per_side_inr REAL NOT NULL DEFAULT 8.00;"); } catch { }
+            try { _db.ExecuteNonQuery("ALTER TABLE quotes ADD COLUMN color_mode TEXT NOT NULL DEFAULT 'bw';"); } catch { }
+            try { _db.ExecuteNonQuery("ALTER TABLE quotes ADD COLUMN paper_size TEXT NOT NULL DEFAULT 'A4';"); } catch { }
+            try { _db.ExecuteNonQuery("ALTER TABLE quotes ADD COLUMN orientation TEXT NOT NULL DEFAULT 'auto';"); } catch { }
+            try { _db.ExecuteNonQuery("ALTER TABLE quotes ADD COLUMN pages_per_sheet INTEGER NOT NULL DEFAULT 1;"); } catch { }
+            try { _db.ExecuteNonQuery("ALTER TABLE quotes ADD COLUMN is_collated INTEGER NOT NULL DEFAULT 1;"); } catch { }
 
             string now = UtcNowIso();
             long shopCount = _db.ExecuteScalarLong("SELECT COUNT(*) FROM shops;");
@@ -314,13 +328,13 @@ CREATE TABLE IF NOT EXISTS audit_events (
             if (printerCount == 0)
             {
                 long pid = _db.ExecuteInsert(
-                    @"INSERT INTO printers (shop_id, station_id, device_code, model_name, port_name, supports_color, supports_a4, supports_duplex, supports_page_range, is_enabled, created_at_utc)
-                      VALUES (1, 1, 'XEROX-B1025-USB001', 'Xerox B1025 Multifunction Printer', 'USB001', 0, 1, 1, 1, 1, @now);",
+                    @"INSERT INTO printers (shop_id, station_id, device_code, model_name, port_name, supports_color, supports_a4, supports_duplex, supports_page_range, allowed_paper_sizes, max_copies, is_enabled, created_at_utc)
+                      VALUES (1, 1, 'XEROX-B1025-USB001', 'Xerox B1025 Multifunction Printer', 'USB001', 1, 1, 1, 1, 'A4,Legal,Letter', 50, 1, @now);",
                     new Dictionary<string, object> { { "now", now } });
 
                 _db.ExecuteInsert(
                     @"INSERT INTO printer_queues (printer_id, windows_queue_name, driver_name, port_name, is_active_selected, is_virtual_excluded, verified_status, notes, updated_at_utc)
-                      VALUES (@pid, @q1, 'Xerox Global Print Driver PCL6', 'USB001', 1, 0, 'VERIFIED_ACTIVE', 'Founder-confirmed active queue (PaperSize=A4, Color=False, OneSided)', @now);",
+                      VALUES (@pid, @q1, 'Xerox Global Print Driver PCL6', 'USB001', 1, 0, 'VERIFIED_ACTIVE', 'Founder-confirmed active queue (PaperSize=A4, Color/B&W, Simplex/Duplex)', @now);",
                     new Dictionary<string, object> { { "pid", pid }, { "q1", VerifiedXeroxQueueName }, { "now", now } });
 
                 _db.ExecuteInsert(
@@ -328,13 +342,18 @@ CREATE TABLE IF NOT EXISTS audit_events (
                       VALUES (@pid, @q2, 'Xerox B1025 Multifunction Printer V4 PCL6', 'USB001', 0, 0, 'DISABLED_DUPLICATE_USB001', 'Excluded to prevent duplicate dispatch to same USB001 physical printer', @now);",
                     new Dictionary<string, object> { { "pid", pid }, { "q2", SecondaryXeroxQueueName }, { "now", now } });
             }
+            else
+            {
+                // Ensure existing DB enables color & page range controls by default so the customer & admin UI have full control out-of-the-box
+                try { _db.ExecuteNonQuery("UPDATE printers SET supports_color = 1, supports_page_range = 1 WHERE id = 1;"); } catch { }
+            }
 
             long priceCount = _db.ExecuteScalarLong("SELECT COUNT(*) FROM price_rules;");
             if (priceCount == 0)
             {
                 _db.ExecuteInsert(
-                    @"INSERT INTO price_rules (shop_id, version, simplex_per_side_inr, duplex_per_side_inr, min_order_charge_inr, tax_percent, is_active, created_by, created_at_utc)
-                      VALUES (1, 1, 2.00, 1.50, 2.00, 0.0, 1, 'system-seed', @now);",
+                    @"INSERT INTO price_rules (shop_id, version, simplex_per_side_inr, duplex_per_side_inr, color_simplex_per_side_inr, color_duplex_per_side_inr, min_order_charge_inr, tax_percent, is_active, created_by, created_at_utc)
+                      VALUES (1, 1, 2.00, 1.50, 10.00, 8.00, 2.00, 0.0, 1, 'system-seed', @now);",
                     new Dictionary<string, object> { { "now", now } });
             }
         }
@@ -439,6 +458,19 @@ CREATE TABLE IF NOT EXISTS audit_events (
             else if (diskLow) statusReason = "Order intake paused: Host storage low.";
             else if (!printerReady) statusReason = "Printer station requires attention (" + Convert.ToString(station["status_message"] ?? "Offline") + ").";
 
+            string allowedPaperSizes = printer.ContainsKey("allowed_paper_sizes") && printer["allowed_paper_sizes"] != null
+                ? Convert.ToString(printer["allowed_paper_sizes"])
+                : "A4,Legal,Letter";
+            int maxCopies = printer.ContainsKey("max_copies") && printer["max_copies"] != null
+                ? Convert.ToInt32(printer["max_copies"], CultureInfo.InvariantCulture)
+                : 50;
+            double colorSimplexRate = priceRule.ContainsKey("color_simplex_per_side_inr") && priceRule["color_simplex_per_side_inr"] != null
+                ? Convert.ToDouble(priceRule["color_simplex_per_side_inr"], CultureInfo.InvariantCulture)
+                : 10.0;
+            double colorDuplexRate = priceRule.ContainsKey("color_duplex_per_side_inr") && priceRule["color_duplex_per_side_inr"] != null
+                ? Convert.ToDouble(priceRule["color_duplex_per_side_inr"], CultureInfo.InvariantCulture)
+                : 8.0;
+
             return new Dictionary<string, object>
             {
                 { "shopName", shop["name"] },
@@ -457,11 +489,15 @@ CREATE TABLE IF NOT EXISTS audit_events (
                 { "supportsA4", Convert.ToInt64(printer["supports_a4"]) != 0 },
                 { "supportsDuplex", Convert.ToInt64(printer["supports_duplex"]) != 0 },
                 { "supportsPageRange", Convert.ToInt64(printer["supports_page_range"]) != 0 },
+                { "allowedPaperSizes", allowedPaperSizes },
+                { "maxCopies", maxCopies },
                 { "pricing", new Dictionary<string, object>
                     {
                         { "version", priceRule["version"] },
                         { "simplexPerSideInr", priceRule["simplex_per_side_inr"] },
                         { "duplexPerSideInr", priceRule["duplex_per_side_inr"] },
+                        { "colorSimplexPerSideInr", colorSimplexRate },
+                        { "colorDuplexPerSideInr", colorDuplexRate },
                         { "minOrderChargeInr", priceRule["min_order_charge_inr"] },
                         { "taxPercent", priceRule["tax_percent"] }
                     }
@@ -555,7 +591,17 @@ CREATE TABLE IF NOT EXISTS audit_events (
             return cleaned;
         }
 
-        public Dictionary<string, object> CreateServerQuote(string fileToken, int copies, string duplexMode, string pageRangeSpec, out string errorMsg)
+        public Dictionary<string, object> CreateServerQuote(
+            string fileToken,
+            int copies,
+            string duplexMode,
+            string pageRangeSpec,
+            out string errorMsg,
+            string colorMode = "bw",
+            string paperSize = "A4",
+            string orientation = "auto",
+            int pagesPerSheet = 1,
+            bool collate = true)
         {
             errorMsg = null;
             var fileRow = _db.QuerySingle("SELECT * FROM files WHERE file_token = @ft AND is_deleted = 0;",
@@ -568,16 +614,43 @@ CREATE TABLE IF NOT EXISTS audit_events (
 
             var printer = _db.QuerySingle("SELECT * FROM printers WHERE id = 1;");
             bool duplexAllowed = Convert.ToInt64(printer["supports_duplex"]) != 0;
+            bool colorAllowed = Convert.ToInt64(printer["supports_color"]) != 0;
+            bool pageRangeAllowed = Convert.ToInt64(printer["supports_page_range"]) != 0;
+            int maxCopies = printer.ContainsKey("max_copies") && printer["max_copies"] != null
+                ? Convert.ToInt32(printer["max_copies"], CultureInfo.InvariantCulture)
+                : 50;
+
             bool isRequestingDuplex = string.Equals(duplexMode, "TwoSidedLongEdge", StringComparison.OrdinalIgnoreCase) ||
                                       string.Equals(duplexMode, "TwoSidedShortEdge", StringComparison.OrdinalIgnoreCase);
             if (isRequestingDuplex && !duplexAllowed)
             {
-                errorMsg = "Duplex printing is currently disabled by shop admin on this printer.";
+                errorMsg = "Duplex (two-sided) printing is currently disabled by shop admin on this printer.";
+                return null;
+            }
+
+            bool isRequestingColor = string.Equals(colorMode, "color", StringComparison.OrdinalIgnoreCase) ||
+                                     string.Equals(colorMode, "colour", StringComparison.OrdinalIgnoreCase);
+            if (isRequestingColor && !colorAllowed)
+            {
+                errorMsg = "Color printing is currently disabled by shop admin on this printer. Please select Black & White.";
+                return null;
+            }
+
+            if (!pageRangeAllowed && !string.IsNullOrWhiteSpace(pageRangeSpec) && !string.Equals(pageRangeSpec.Trim(), "all", StringComparison.OrdinalIgnoreCase))
+            {
+                errorMsg = "Custom page selection is currently disabled by shop admin.";
                 return null;
             }
 
             var priceRule = _db.QuerySingle("SELECT * FROM price_rules WHERE shop_id = 1 AND is_active = 1 ORDER BY version DESC LIMIT 1;");
             int docPages = Convert.ToInt32(fileRow["page_count"], CultureInfo.InvariantCulture);
+
+            double colorSimplexRate = priceRule.ContainsKey("color_simplex_per_side_inr") && priceRule["color_simplex_per_side_inr"] != null
+                ? Convert.ToDouble(priceRule["color_simplex_per_side_inr"], CultureInfo.InvariantCulture)
+                : 10.0;
+            double colorDuplexRate = priceRule.ContainsKey("color_duplex_per_side_inr") && priceRule["color_duplex_per_side_inr"] != null
+                ? Convert.ToDouble(priceRule["color_duplex_per_side_inr"], CultureInfo.InvariantCulture)
+                : 8.0;
 
             string calcErr;
             QuoteCalculationResult calc = PdfAndPrinterEngine.CalculateQuote(
@@ -589,7 +662,15 @@ CREATE TABLE IF NOT EXISTS audit_events (
                 Convert.ToDouble(priceRule["duplex_per_side_inr"], CultureInfo.InvariantCulture),
                 Convert.ToDouble(priceRule["min_order_charge_inr"], CultureInfo.InvariantCulture),
                 Convert.ToDouble(priceRule["tax_percent"], CultureInfo.InvariantCulture),
-                out calcErr);
+                out calcErr,
+                colorMode,
+                colorSimplexRate,
+                colorDuplexRate,
+                paperSize,
+                orientation,
+                pagesPerSheet,
+                collate,
+                maxCopies);
 
             if (calc == null)
             {
@@ -605,12 +686,14 @@ CREATE TABLE IF NOT EXISTS audit_events (
                 @"INSERT INTO quotes (
                     quote_token, shop_id, file_id, price_rule_id, price_rule_version,
                     document_pages, selected_pages, page_range_spec, copies, duplex_mode,
+                    color_mode, paper_size, orientation, pages_per_sheet, is_collated,
                     printed_sides, physical_sheets, rate_per_side_inr, base_charge_inr,
                     min_charge_delta_inr, tax_amount_inr, total_amount_inr, total_amount_paise,
                     expires_at_utc, created_at_utc
                   ) VALUES (
                     @qtoken, 1, @fid, @prid, @prver,
                     @dpages, @spages, @range, @copies, @duplex,
+                    @cmode, @psize, @orient, @pps, @collate,
                     @sides, @sheets, @rate, @base,
                     @mindelta, @tax, @totalinr, @totalpaise,
                     @exp, @now
@@ -626,6 +709,11 @@ CREATE TABLE IF NOT EXISTS audit_events (
                     { "range", calc.NormalizedPageRange },
                     { "copies", calc.Copies },
                     { "duplex", calc.DuplexMode },
+                    { "cmode", calc.ColorMode },
+                    { "psize", calc.PaperSize },
+                    { "orient", calc.Orientation },
+                    { "pps", calc.PagesPerSheet },
+                    { "collate", calc.Collate ? 1 : 0 },
                     { "sides", calc.TotalPrintedSides },
                     { "sheets", calc.TotalPhysicalSheets },
                     { "rate", calc.RatePerSideInr },
@@ -646,10 +734,18 @@ CREATE TABLE IF NOT EXISTS audit_events (
                 { "priceRuleVersion", priceRule["version"] },
                 { "documentPages", calc.DocumentPages },
                 { "selectedPages", calc.SelectedPageCount },
+                { "resolvedPages", calc.ResolvedPages },
                 { "pageRange", calc.NormalizedPageRange },
                 { "copies", calc.Copies },
                 { "duplexMode", calc.DuplexMode },
+                { "colorMode", calc.ColorMode },
+                { "paperSize", calc.PaperSize },
+                { "orientation", calc.Orientation },
+                { "pagesPerSheet", calc.PagesPerSheet },
+                { "collate", calc.Collate },
+                { "printedSidesPerCopy", calc.PrintedSidesPerCopy },
                 { "printedSides", calc.TotalPrintedSides },
+                { "sheetsPerCopy", calc.SheetsPerCopy },
                 { "physicalSheets", calc.TotalPhysicalSheets },
                 { "ratePerSideInr", calc.RatePerSideInr },
                 { "baseChargeInr", calc.BaseChargeInr },
@@ -915,6 +1011,7 @@ CREATE TABLE IF NOT EXISTS audit_events (
         {
             var row = _db.QuerySingle(
                 @"SELECT o.*, q.document_pages, q.selected_pages, q.page_range_spec, q.copies, q.duplex_mode,
+                         q.color_mode, q.paper_size, q.orientation, q.pages_per_sheet, q.is_collated,
                          q.printed_sides, q.physical_sheets, q.total_amount_inr, q.rate_per_side_inr,
                          f.original_filename_redacted, f.is_deleted,
                          j.windows_spooler_job_id, j.state AS job_state
@@ -948,6 +1045,11 @@ CREATE TABLE IF NOT EXISTS audit_events (
                 { "pageRange", row["page_range_spec"] },
                 { "copies", row["copies"] },
                 { "duplexMode", row["duplex_mode"] },
+                { "colorMode", row.ContainsKey("color_mode") && row["color_mode"] != null ? row["color_mode"] : "bw" },
+                { "paperSize", row.ContainsKey("paper_size") && row["paper_size"] != null ? row["paper_size"] : "A4" },
+                { "orientation", row.ContainsKey("orientation") && row["orientation"] != null ? row["orientation"] : "auto" },
+                { "pagesPerSheet", row.ContainsKey("pages_per_sheet") && row["pages_per_sheet"] != null ? row["pages_per_sheet"] : 1 },
+                { "collate", !row.ContainsKey("is_collated") || row["is_collated"] == null || Convert.ToInt64(row["is_collated"]) != 0 },
                 { "printedSides", row["printed_sides"] },
                 { "physicalSheets", row["physical_sheets"] },
                 { "totalAmountInr", row["total_amount_inr"] },
@@ -1610,7 +1712,8 @@ CREATE TABLE IF NOT EXISTS audit_events (
 
                 var nextJob = _db.QuerySingle(
                     @"SELECT j.*, o.order_code, o.file_id, o.quote_id, o.state AS order_state, o.payment_status,
-                             q.page_range_spec, q.document_pages, q.copies, q.duplex_mode
+                             q.page_range_spec, q.document_pages, q.copies, q.duplex_mode,
+                             q.color_mode, q.paper_size, q.orientation, q.pages_per_sheet, q.is_collated
                       FROM print_jobs j
                       JOIN orders o ON j.order_id = o.id
                       JOIN quotes q ON o.quote_id = q.id
@@ -1657,6 +1760,11 @@ CREATE TABLE IF NOT EXISTS audit_events (
                     { "pageRange", nextJob["page_range_spec"] },
                     { "copies", nextJob["copies"] },
                     { "duplexMode", nextJob["duplex_mode"] },
+                    { "colorMode", nextJob.ContainsKey("color_mode") && nextJob["color_mode"] != null ? nextJob["color_mode"] : "bw" },
+                    { "paperSize", nextJob.ContainsKey("paper_size") && nextJob["paper_size"] != null ? nextJob["paper_size"] : "A4" },
+                    { "orientation", nextJob.ContainsKey("orientation") && nextJob["orientation"] != null ? nextJob["orientation"] : "auto" },
+                    { "pagesPerSheet", nextJob.ContainsKey("pages_per_sheet") && nextJob["pages_per_sheet"] != null ? nextJob["pages_per_sheet"] : 1 },
+                    { "collate", !nextJob.ContainsKey("is_collated") || nextJob["is_collated"] == null || Convert.ToInt64(nextJob["is_collated"]) != 0 },
                     { "downloadUrl", "/api/worker/jobs/" + jobId.ToString(CultureInfo.InvariantCulture) + "/download?leaseToken=" + leaseToken }
                 };
             });
@@ -1804,10 +1912,12 @@ CREATE TABLE IF NOT EXISTS audit_events (
             double minOrderInr,
             double taxPercent,
             string adminUsername,
-            out string errorMsg)
+            out string errorMsg,
+            double colorSimplexRateInr = 10.0,
+            double colorDuplexRateInr = 8.0)
         {
             errorMsg = null;
-            if (simplexRateInr <= 0 || duplexRateInr <= 0 || minOrderInr < 0 || taxPercent < 0 || taxPercent > 50)
+            if (simplexRateInr <= 0 || duplexRateInr <= 0 || colorSimplexRateInr <= 0 || colorDuplexRateInr <= 0 || minOrderInr < 0 || taxPercent < 0 || taxPercent > 50)
             {
                 errorMsg = "Invalid pricing parameters.";
                 return null;
@@ -1821,13 +1931,15 @@ CREATE TABLE IF NOT EXISTS audit_events (
 
                 _db.ExecuteNonQuery("UPDATE price_rules SET is_active = 0 WHERE shop_id = 1;");
                 long newId = _db.ExecuteInsert(
-                    @"INSERT INTO price_rules (shop_id, version, simplex_per_side_inr, duplex_per_side_inr, min_order_charge_inr, tax_percent, is_active, created_by, created_at_utc)
-                      VALUES (1, @ver, @srate, @drate, @minc, @tax, 1, @by, @now);",
+                    @"INSERT INTO price_rules (shop_id, version, simplex_per_side_inr, duplex_per_side_inr, color_simplex_per_side_inr, color_duplex_per_side_inr, min_order_charge_inr, tax_percent, is_active, created_by, created_at_utc)
+                      VALUES (1, @ver, @srate, @drate, @csrate, @cdrate, @minc, @tax, 1, @by, @now);",
                     new Dictionary<string, object>
                     {
                         { "ver", newVer },
                         { "srate", simplexRateInr },
                         { "drate", duplexRateInr },
+                        { "csrate", colorSimplexRateInr },
+                        { "cdrate", colorDuplexRateInr },
                         { "minc", minOrderInr },
                         { "tax", taxPercent },
                         { "by", adminUsername },
@@ -1835,7 +1947,8 @@ CREATE TABLE IF NOT EXISTS audit_events (
                     });
 
                 LogAudit(null, "admin", adminUsername, "PRICE_RULE_VERSION_CREATED", "v" + currentMaxVer, "v" + newVer,
-                    string.Format(CultureInfo.InvariantCulture, "Simplex=INR {0:0.00}/side, Duplex=INR {1:0.00}/side, Min=INR {2:0.00}", simplexRateInr, duplexRateInr, minOrderInr));
+                    string.Format(CultureInfo.InvariantCulture, "BW Simplex={0:0.00}, BW Duplex={1:0.00}, Color Simplex={2:0.00}, Color Duplex={3:0.00}, Min={4:0.00}",
+                        simplexRateInr, duplexRateInr, colorSimplexRateInr, colorDuplexRateInr, minOrderInr));
 
                 return new Dictionary<string, object>
                 {
@@ -1843,6 +1956,8 @@ CREATE TABLE IF NOT EXISTS audit_events (
                     { "version", newVer },
                     { "simplexPerSideInr", simplexRateInr },
                     { "duplexPerSideInr", duplexRateInr },
+                    { "colorSimplexPerSideInr", colorSimplexRateInr },
+                    { "colorDuplexPerSideInr", colorDuplexRateInr },
                     { "minOrderChargeInr", minOrderInr },
                     { "taxPercent", taxPercent }
                 };
@@ -1854,7 +1969,12 @@ CREATE TABLE IF NOT EXISTS audit_events (
             string pauseReason,
             bool? supportsDuplex,
             bool? printerReadyOverride,
-            string adminUsername)
+            string adminUsername,
+            bool? supportsColor = null,
+            bool? supportsPageRange = null,
+            string allowedPaperSizes = null,
+            int? maxCopies = null,
+            string activeQueueName = null)
         {
             _db.RunInTransaction(() =>
             {
@@ -1870,6 +1990,49 @@ CREATE TABLE IF NOT EXISTS audit_events (
                         "UPDATE printers SET supports_duplex = @d WHERE id = 1;",
                         new Dictionary<string, object> { { "d", supportsDuplex.Value ? 1 : 0 } });
                 }
+                if (supportsColor.HasValue)
+                {
+                    _db.ExecuteNonQuery(
+                        "UPDATE printers SET supports_color = @c WHERE id = 1;",
+                        new Dictionary<string, object> { { "c", supportsColor.Value ? 1 : 0 } });
+                }
+                if (supportsPageRange.HasValue)
+                {
+                    _db.ExecuteNonQuery(
+                        "UPDATE printers SET supports_page_range = @pr WHERE id = 1;",
+                        new Dictionary<string, object> { { "pr", supportsPageRange.Value ? 1 : 0 } });
+                }
+                if (!string.IsNullOrWhiteSpace(allowedPaperSizes))
+                {
+                    _db.ExecuteNonQuery(
+                        "UPDATE printers SET allowed_paper_sizes = @aps WHERE id = 1;",
+                        new Dictionary<string, object> { { "aps", allowedPaperSizes.Trim() } });
+                }
+                if (maxCopies.HasValue && maxCopies.Value >= 1 && maxCopies.Value <= 200)
+                {
+                    _db.ExecuteNonQuery(
+                        "UPDATE printers SET max_copies = @mc WHERE id = 1;",
+                        new Dictionary<string, object> { { "mc", maxCopies.Value } });
+                }
+                if (!string.IsNullOrWhiteSpace(activeQueueName))
+                {
+                    string qName = activeQueueName.Trim();
+                    _db.ExecuteNonQuery("UPDATE printer_queues SET is_active_selected = 0;");
+                    var existing = _db.QuerySingle("SELECT * FROM printer_queues WHERE windows_queue_name = @qn;",
+                        new Dictionary<string, object> { { "qn", qName } });
+                    if (existing != null)
+                    {
+                        _db.ExecuteNonQuery("UPDATE printer_queues SET is_active_selected = 1, verified_status = 'VERIFIED_ACTIVE', updated_at_utc = @now WHERE windows_queue_name = @qn;",
+                            new Dictionary<string, object> { { "qn", qName }, { "now", UtcNowIso() } });
+                    }
+                    else
+                    {
+                        _db.ExecuteInsert(
+                            @"INSERT INTO printer_queues (printer_id, windows_queue_name, driver_name, port_name, is_active_selected, is_virtual_excluded, verified_status, notes, updated_at_utc)
+                              VALUES (1, @qn, 'Windows Installed Driver', 'USB001', 1, 0, 'VERIFIED_ACTIVE', 'Selected by Admin', @now);",
+                            new Dictionary<string, object> { { "qn", qName }, { "now", UtcNowIso() } });
+                    }
+                }
                 if (printerReadyOverride.HasValue)
                 {
                     _db.ExecuteNonQuery(
@@ -1881,10 +2044,124 @@ CREATE TABLE IF NOT EXISTS audit_events (
                         });
                 }
                 LogAudit(null, "admin", adminUsername, "SHOP_PRINTER_CONTROLS_UPDATED", null, null,
-                    string.Format(CultureInfo.InvariantCulture, "IntakePaused={0}, SupportsDuplex={1}, PrinterReady={2}", intakePaused, supportsDuplex, printerReadyOverride));
+                    string.Format(CultureInfo.InvariantCulture, "IntakePaused={0}, Color={1}, Duplex={2}, PageRange={3}, Queue={4}",
+                        intakePaused, supportsColor, supportsDuplex, supportsPageRange, activeQueueName ?? "unchanged"));
             });
 
             return GetShopAndAvailabilityStatus();
+        }
+
+        // Allows counter admin to override print settings (e.g., B&W vs Color, Page Range, Copies, Duplex, N-Up, Orientation)
+        // on an order before approving/printing or before re-dispatching!
+        public Dictionary<string, object> AdminOverrideOrderPrintSettings(
+            long orderId,
+            string pageRangeSpec,
+            int copies,
+            string duplexMode,
+            string colorMode,
+            string paperSize,
+            string orientation,
+            int pagesPerSheet,
+            bool collate,
+            string adminUsername,
+            out string errorMsg)
+        {
+            errorMsg = null;
+            try
+            {
+                return _db.RunInTransaction(() =>
+                {
+                    var order = _db.QuerySingle("SELECT * FROM orders WHERE id = @id;", new Dictionary<string, object> { { "id", orderId } });
+                    if (order == null) throw new InvalidOperationException("Order not found.");
+
+                    var quote = _db.QuerySingle("SELECT * FROM quotes WHERE id = @qid;", new Dictionary<string, object> { { "qid", order["quote_id"] } });
+                    var priceRule = _db.QuerySingle("SELECT * FROM price_rules WHERE id = @prid;", new Dictionary<string, object> { { "prid", quote["price_rule_id"] } });
+                    if (priceRule == null)
+                    {
+                        priceRule = _db.QuerySingle("SELECT * FROM price_rules WHERE shop_id = 1 AND is_active = 1 ORDER BY version DESC LIMIT 1;");
+                    }
+
+                    int docPages = Convert.ToInt32(quote["document_pages"], CultureInfo.InvariantCulture);
+                    double colorSimplexRate = priceRule.ContainsKey("color_simplex_per_side_inr") && priceRule["color_simplex_per_side_inr"] != null
+                        ? Convert.ToDouble(priceRule["color_simplex_per_side_inr"], CultureInfo.InvariantCulture)
+                        : 10.0;
+                    double colorDuplexRate = priceRule.ContainsKey("color_duplex_per_side_inr") && priceRule["color_duplex_per_side_inr"] != null
+                        ? Convert.ToDouble(priceRule["color_duplex_per_side_inr"], CultureInfo.InvariantCulture)
+                        : 8.0;
+
+                    string calcErr;
+                    QuoteCalculationResult calc = PdfAndPrinterEngine.CalculateQuote(
+                        docPages,
+                        pageRangeSpec,
+                        copies,
+                        duplexMode,
+                        Convert.ToDouble(priceRule["simplex_per_side_inr"], CultureInfo.InvariantCulture),
+                        Convert.ToDouble(priceRule["duplex_per_side_inr"], CultureInfo.InvariantCulture),
+                        Convert.ToDouble(priceRule["min_order_charge_inr"], CultureInfo.InvariantCulture),
+                        Convert.ToDouble(priceRule["tax_percent"], CultureInfo.InvariantCulture),
+                        out calcErr,
+                        colorMode,
+                        colorSimplexRate,
+                        colorDuplexRate,
+                        paperSize,
+                        orientation,
+                        pagesPerSheet,
+                        collate,
+                        200);
+
+                    if (calc == null) throw new InvalidOperationException(calcErr);
+
+                    _db.ExecuteNonQuery(
+                        @"UPDATE quotes
+                          SET selected_pages = @sp, page_range_spec = @rng, copies = @cp, duplex_mode = @dup,
+                              color_mode = @cm, paper_size = @ps, orientation = @ori, pages_per_sheet = @pps, is_collated = @col,
+                              printed_sides = @sides, physical_sheets = @sheets
+                          WHERE id = @qid;
+                          UPDATE orders SET updated_at_utc = @now WHERE id = @oid;",
+                        new Dictionary<string, object>
+                        {
+                            { "sp", calc.SelectedPageCount },
+                            { "rng", calc.NormalizedPageRange },
+                            { "cp", calc.Copies },
+                            { "dup", calc.DuplexMode },
+                            { "cm", calc.ColorMode },
+                            { "ps", calc.PaperSize },
+                            { "ori", calc.Orientation },
+                            { "pps", calc.PagesPerSheet },
+                            { "col", calc.Collate ? 1 : 0 },
+                            { "sides", calc.TotalPrintedSides },
+                            { "sheets", calc.TotalPhysicalSheets },
+                            { "qid", quote["id"] },
+                            { "now", UtcNowIso() },
+                            { "oid", orderId }
+                        });
+
+                    LogAudit(orderId, "admin", adminUsername, "ADMIN_PRINT_SETTINGS_OVERRIDDEN", Convert.ToString(order["state"]), Convert.ToString(order["state"]),
+                        string.Format(CultureInfo.InvariantCulture, "Range={0}, Copies={1}, Color={2}, Duplex={3}, Paper={4}, Orientation={5}, NUp={6} -> Sides={7}, Sheets={8}",
+                            calc.NormalizedPageRange, calc.Copies, calc.ColorMode, calc.DuplexMode, calc.PaperSize, calc.Orientation, calc.PagesPerSheet, calc.TotalPrintedSides, calc.TotalPhysicalSheets));
+
+                    return new Dictionary<string, object>
+                    {
+                        { "orderId", orderId },
+                        { "selectedPages", calc.SelectedPageCount },
+                        { "pageRange", calc.NormalizedPageRange },
+                        { "copies", calc.Copies },
+                        { "duplexMode", calc.DuplexMode },
+                        { "colorMode", calc.ColorMode },
+                        { "paperSize", calc.PaperSize },
+                        { "orientation", calc.Orientation },
+                        { "pagesPerSheet", calc.PagesPerSheet },
+                        { "collate", calc.Collate },
+                        { "printedSides", calc.TotalPrintedSides },
+                        { "physicalSheets", calc.TotalPhysicalSheets }
+                    };
+                });
+            }
+            catch (Exception ex)
+            {
+                errorMsg = ex.Message;
+                return null;
+            }
         }
 
         public string GetDispatchMode()
@@ -1936,6 +2213,7 @@ CREATE TABLE IF NOT EXISTS audit_events (
 
             var sql = new StringBuilder(@"
                 SELECT o.*, q.document_pages, q.selected_pages, q.page_range_spec, q.copies, q.duplex_mode,
+                       q.color_mode, q.paper_size, q.orientation, q.pages_per_sheet, q.is_collated,
                        q.printed_sides, q.physical_sheets, q.total_amount_inr, q.price_rule_version,
                        f.original_filename_redacted, f.sha256_hex, f.size_bytes, f.is_deleted,
                        p.gateway_order_id, p.gateway_payment_id, p.webhook_calls_count,
@@ -1983,6 +2261,11 @@ CREATE TABLE IF NOT EXISTS audit_events (
                     { "pageRange", r["page_range_spec"] },
                     { "copies", r["copies"] },
                     { "duplexMode", r["duplex_mode"] },
+                    { "colorMode", r.ContainsKey("color_mode") && r["color_mode"] != null ? r["color_mode"] : "bw" },
+                    { "paperSize", r.ContainsKey("paper_size") && r["paper_size"] != null ? r["paper_size"] : "A4" },
+                    { "orientation", r.ContainsKey("orientation") && r["orientation"] != null ? r["orientation"] : "auto" },
+                    { "pagesPerSheet", r.ContainsKey("pages_per_sheet") && r["pages_per_sheet"] != null ? r["pages_per_sheet"] : 1 },
+                    { "collate", !r.ContainsKey("is_collated") || r["is_collated"] == null || Convert.ToInt64(r["is_collated"]) != 0 },
                     { "printedSides", r["printed_sides"] },
                     { "physicalSheets", r["physical_sheets"] },
                     { "totalAmountInr", r["total_amount_inr"] },
