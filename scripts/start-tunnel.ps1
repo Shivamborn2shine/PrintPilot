@@ -6,7 +6,7 @@
 #>
 
 param(
-    [string]$NetlifyUrl = "",
+    [string]$NetlifyUrl = "https://printitaway.netlify.app",
     [int]$LocalPort = 8080
 )
 
@@ -72,7 +72,7 @@ Write-Host "Launching Cloudflare Tunnel for http://127.0.0.1:$LocalPort ..." -Fo
 
 $procInfo = New-Object System.Diagnostics.ProcessStartInfo
 $procInfo.FileName = $cloudflared
-$procInfo.Arguments = "tunnel --url http://127.0.0.1:$LocalPort"
+$procInfo.Arguments = "tunnel --protocol http2 --url http://127.0.0.1:$LocalPort"
 $procInfo.RedirectStandardError = $true
 $procInfo.RedirectStandardOutput = $true
 $procInfo.UseShellExecute = $false

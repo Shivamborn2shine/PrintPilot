@@ -522,8 +522,13 @@
   </div>
 
   <script>
+    const DEFAULT_STATION_URL = 'https://mason-characteristic-little-reproductive.trycloudflare.com';
+
     function apiUrl(path) {
-      const base = (localStorage.getItem('printaway_api_base') || '').trim();
+      let base = (localStorage.getItem('printaway_api_base') || '').trim();
+      if (!base && (window.location.hostname !== 'localhost' && window.location.hostname !== '127.0.0.1')) {
+        base = DEFAULT_STATION_URL;
+      }
       if (!base) return path;
       return base.replace(/\/+$/, '') + path;
     }
