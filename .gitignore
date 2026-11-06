@@ -19,6 +19,7 @@ secrets/
 
 # Tunnel binary
 bin/cloudflared.exe
+bin/*.yml
 
 # Distribution packaging & updater temporary files
 dist/

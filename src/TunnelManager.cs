@@ -43,6 +43,15 @@ namespace PrintAway.Tunnel
             string exePath = Path.Combine(binDir, "cloudflared.exe");
             if (!File.Exists(exePath))
             {
+                string altExe = Path.Combine(_rootDir, "cloudflared.exe");
+                if (File.Exists(altExe))
+                {
+                    exePath = altExe;
+                }
+            }
+
+            if (!File.Exists(exePath))
+            {
                 Log("Cloudflared binary missing. Downloading official Cloudflare Tunnel engine...");
                 DownloadCloudflared(exePath);
             }
@@ -205,3 +214,4 @@ namespace PrintAway.Tunnel
         }
     }
 }
+

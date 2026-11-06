@@ -4,6 +4,7 @@ using System.Diagnostics;
 using System.Drawing;
 using System.Globalization;
 using System.IO;
+using System.Runtime.InteropServices;
 using System.Text.RegularExpressions;
 using System.Windows.Forms;
 using PrintAway.Engine;
@@ -17,6 +18,18 @@ namespace PrintAway.Gui
 {
     public sealed class StationGuiForm : Form
     {
+        [DllImport("user32.dll", SetLastError = true, CharSet = CharSet.Auto)]
+        private static extern int RegisterWindowMessage(string lpString);
+
+        [DllImport("user32.dll")]
+        private static extern bool SetForegroundWindow(IntPtr hWnd);
+
+        [DllImport("user32.dll")]
+        private static extern bool ShowWindow(IntPtr hWnd, int nCmdShow);
+        private const int SW_RESTORE = 9;
+
+        public static readonly int WM_SHOWME = RegisterWindowMessage("PRINTAWAY_SHOWME_RESTORE_MSG");
+
         private readonly PrintAwayRepository _repo;
         private readonly LocalPrintWorker _worker;
         private readonly PrintAwayHttpServer _server;
@@ -42,6 +55,7 @@ namespace PrintAway.Gui
         private ContextMenuStrip _trayMenu;
         private System.Windows.Forms.Timer _metricsTimer;
         private bool _reallyExit;
+        private bool _isInitializing = true;
 
         public StationGuiForm(PrintAwayRepository repo, LocalPrintWorker worker, PrintAwayHttpServer server, TunnelManager tunnel, string repoRoot, int port)
         {
@@ -61,17 +75,27 @@ namespace PrintAway.Gui
             }
         }
 
+        protected override void WndProc(ref Message m)
+        {
+            if (m.Msg == WM_SHOWME)
+            {
+                RestoreWindow();
+            }
+            base.WndProc(ref m);
+        }
+
         private void InitializeGui()
         {
             this.Text = "PrintAway Station v" + AutoUpdater.CurrentVersion;
-            this.Size = new Size(680, 680);
+            this.ClientSize = new Size(670, 680);
             this.StartPosition = FormStartPosition.CenterScreen;
             this.FormBorderStyle = FormBorderStyle.FixedSingle;
             this.MaximizeBox = false;
+            this.Icon = SystemIcons.Application;
             this.BackColor = Color.FromArgb(248, 250, 252);
             this.Font = new Font("Segoe UI", 9f, FontStyle.Regular);
 
-            // 1. Top Header Bar
+            // 1. Top Header Bar (Fixed Top)
             var pnlHeader = new Panel
             {
                 Dock = DockStyle.Top,
@@ -111,22 +135,23 @@ namespace PrintAway.Gui
             pnlHeader.Controls.Add(lblHeaderTitle);
             pnlHeader.Controls.Add(lblHeaderSub);
             pnlHeader.Controls.Add(_lblStatusBadge);
-            this.Controls.Add(pnlHeader);
 
-            // Container Panel
+            // 2. Body Scrollable Container (Fills rest of form)
             var pnlBody = new Panel
             {
                 Dock = DockStyle.Fill,
-                Padding = new Padding(18),
+                BackColor = Color.FromArgb(248, 250, 252),
                 AutoScroll = true
             };
             this.Controls.Add(pnlBody);
+            this.Controls.Add(pnlHeader);
+            pnlBody.SendToBack();
 
-            int y = 75;
+            int y = 14;
 
-            // 2. Card: Shop Identity & Live Customer QR Link
-            var grpShop = CreateCardPanel("🏪 Shop Identity & Live Customer QR", 18, y, 626, 120);
-            y += 130;
+            // 3. Card: Shop Identity & Live Customer QR Link
+            var grpShop = CreateCardPanel("🏪 Shop Identity & Live Customer QR", 18, y, 620, 120);
+            y += 132;
 
             _lblShopTitle = new Label
             {
@@ -134,7 +159,7 @@ namespace PrintAway.Gui
                 Font = new Font("Segoe UI", 9.5f, FontStyle.Bold),
                 ForeColor = Color.FromArgb(30, 41, 59),
                 Location = new Point(14, 25),
-                Size = new Size(590, 20)
+                Size = new Size(585, 20)
             };
 
             _lblCustomerLink = new Label
@@ -143,14 +168,14 @@ namespace PrintAway.Gui
                 Font = new Font("Segoe UI", 8.5f, FontStyle.Regular),
                 ForeColor = Color.FromArgb(29, 78, 216),
                 Location = new Point(14, 48),
-                Size = new Size(460, 20)
+                Size = new Size(475, 20)
             };
 
             var btnCopyLink = new Button
             {
                 Text = "📋 Copy Link",
                 Size = new Size(95, 26),
-                Location = new Point(510, 44),
+                Location = new Point(505, 44),
                 BackColor = Color.White,
                 FlatStyle = FlatStyle.System
             };
@@ -169,18 +194,18 @@ namespace PrintAway.Gui
                 Text = "Cloudflare Tunnel: Initializing secure HTTP/2 tunnel...",
                 Font = new Font("Segoe UI", 8f, FontStyle.Regular),
                 ForeColor = Color.FromArgb(71, 85, 105),
-                Location = new Point(14, 75),
-                Size = new Size(590, 35)
+                Location = new Point(14, 74),
+                Size = new Size(585, 38)
             };
 
             grpShop.Controls.Add(_lblShopTitle);
             grpShop.Controls.Add(_lblCustomerLink);
             grpShop.Controls.Add(btnCopyLink);
             grpShop.Controls.Add(_lblTunnelUrl);
-            this.Controls.Add(grpShop);
+            pnlBody.Controls.Add(grpShop);
 
-            // 3. Card: Printer Fleet & Dispatch Control
-            var grpPrinter = CreateCardPanel("🖨️ Hardware Printer & Dispatch Mode", 18, y, 626, 130);
+            // 4. Card: Printer Fleet & Dispatch Control
+            var grpPrinter = CreateCardPanel("🖨️ Hardware Printer & Dispatch Mode", 18, y, 620, 128);
             y += 140;
 
             var lblSelP = new Label
@@ -202,7 +227,7 @@ namespace PrintAway.Gui
             _btnPauseResume = new Button
             {
                 Text = "⏸ Pause Intake",
-                Size = new Size(115, 28),
+                Size = new Size(110, 28),
                 Location = new Point(498, 21),
                 BackColor = Color.FromArgb(241, 245, 249),
                 FlatStyle = FlatStyle.System
@@ -232,7 +257,7 @@ namespace PrintAway.Gui
 
             var lblPaperNote = new Label
             {
-                Text = "Prints via standard Windows GDI+ / PCL6 rasterizer. Color vs B&W routing enabled.",
+                Text = "Prints via standard Windows GDI+ / PCL6 rasterizer. Auto-routes B&W vs Color queues.",
                 Font = new Font("Segoe UI", 8f, FontStyle.Regular),
                 ForeColor = Color.FromArgb(100, 116, 139),
                 Location = new Point(16, 92),
@@ -245,18 +270,18 @@ namespace PrintAway.Gui
             grpPrinter.Controls.Add(_rbPhysical);
             grpPrinter.Controls.Add(_rbSimulation);
             grpPrinter.Controls.Add(lblPaperNote);
-            this.Controls.Add(grpPrinter);
+            pnlBody.Controls.Add(grpPrinter);
 
-            // 4. Card: Real-Time Counter Metrics
-            var grpMetrics = CreateCardPanel("📊 Today's Counter Performance (Real-Time)", 18, y, 626, 90);
-            y += 100;
+            // 5. Card: Real-Time Counter Metrics
+            var grpMetrics = CreateCardPanel("📊 Today's Counter Performance (Real-Time)", 18, y, 620, 90);
+            y += 102;
 
-            _lblMetricOrders = CreateMetricBox("ORDERS TODAY", "0", 18, 22, 180, grpMetrics);
-            _lblMetricSides = CreateMetricBox("PAGES PRINTED", "0", 218, 22, 180, grpMetrics);
-            _lblMetricRevenue = CreateMetricBox("TOTAL REVENUE", "₹0.00", 418, 22, 180, grpMetrics);
-            this.Controls.Add(grpMetrics);
+            _lblMetricOrders = CreateMetricBox("ORDERS TODAY", "0", 14, 22, 185, grpMetrics);
+            _lblMetricSides = CreateMetricBox("PAGES PRINTED", "0", 214, 22, 185, grpMetrics);
+            _lblMetricRevenue = CreateMetricBox("TOTAL REVENUE", "₹0.00", 414, 22, 190, grpMetrics);
+            pnlBody.Controls.Add(grpMetrics);
 
-            // 5. Quick Action Launchers
+            // 6. Quick Action Launchers
             var btnOpenAdmin = new Button
             {
                 Text = "⚙️ Open Counter Admin Dashboard (/admin)",
@@ -264,8 +289,9 @@ namespace PrintAway.Gui
                 ForeColor = Color.White,
                 Font = new Font("Segoe UI", 9.5f, FontStyle.Bold),
                 FlatStyle = FlatStyle.Flat,
-                Size = new Size(310, 42),
-                Location = new Point(18, y)
+                Size = new Size(305, 42),
+                Location = new Point(18, y),
+                Cursor = Cursors.Hand
             };
             btnOpenAdmin.FlatAppearance.BorderSize = 0;
             btnOpenAdmin.Click += (s, e) => LaunchBrowser("http://127.0.0.1:" + _port + "/admin");
@@ -278,16 +304,17 @@ namespace PrintAway.Gui
                 Font = new Font("Segoe UI", 9.5f, FontStyle.Bold),
                 FlatStyle = FlatStyle.Flat,
                 Size = new Size(305, 42),
-                Location = new Point(338, y)
+                Location = new Point(333, y),
+                Cursor = Cursors.Hand
             };
             btnOpenQr.FlatAppearance.BorderSize = 0;
             btnOpenQr.Click += (s, e) => LaunchBrowser("https://printitaway.netlify.app/?shop=" + GetCurrentShopId());
 
-            this.Controls.Add(btnOpenAdmin);
-            this.Controls.Add(btnOpenQr);
-            y += 52;
+            pnlBody.Controls.Add(btnOpenAdmin);
+            pnlBody.Controls.Add(btnOpenQr);
+            y += 54;
 
-            // 6. Preferences & Boot Settings
+            // 7. Preferences & Boot Settings
             _chkAutoStart = new CheckBox
             {
                 Text = "Start station automatically when Windows boots",
@@ -300,38 +327,42 @@ namespace PrintAway.Gui
             _chkMinimizeToTray = new CheckBox
             {
                 Text = "Minimize to System Tray (near clock) when closed",
-                Checked = true,
-                Location = new Point(340, y),
+                Checked = false, // Default false so closing actually exits unless user wants tray mode!
+                Location = new Point(335, y),
                 AutoSize = true,
                 Font = new Font("Segoe UI", 8.5f, FontStyle.Regular)
             };
 
+            y += 28;
             var btnCheckUpdates = new Button
             {
                 Text = "🔄 Check for Updates",
-                Size = new Size(140, 26),
-                Location = new Point(504, y + 25),
+                Size = new Size(150, 28),
+                Location = new Point(488, y),
                 BackColor = Color.White,
                 FlatStyle = FlatStyle.System
             };
             btnCheckUpdates.Click += OnCheckUpdatesClicked;
 
-            this.Controls.Add(_chkAutoStart);
-            this.Controls.Add(_chkMinimizeToTray);
-            this.Controls.Add(btnCheckUpdates);
+            pnlBody.Controls.Add(_chkAutoStart);
+            pnlBody.Controls.Add(_chkMinimizeToTray);
+            pnlBody.Controls.Add(btnCheckUpdates);
 
-            // 7. System Tray Icon Setup
+            // 8. System Tray Icon Setup
             SetupSystemTray();
 
-            // 8. Form Close Handler
+            // 9. Form Close Handler
             this.FormClosing += (s, e) =>
             {
                 if (!_reallyExit && _chkMinimizeToTray.Checked)
                 {
                     e.Cancel = true;
                     this.Hide();
-                    _trayIcon.ShowBalloonTip(1500, "PrintAway Station",
-                        "Station is running quietly in the system tray. Double-click to open.", ToolTipIcon.Info);
+                    if (_trayIcon != null)
+                    {
+                        _trayIcon.ShowBalloonTip(1500, "PrintAway Station",
+                            "Station is running quietly in the system tray. Double-click to open.", ToolTipIcon.Info);
+                    }
                 }
                 else
                 {
@@ -339,7 +370,7 @@ namespace PrintAway.Gui
                 }
             };
 
-            // 9. Metrics Auto-Refresh Timer (every 3 seconds)
+            // 10. Metrics Auto-Refresh Timer (every 3 seconds)
             _metricsTimer = new System.Windows.Forms.Timer { Interval = 3000 };
             _metricsTimer.Tick += (s, e) => RefreshDashboardMetrics();
             _metricsTimer.Start();
@@ -359,7 +390,7 @@ namespace PrintAway.Gui
                 Text = title,
                 Font = new Font("Segoe UI", 8.5f, FontStyle.Bold),
                 ForeColor = Color.FromArgb(71, 85, 105),
-                Location = new Point(10, 4),
+                Location = new Point(10, 5),
                 AutoSize = true
             };
             pnl.Controls.Add(lblTitle);
@@ -426,16 +457,24 @@ namespace PrintAway.Gui
             _trayIcon.DoubleClick += (s, e) => RestoreWindow();
         }
 
-        private void RestoreWindow()
+        public void RestoreWindow()
         {
+            if (this.InvokeRequired)
+            {
+                this.BeginInvoke(new Action(RestoreWindow));
+                return;
+            }
             this.Show();
             this.WindowState = FormWindowState.Normal;
+            ShowWindow(this.Handle, SW_RESTORE);
+            SetForegroundWindow(this.Handle);
             this.BringToFront();
             this.Activate();
         }
 
         private void LoadInitialData()
         {
+            _isInitializing = true;
             try
             {
                 var status = _repo.GetShopAndAvailabilityStatus();
@@ -483,6 +522,10 @@ namespace PrintAway.Gui
             {
                 MessageBox.Show("Error loading station state: " + ex.Message, "PrintAway", MessageBoxButtons.OK, MessageBoxIcon.Warning);
             }
+            finally
+            {
+                _isInitializing = false;
+            }
         }
 
         private void RefreshDashboardMetrics()
@@ -518,7 +561,7 @@ namespace PrintAway.Gui
 
         private void OnPrinterSelectionChanged(object sender, EventArgs e)
         {
-            if (_cmbPrinters.SelectedItem == null) return;
+            if (_isInitializing || _cmbPrinters.SelectedItem == null) return;
             string selectedText = _cmbPrinters.SelectedItem.ToString();
             string cleanQueue = selectedText.Replace("[PHYSICAL] ", "").Replace("[VIRTUAL] ", "").Trim();
 
@@ -535,6 +578,7 @@ namespace PrintAway.Gui
 
         private void OnDispatchModeChanged(object sender, EventArgs e)
         {
+            if (_isInitializing) return;
             bool isPhysical = _rbPhysical.Checked;
             try
             {
@@ -566,19 +610,20 @@ namespace PrintAway.Gui
                 _lblStatusBadge.Text = "● ONLINE";
                 _lblStatusBadge.BackColor = Color.FromArgb(21, 128, 61);
                 _btnPauseResume.Text = "⏸ Pause Intake";
-                _trayIcon.Text = "PrintAway Station - Online";
+                if (_trayIcon != null) _trayIcon.Text = "PrintAway Station - Online";
             }
             else
             {
                 _lblStatusBadge.Text = "⏸ PAUSED";
                 _lblStatusBadge.BackColor = Color.FromArgb(180, 83, 9);
                 _btnPauseResume.Text = "▶ Resume Intake";
-                _trayIcon.Text = "PrintAway Station - Paused";
+                if (_trayIcon != null) _trayIcon.Text = "PrintAway Station - Paused";
             }
         }
 
         private void OnAutoStartToggled(object sender, EventArgs e)
         {
+            if (_isInitializing) return;
             string startupDir = Environment.GetFolderPath(Environment.SpecialFolder.Startup);
             string shortcutPath = Path.Combine(startupDir, "PrintAwayStation.lnk");
             string currentExe = Process.GetCurrentProcess().MainModule.FileName;

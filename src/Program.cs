@@ -22,12 +22,28 @@ namespace PrintAway
 
         private const int ATTACH_PARENT_PROCESS = -1;
 
+        [DllImport("user32.dll", SetLastError = true, CharSet = CharSet.Auto)]
+        private static extern int RegisterWindowMessage(string lpString);
+
+        [DllImport("user32.dll")]
+        private static extern bool PostMessage(IntPtr hWnd, int Msg, IntPtr wParam, IntPtr lParam);
+
+        private static readonly IntPtr HWND_BROADCAST = new IntPtr(0xffff);
+
         [STAThread]
         public static int Main(string[] args)
         {
             string baseDir = AppDomain.CurrentDomain.BaseDirectory;
-            string repoRoot = Path.GetFullPath(Path.Combine(baseDir, ".."));
-            if (!Directory.Exists(Path.Combine(repoRoot, "web")))
+            string repoRoot = baseDir;
+            if (Directory.Exists(Path.Combine(baseDir, "web")))
+            {
+                repoRoot = baseDir;
+            }
+            else if (Directory.Exists(Path.Combine(baseDir, "..", "web")))
+            {
+                repoRoot = Path.GetFullPath(Path.Combine(baseDir, ".."));
+            }
+            else if (Directory.Exists(Path.Combine(Directory.GetCurrentDirectory(), "web")))
             {
                 repoRoot = Directory.GetCurrentDirectory();
             }
@@ -114,121 +130,149 @@ namespace PrintAway
                 return SelfTestSuite.RunAllTests(tempDir);
             }
 
-            string dataDir = Path.Combine(repoRoot, "data");
-            string vaultDir = Path.Combine(dataDir, "private_vault_pdfs");
-            string dbPath = Path.Combine(dataDir, "printaway.db");
-            string webRoot = Path.Combine(repoRoot, "web");
-
-            if (!Directory.Exists(dataDir)) Directory.CreateDirectory(dataDir);
-            if (!Directory.Exists(vaultDir)) Directory.CreateDirectory(vaultDir);
-
-            string webhookSecret = Environment.GetEnvironmentVariable("PRINTAWAY_WEBHOOK_SECRET") ?? "pa_local_webhook_secret_2026";
-            string workerToken = Environment.GetEnvironmentVariable("PRINTAWAY_WORKER_TOKEN") ?? "pa_local_worker_token_2026";
-
-            using (var sqlite = new SqliteDatabase(dbPath))
+            bool createdNewMutex = false;
+            Mutex singleInstanceMutex = null;
+            if (!cliMode)
             {
-                var repo = new PrintAwayRepository(sqlite, vaultDir, webhookSecret, workerToken);
-
-                string rzpKey = Environment.GetEnvironmentVariable("RAZORPAY_KEY_ID");
-                string rzpSec = Environment.GetEnvironmentVariable("RAZORPAY_KEY_SECRET");
-                string rzpWhSec = Environment.GetEnvironmentVariable("RAZORPAY_WEBHOOK_SECRET");
-                if (!string.IsNullOrWhiteSpace(rzpKey) && !string.IsNullOrWhiteSpace(rzpSec))
+                singleInstanceMutex = new Mutex(true, "PrintAway_Station_SingleInstance_Mutex_9f8a", out createdNewMutex);
+                if (!createdNewMutex)
                 {
-                    repo.ConfigureRazorpay(rzpKey, rzpSec, rzpWhSec);
-                    Console.ForegroundColor = ConsoleColor.Green;
-                    Console.WriteLine("[Payment Gateway] Razorpay Active -> Key ID: " + rzpKey);
-                    Console.ResetColor();
+                    // PrintAway Station is already running! Signal existing window to restore and exit cleanly.
+                    int wmShowMe = RegisterWindowMessage("PRINTAWAY_SHOWME_RESTORE_MSG");
+                    PostMessage(HWND_BROADCAST, wmShowMe, IntPtr.Zero, IntPtr.Zero);
+                    return 0;
                 }
+            }
 
-                // Resolve printer queue for easy hardware/PC migration
-                string desiredQueue = !string.IsNullOrWhiteSpace(cliPrinterQueue) ? cliPrinterQueue : configPrinterQueue;
-                if (!string.IsNullOrWhiteSpace(desiredQueue))
+            try
+            {
+                string dataDir = Path.Combine(repoRoot, "data");
+                string vaultDir = Path.Combine(dataDir, "private_vault_pdfs");
+                string dbPath = Path.Combine(dataDir, "printaway.db");
+                string webRoot = Path.Combine(repoRoot, "web");
+
+                if (!Directory.Exists(dataDir)) Directory.CreateDirectory(dataDir);
+                if (!Directory.Exists(vaultDir)) Directory.CreateDirectory(vaultDir);
+
+                string webhookSecret = Environment.GetEnvironmentVariable("PRINTAWAY_WEBHOOK_SECRET") ?? "pa_local_webhook_secret_2026";
+                string workerToken = Environment.GetEnvironmentVariable("PRINTAWAY_WORKER_TOKEN") ?? "pa_local_worker_token_2026";
+
+                using (var sqlite = new SqliteDatabase(dbPath))
                 {
-                    var liveQueues = PdfAndPrinterEngine.DiscoverWindowsQueues();
-                    bool foundExact = false;
-                    string firstPhysicalQueue = null;
+                    var repo = new PrintAwayRepository(sqlite, vaultDir, webhookSecret, workerToken);
 
-                    if (!string.Equals(desiredQueue, "auto", StringComparison.OrdinalIgnoreCase))
+                    string rzpKey = Environment.GetEnvironmentVariable("RAZORPAY_KEY_ID");
+                    string rzpSec = Environment.GetEnvironmentVariable("RAZORPAY_KEY_SECRET");
+                    string rzpWhSec = Environment.GetEnvironmentVariable("RAZORPAY_WEBHOOK_SECRET");
+                    if (!string.IsNullOrWhiteSpace(rzpKey) && !string.IsNullOrWhiteSpace(rzpSec))
                     {
-                        foreach (var q in liveQueues)
+                        repo.ConfigureRazorpay(rzpKey, rzpSec, rzpWhSec);
+                        Console.ForegroundColor = ConsoleColor.Green;
+                        Console.WriteLine("[Payment Gateway] Razorpay Active -> Key ID: " + rzpKey);
+                        Console.ResetColor();
+                    }
+
+                    // Resolve printer queue for easy hardware/PC migration
+                    string desiredQueue = !string.IsNullOrWhiteSpace(cliPrinterQueue) ? cliPrinterQueue : configPrinterQueue;
+                    if (!string.IsNullOrWhiteSpace(desiredQueue))
+                    {
+                        var liveQueues = PdfAndPrinterEngine.DiscoverWindowsQueues();
+                        bool foundExact = false;
+                        string firstPhysicalQueue = null;
+
+                        if (!string.Equals(desiredQueue, "auto", StringComparison.OrdinalIgnoreCase))
                         {
-                            if (string.Equals(q.QueueName, desiredQueue, StringComparison.OrdinalIgnoreCase))
+                            foreach (var q in liveQueues)
                             {
-                                foundExact = true;
-                                desiredQueue = q.QueueName;
-                                break;
+                                if (string.Equals(q.QueueName, desiredQueue, StringComparison.OrdinalIgnoreCase))
+                                {
+                                    foundExact = true;
+                                    desiredQueue = q.QueueName;
+                                    break;
+                                }
                             }
                         }
-                    }
 
-                    foreach (var q in liveQueues)
-                    {
-                        if (!q.IsVirtualExcluded && firstPhysicalQueue == null)
+                        foreach (var q in liveQueues)
                         {
-                            firstPhysicalQueue = q.QueueName;
+                            if (!q.IsVirtualExcluded && firstPhysicalQueue == null)
+                            {
+                                firstPhysicalQueue = q.QueueName;
+                            }
+                        }
+
+                        if (foundExact)
+                        {
+                            repo.UpdateShopAndPrinterControls(null, null, null, null, "system-startup", null, null, null, null, desiredQueue, configBwQueue, configColorQueue, configShopId, configShopName);
+                        }
+                        else if ((string.Equals(desiredQueue, "auto", StringComparison.OrdinalIgnoreCase) || autoFallbackPrinter) && !string.IsNullOrWhiteSpace(firstPhysicalQueue))
+                        {
+                            Console.WriteLine("[Printer Auto-Detect] Configured queue '" + desiredQueue + "' not on host; auto-selecting physical printer: " + firstPhysicalQueue);
+                            repo.UpdateShopAndPrinterControls(null, null, null, null, "system-startup", null, null, null, null, firstPhysicalQueue, configBwQueue, configColorQueue, configShopId, configShopName);
                         }
                     }
 
-                    if (foundExact)
+                    var currentStatus = repo.GetShopAndAvailabilityStatus();
+                    string activeQueueDisplay = Convert.ToString(currentStatus["activeQueueName"]);
+
+                    var worker = new LocalPrintWorker(repo, simulateSpoolerOnly: forceSimulation);
+                    worker.StartBackground(1500);
+
+                    using (var server = new PrintAwayHttpServer(port, repo, worker, webRoot))
                     {
-                        repo.UpdateShopAndPrinterControls(null, null, null, null, "system-startup", null, null, null, null, desiredQueue, configBwQueue, configColorQueue, configShopId, configShopName);
-                    }
-                    else if ((string.Equals(desiredQueue, "auto", StringComparison.OrdinalIgnoreCase) || autoFallbackPrinter) && !string.IsNullOrWhiteSpace(firstPhysicalQueue))
-                    {
-                        Console.WriteLine("[Printer Auto-Detect] Configured queue '" + desiredQueue + "' not on host; auto-selecting physical printer: " + firstPhysicalQueue);
-                        repo.UpdateShopAndPrinterControls(null, null, null, null, "system-startup", null, null, null, null, firstPhysicalQueue, configBwQueue, configColorQueue, configShopId, configShopName);
+                        server.Start();
+
+                        string registryTopic = "printaway_station_registry_" + (configShopId ?? "pilot") + "_9f8a7b6c5d4e";
+                        var tunnel = new TunnelManager(repoRoot, port, registryTopic);
+                        tunnel.Start();
+
+                        if (!cliMode)
+                        {
+                            Application.EnableVisualStyles();
+                            Application.SetCompatibleTextRenderingDefault(false);
+                            Application.Run(new StationGuiForm(repo, worker, server, tunnel, repoRoot, port));
+                        }
+                        else
+                        {
+                            Console.ForegroundColor = ConsoleColor.Cyan;
+                            Console.WriteLine("======================================================================");
+                            Console.WriteLine("  PrintAway Local Host Server & Print Worker Active (CLI Mode)");
+                            Console.WriteLine("======================================================================");
+                            Console.ResetColor();
+                            Console.WriteLine("  Customer Portal (QR / Web):  http://127.0.0.1:" + port + "/");
+                            Console.WriteLine("  Staff Admin Dashboard:       http://127.0.0.1:" + port + "/admin");
+                            Console.WriteLine("  Default Admin Login:         admin / PrintAway@Admin2026");
+                            Console.WriteLine("  Active Verified Queue:       " + activeQueueDisplay);
+                            Console.WriteLine("  Worker Dispatch Mode:        " + (forceSimulation ? "SAFE SPOOLER SIMULATION (--simulation)" : "LIVE PHYSICAL PRINT (" + activeQueueDisplay + ")"));
+                            Console.WriteLine("  Station Config File:         " + configPath);
+                            Console.WriteLine("  SQLite WAL Database:         " + dbPath);
+                            Console.WriteLine("  Private PDF Vault:           " + vaultDir);
+                            Console.WriteLine("======================================================================");
+                            Console.WriteLine("Press Ctrl+C to stop.");
+
+                            var exitEvent = new ManualResetEvent(false);
+                            Console.CancelKeyPress += (s, e) =>
+                            {
+                                e.Cancel = true;
+                                exitEvent.Set();
+                            };
+                            exitEvent.WaitOne();
+                        }
+
+                        tunnel.Stop();
+                        worker.Stop();
                     }
                 }
-
-                var currentStatus = repo.GetShopAndAvailabilityStatus();
-                string activeQueueDisplay = Convert.ToString(currentStatus["activeQueueName"]);
-
-                var worker = new LocalPrintWorker(repo, simulateSpoolerOnly: forceSimulation);
-                worker.StartBackground(1500);
-
-                using (var server = new PrintAwayHttpServer(port, repo, worker, webRoot))
+            }
+            finally
+            {
+                if (singleInstanceMutex != null)
                 {
-                    server.Start();
-
-                    string registryTopic = "printaway_station_registry_" + (configShopId ?? "pilot") + "_9f8a7b6c5d4e";
-                    var tunnel = new TunnelManager(repoRoot, port, registryTopic);
-                    tunnel.Start();
-
-                    if (!cliMode)
+                    if (createdNewMutex)
                     {
-                        Application.EnableVisualStyles();
-                        Application.SetCompatibleTextRenderingDefault(false);
-                        Application.Run(new StationGuiForm(repo, worker, server, tunnel, repoRoot, port));
+                        try { singleInstanceMutex.ReleaseMutex(); } catch { }
                     }
-                    else
-                    {
-                        Console.ForegroundColor = ConsoleColor.Cyan;
-                        Console.WriteLine("======================================================================");
-                        Console.WriteLine("  PrintAway Local Host Server & Print Worker Active (CLI Mode)");
-                        Console.WriteLine("======================================================================");
-                        Console.ResetColor();
-                        Console.WriteLine("  Customer Portal (QR / Web):  http://127.0.0.1:" + port + "/");
-                        Console.WriteLine("  Staff Admin Dashboard:       http://127.0.0.1:" + port + "/admin");
-                        Console.WriteLine("  Default Admin Login:         admin / PrintAway@Admin2026");
-                        Console.WriteLine("  Active Verified Queue:       " + activeQueueDisplay);
-                        Console.WriteLine("  Worker Dispatch Mode:        " + (forceSimulation ? "SAFE SPOOLER SIMULATION (--simulation)" : "LIVE PHYSICAL PRINT (" + activeQueueDisplay + ")"));
-                        Console.WriteLine("  Station Config File:         " + configPath);
-                        Console.WriteLine("  SQLite WAL Database:         " + dbPath);
-                        Console.WriteLine("  Private PDF Vault:           " + vaultDir);
-                        Console.WriteLine("======================================================================");
-                        Console.WriteLine("Press Ctrl+C to stop.");
-
-                        var exitEvent = new ManualResetEvent(false);
-                        Console.CancelKeyPress += (s, e) =>
-                        {
-                            e.Cancel = true;
-                            exitEvent.Set();
-                        };
-                        exitEvent.WaitOne();
-                    }
-
-                    tunnel.Stop();
-                    worker.Stop();
+                    singleInstanceMutex.Dispose();
                 }
             }
             return 0;

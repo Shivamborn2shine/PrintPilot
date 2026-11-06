@@ -92,3 +92,4 @@ Add-Type -AssemblyName System.IO.Compression.FileSystem
 $zipSizeMb = (Get-Item $zipPath).Length / 1MB
 Write-Host "Release package ready -> $zipPath ($([Math]::Round($zipSizeMb, 2)) MB)" -ForegroundColor Green
 Write-Host "Strict IP Protection verified: 0 source files (.cs) or Git history included." -ForegroundColor Green
+
