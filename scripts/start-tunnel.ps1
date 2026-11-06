@@ -1,49 +1,73 @@
 <#
 .SYNOPSIS
-    PrintAway Cloudflare Quick Tunnel Launcher
-    Exposes http://127.0.0.1:8080 over a free, zero-config Cloudflare HTTPS Tunnel
-    and outputs the exact URLs ready to paste or use with Netlify.
+    PrintAway Zero-Config Station & Secure Tunnel Launcher
+    1. Compiles PrintAway.exe if missing (using built-in Windows .NET 4.8 csc.exe)
+    2. Starts local PrintAway server on port 8080 (with physical printer auto-discovery)
+    3. Downloads cloudflared.exe if missing and starts an HTTP/2 TLS tunnel
+    4. Automatically updates web/index.html & web/admin.html with the live tunnel URL
+       and pushes to GitHub so Netlify (https://printitaway.netlify.app) connects automatically!
 #>
 
 param(
-    [string]$NetlifyUrl = "https://printitaway.netlify.app",
-    [int]$LocalPort = 8080
+    [string]$NetlifyUrl = "",
+    [int]$LocalPort = 0,
+    [string]$PrinterQueue = ""
 )
 
 $ErrorActionPreference = "Stop"
 $rootDir = (Resolve-Path (Join-Path $PSScriptRoot "..")).Path
 Set-Location $rootDir
 
+# Load portable config/station.json if present
+$configPath = Join-Path $rootDir "config\station.json"
+$autoPushGit = $true
+if (Test-Path $configPath) {
+    try {
+        $cfg = Get-Content $configPath -Raw | ConvertFrom-Json
+        if (-not $NetlifyUrl -and $cfg.netlifySiteUrl) { $NetlifyUrl = $cfg.netlifySiteUrl }
+        if ($LocalPort -le 0 -and $cfg.port) { $LocalPort = [int]$cfg.port }
+        if ($null -ne $cfg.autoPushTunnelToGit) { $autoPushGit = [bool]$cfg.autoPushTunnelToGit }
+    } catch {
+        Write-Host "[Config] Warning reading config/station.json: $_" -ForegroundColor DarkYellow
+    }
+}
+if (-not $NetlifyUrl) { $NetlifyUrl = "https://printitaway.netlify.app" }
+if ($LocalPort -le 0) { $LocalPort = 8080 }
+
 Write-Host "==========================================================" -ForegroundColor Cyan
-Write-Host "          PRINTAWAY ZERO-CONFIG SECURE TUNNEL            " -ForegroundColor Cyan
+Write-Host "       PRINTAWAY 1-CLICK STATION & TUNNEL LAUNCHER        " -ForegroundColor Cyan
 Write-Host "==========================================================" -ForegroundColor Cyan
 
 # 1. Check if local PrintAway server is running
 $localApiUrl = "http://127.0.0.1:$LocalPort/api/shop/status"
-Write-Host "Checking local PrintAway server at $localApiUrl ..." -ForegroundColor Yellow
+Write-Host "[1/4] Checking local PrintAway server at $localApiUrl ..." -ForegroundColor Yellow
 $serverRunning = $false
 try {
     $res = Invoke-RestMethod -Uri $localApiUrl -TimeoutSec 3 -ErrorAction Stop
     if ($res.shopName) {
         $serverRunning = $true
-        Write-Host "  [OK] PrintAway server is running (`"$($res.shopName)`")" -ForegroundColor Green
+        Write-Host "  [OK] PrintAway server is running (`"$($res.shopName)`" -> Queue: $($res.activeQueueName))" -ForegroundColor Green
     }
 } catch {
-    Write-Host "  [!] PrintAway server not responding on port $LocalPort." -ForegroundColor DarkYellow
+    Write-Host "  [!] PrintAway server not running yet on port $LocalPort." -ForegroundColor DarkYellow
 }
 
 if (-not $serverRunning) {
-    Write-Host "Starting local PrintAway server in background..." -ForegroundColor Yellow
     $serverExe = Join-Path $rootDir "bin\PrintAway.exe"
     if (-not (Test-Path $serverExe)) {
-        Write-Host "Building PrintAway first..." -ForegroundColor Yellow
-        powershell -NoProfile -ExecutionPolicy Bypass -File (Join-Path $rootDir "scripts\build.ps1")
+        Write-Host "  Compiling PrintAway.exe using built-in Windows .NET compiler..." -ForegroundColor Yellow
+        powershell -NoProfile -ExecutionPolicy Bypass -File (Join-Path $rootDir "scripts\build-and-test.ps1")
     }
-    Start-Process -FilePath $serverExe -ArgumentList "--port $LocalPort" -WindowStyle Minimized
+    $argList = "--port $LocalPort"
+    if ($PrinterQueue) {
+        $argList += " --printer `"$PrinterQueue`""
+    }
+    Write-Host "  Starting PrintAway.exe ($argList)..." -ForegroundColor Yellow
+    Start-Process -FilePath $serverExe -ArgumentList $argList -WindowStyle Minimized
     Start-Sleep -Seconds 2
     try {
         $res = Invoke-RestMethod -Uri $localApiUrl -TimeoutSec 5 -ErrorAction Stop
-        Write-Host "  [OK] Local server started successfully." -ForegroundColor Green
+        Write-Host "  [OK] Local server started. Active Printer Queue: $($res.activeQueueName)" -ForegroundColor Green
     } catch {
         Write-Host "  [ERROR] Failed to start local PrintAway server: $_" -ForegroundColor Red
         exit 1
@@ -53,13 +77,19 @@ if (-not $serverRunning) {
 # 2. Check cloudflared binary
 $cloudflared = Join-Path $rootDir "bin\cloudflared.exe"
 if (-not (Test-Path $cloudflared)) {
-    Write-Host "Downloading cloudflared.exe from Cloudflare official releases..." -ForegroundColor Yellow
+    Write-Host "[2/4] Downloading cloudflared.exe from Cloudflare official GitHub releases..." -ForegroundColor Yellow
+    if (-not (Test-Path (Join-Path $rootDir "bin"))) {
+        New-Item -ItemType Directory -Path (Join-Path $rootDir "bin") -Force | Out-Null
+    }
+    $ProgressPreference = 'SilentlyContinue'
     [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12
     Invoke-WebRequest -Uri "https://github.com/cloudflare/cloudflared/releases/latest/download/cloudflared-windows-amd64.exe" -OutFile $cloudflared
-    Write-Host "  [OK] Downloaded cloudflared." -ForegroundColor Green
+    Write-Host "  [OK] Downloaded cloudflared.exe." -ForegroundColor Green
+} else {
+    Write-Host "[2/4] Found cloudflared.exe in bin\." -ForegroundColor Green
 }
 
-# 3. Launch tunnel and parse tunnel URL
+# 3. Launch tunnel (HTTP/2 over TCP for zero UDP packet loss)
 $tunnelLog = Join-Path $rootDir "data\tunnel.log"
 if (-not (Test-Path (Join-Path $rootDir "data"))) {
     New-Item -ItemType Directory -Path (Join-Path $rootDir "data") -Force | Out-Null
@@ -68,7 +98,7 @@ if (Test-Path $tunnelLog) {
     Remove-Item -Force $tunnelLog -ErrorAction SilentlyContinue
 }
 
-Write-Host "Launching Cloudflare Tunnel for http://127.0.0.1:$LocalPort ..." -ForegroundColor Yellow
+Write-Host "[3/4] Launching Cloudflare HTTP/2 Tunnel for http://127.0.0.1:$LocalPort ..." -ForegroundColor Yellow
 
 $procInfo = New-Object System.Diagnostics.ProcessStartInfo
 $procInfo.FileName = $cloudflared
@@ -109,36 +139,52 @@ if (-not $tunnelUrl) {
     exit 1
 }
 
-Write-Host ""
-Write-Host "==========================================================" -ForegroundColor Green
-Write-Host "                 TUNNEL IS LIVE!                          " -ForegroundColor Green
-Write-Host "==========================================================" -ForegroundColor Green
-Write-Host "Public Station Tunnel URL:" -ForegroundColor Cyan
-Write-Host "  $tunnelUrl" -ForegroundColor White -BackgroundColor DarkBlue
-Write-Host ""
-Write-Host "Test Local Connectivity:" -ForegroundColor Yellow
-Write-Host "  curl $tunnelUrl/api/shop/status"
-Write-Host ""
-
-if ($NetlifyUrl) {
-    $cleanNetlify = $NetlifyUrl.TrimEnd('/')
-    Write-Host "Your Ready-to-Use Netlify Customer URL:" -ForegroundColor Cyan
-    Write-Host "  $cleanNetlify/?station=$tunnelUrl" -ForegroundColor Green
-    Write-Host ""
-    Write-Host "Your Ready-to-Use Netlify Admin URL:" -ForegroundColor Cyan
-    Write-Host "  $cleanNetlify/admin?station=$tunnelUrl" -ForegroundColor Green
-} else {
-    Write-Host "HOW TO CONNECT WITH NETLIFY:" -ForegroundColor Cyan
-    Write-Host "Option 1 (Zero-Config URL Parameter):" -ForegroundColor White
-    Write-Host "  Simply append ?station=$tunnelUrl to your Netlify link:"
-    Write-Host "  https://YOUR-SITE.netlify.app/?station=$tunnelUrl" -ForegroundColor Green
-    Write-Host ""
-    Write-Host "Option 2 (Persistent UI Setting):" -ForegroundColor White
-    Write-Host "  Open your Netlify site, click '⚙️ Station URL' in the top right,"
-    Write-Host "  and paste: $tunnelUrl" -ForegroundColor Green
+# 4. Auto-update web/index.html & web/admin.html with new DEFAULT_STATION_URL
+Write-Host "[4/4] Syncing tunnel URL ($tunnelUrl) to web frontend..." -ForegroundColor Yellow
+$utf8NoBom = New-Object System.Text.UTF8Encoding($false)
+foreach ($webFile in @("web\index.html", "web\admin.html")) {
+    $fullWebPath = Join-Path $rootDir $webFile
+    if (Test-Path $fullWebPath) {
+        $content = [System.IO.File]::ReadAllText($fullWebPath, [System.Text.Encoding]::UTF8)
+        $updated = [regex]::Replace($content, "const DEFAULT_STATION_URL = '[^']*';", "const DEFAULT_STATION_URL = '$tunnelUrl';")
+        if ($updated -ne $content) {
+            [System.IO.File]::WriteAllText($fullWebPath, $updated, $utf8NoBom)
+        }
+    }
 }
+
+if ($autoPushGit) {
+    try {
+        git add web/index.html web/admin.html 2>$null
+        $diff = git status --porcelain web/index.html web/admin.html 2>$null
+        if ($diff) {
+            git commit -m "Auto-sync active station tunnel URL: $tunnelUrl" 2>$null | Out-Null
+            git push origin main 2>$null | Out-Null
+            Write-Host "  [OK] Pushed new tunnel URL to GitHub -> Netlify will auto-update in ~15s!" -ForegroundColor Green
+        } else {
+            Write-Host "  [OK] Web files already synced." -ForegroundColor Green
+        }
+    } catch {
+        Write-Host "  [!] Git auto-push skipped (use the ?station= URL below or push manually)." -ForegroundColor DarkYellow
+    }
+}
+
+$cleanNetlify = $NetlifyUrl.TrimEnd('/')
+Write-Host ""
 Write-Host "==========================================================" -ForegroundColor Green
-Write-Host "Tunnel process PID: $($tunnelProcess.Id). Keep this window open." -ForegroundColor Yellow
+Write-Host "                 STATION & TUNNEL LIVE!                   " -ForegroundColor Green
+Write-Host "==========================================================" -ForegroundColor Green
+Write-Host "Local Customer URL:      http://127.0.0.1:$LocalPort/" -ForegroundColor White
+Write-Host "Local Admin URL:         http://127.0.0.1:$LocalPort/admin" -ForegroundColor White
+Write-Host "Public Tunnel URL:       $tunnelUrl" -ForegroundColor Cyan
+Write-Host ""
+Write-Host "Netlify Customer URL (Direct):" -ForegroundColor Cyan
+Write-Host "  $cleanNetlify/?station=$tunnelUrl" -ForegroundColor Green
+Write-Host ""
+Write-Host "Netlify Admin URL (Direct):" -ForegroundColor Cyan
+Write-Host "  $cleanNetlify/admin?station=$tunnelUrl" -ForegroundColor Green
+Write-Host "==========================================================" -ForegroundColor Green
+Write-Host "Tunnel process PID: $($tunnelProcess.Id). Keep this window open while shop is open." -ForegroundColor Yellow
 Write-Host "Press Ctrl+C to stop tunnel." -ForegroundColor DarkGray
 Write-Host ""
 
@@ -155,4 +201,3 @@ try {
         $tunnelProcess.Kill()
     }
 }
-

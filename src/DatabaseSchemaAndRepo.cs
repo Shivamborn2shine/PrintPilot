@@ -2017,6 +2017,8 @@ CREATE TABLE IF NOT EXISTS audit_events (
                 if (!string.IsNullOrWhiteSpace(activeQueueName))
                 {
                     string qName = activeQueueName.Trim();
+                    string modelDisplay = (qName == VerifiedXeroxQueueName) ? "Xerox B1025 Multifunction Printer" : qName;
+                    _db.ExecuteNonQuery("UPDATE printers SET model_name = @mn WHERE id = 1;", new Dictionary<string, object> { { "mn", modelDisplay } });
                     _db.ExecuteNonQuery("UPDATE printer_queues SET is_active_selected = 0;");
                     var existing = _db.QuerySingle("SELECT * FROM printer_queues WHERE windows_queue_name = @qn;",
                         new Dictionary<string, object> { { "qn", qName } });

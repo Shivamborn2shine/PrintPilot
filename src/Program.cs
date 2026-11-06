@@ -1,7 +1,10 @@
 using System;
+using System.Collections.Generic;
 using System.Globalization;
 using System.IO;
 using System.Threading;
+using System.Web.Script.Serialization;
+using PrintAway.Engine;
 using PrintAway.Storage;
 using PrintAway.Web;
 using PrintAway.Worker;
@@ -22,6 +25,33 @@ namespace PrintAway
             bool runSelfTest = false;
             bool forceSimulation = false;
             int port = 8080;
+            string cliPrinterQueue = null;
+            string configPrinterQueue = null;
+            bool autoFallbackPrinter = true;
+
+            // Load portable station config from config/station.json if present
+            string configPath = Path.Combine(repoRoot, "config", "station.json");
+            if (File.Exists(configPath))
+            {
+                try
+                {
+                    var json = new JavaScriptSerializer();
+                    var cfg = json.Deserialize<Dictionary<string, object>>(File.ReadAllText(configPath));
+                    if (cfg != null)
+                    {
+                        if (cfg.ContainsKey("port") && cfg["port"] != null)
+                            int.TryParse(Convert.ToString(cfg["port"], CultureInfo.InvariantCulture), out port);
+                        if (cfg.ContainsKey("activePrinterQueue") && cfg["activePrinterQueue"] != null)
+                            configPrinterQueue = Convert.ToString(cfg["activePrinterQueue"]).Trim();
+                        if (cfg.ContainsKey("autoFallbackToPhysicalPrinter") && cfg["autoFallbackToPhysicalPrinter"] != null)
+                            bool.TryParse(Convert.ToString(cfg["autoFallbackToPhysicalPrinter"]), out autoFallbackPrinter);
+                    }
+                }
+                catch (Exception ex)
+                {
+                    Console.WriteLine("[Config] Warning reading config/station.json: " + ex.Message);
+                }
+            }
 
             if (args != null)
             {
@@ -35,6 +65,10 @@ namespace PrintAway
                     else if (string.Equals(a, "--port", StringComparison.OrdinalIgnoreCase) && i + 1 < args.Length)
                     {
                         int.TryParse(args[++i], NumberStyles.Integer, CultureInfo.InvariantCulture, out port);
+                    }
+                    else if (string.Equals(a, "--printer", StringComparison.OrdinalIgnoreCase) && i + 1 < args.Length)
+                    {
+                        cliPrinterQueue = args[++i];
                     }
                 }
             }
@@ -59,6 +93,50 @@ namespace PrintAway
             using (var sqlite = new SqliteDatabase(dbPath))
             {
                 var repo = new PrintAwayRepository(sqlite, vaultDir, webhookSecret, workerToken);
+
+                // Resolve printer queue for easy hardware/PC migration
+                string desiredQueue = !string.IsNullOrWhiteSpace(cliPrinterQueue) ? cliPrinterQueue : configPrinterQueue;
+                if (!string.IsNullOrWhiteSpace(desiredQueue))
+                {
+                    var liveQueues = PdfAndPrinterEngine.DiscoverWindowsQueues();
+                    bool foundExact = false;
+                    string firstPhysicalQueue = null;
+
+                    if (!string.Equals(desiredQueue, "auto", StringComparison.OrdinalIgnoreCase))
+                    {
+                        foreach (var q in liveQueues)
+                        {
+                            if (string.Equals(q.QueueName, desiredQueue, StringComparison.OrdinalIgnoreCase))
+                            {
+                                foundExact = true;
+                                desiredQueue = q.QueueName;
+                                break;
+                            }
+                        }
+                    }
+
+                    foreach (var q in liveQueues)
+                    {
+                        if (!q.IsVirtualExcluded && firstPhysicalQueue == null)
+                        {
+                            firstPhysicalQueue = q.QueueName;
+                        }
+                    }
+
+                    if (foundExact)
+                    {
+                        repo.UpdateShopAndPrinterControls(null, null, null, null, "system-startup", null, null, null, null, desiredQueue);
+                    }
+                    else if ((string.Equals(desiredQueue, "auto", StringComparison.OrdinalIgnoreCase) || autoFallbackPrinter) && !string.IsNullOrWhiteSpace(firstPhysicalQueue))
+                    {
+                        Console.WriteLine("[Printer Auto-Detect] Configured queue '" + desiredQueue + "' not on host; auto-selecting physical printer: " + firstPhysicalQueue);
+                        repo.UpdateShopAndPrinterControls(null, null, null, null, "system-startup", null, null, null, null, firstPhysicalQueue);
+                    }
+                }
+
+                var currentStatus = repo.GetShopAndAvailabilityStatus();
+                string activeQueueDisplay = Convert.ToString(currentStatus["activeQueueName"]);
+
                 var worker = new LocalPrintWorker(repo, simulateSpoolerOnly: forceSimulation);
                 worker.StartBackground(1500);
 
@@ -73,8 +151,9 @@ namespace PrintAway
                     Console.WriteLine("  Customer Portal (QR / Web):  http://127.0.0.1:" + port + "/");
                     Console.WriteLine("  Staff Admin Dashboard:       http://127.0.0.1:" + port + "/admin");
                     Console.WriteLine("  Default Admin Login:         admin / PrintAway@Admin2026");
-                    Console.WriteLine("  Active Verified Queue:       " + PrintAwayRepository.VerifiedXeroxQueueName + " (USB001)");
-                    Console.WriteLine("  Worker Dispatch Mode:        " + (forceSimulation ? "SAFE SPOOLER SIMULATION (--simulation)" : "LIVE PHYSICAL PRINT TO XEROX B1025 PCL6 (Default)"));
+                    Console.WriteLine("  Active Verified Queue:       " + activeQueueDisplay);
+                    Console.WriteLine("  Worker Dispatch Mode:        " + (forceSimulation ? "SAFE SPOOLER SIMULATION (--simulation)" : "LIVE PHYSICAL PRINT (" + activeQueueDisplay + ")"));
+                    Console.WriteLine("  Station Config File:         " + configPath);
                     Console.WriteLine("  SQLite WAL Database:         " + dbPath);
                     Console.WriteLine("  Private PDF Vault:           " + vaultDir);
                     Console.WriteLine("======================================================================");
@@ -94,4 +173,3 @@ namespace PrintAway
         }
     }
 }
-
