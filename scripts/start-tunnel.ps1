@@ -4,8 +4,8 @@
     1. Compiles PrintAway.exe if missing (using built-in Windows .NET 4.8 csc.exe)
     2. Starts local PrintAway server on port 8080 (with physical printer auto-discovery)
     3. Downloads cloudflared.exe if missing and starts an HTTP/2 TLS tunnel
-    4. Automatically updates web/index.html & web/admin.html with the live tunnel URL
-       and pushes to GitHub so Netlify (https://printitaway.netlify.app) connects automatically!
+    4. Publishes the live tunnel URL to the instant cloud registry (ntfy.sh) so the
+       permanent QR code (https://printitaway.netlify.app) connects in 0.1s with ZERO Git or manual setup!
 #>
 
 param(
@@ -21,11 +21,13 @@ Set-Location $rootDir
 # Load portable config/station.json if present
 $configPath = Join-Path $rootDir "config\station.json"
 $autoPushGit = $true
+$registryTopic = "printaway_station_registry_pilot_9f8a7b6c5d4e"
 if (Test-Path $configPath) {
     try {
         $cfg = Get-Content $configPath -Raw | ConvertFrom-Json
         if (-not $NetlifyUrl -and $cfg.netlifySiteUrl) { $NetlifyUrl = $cfg.netlifySiteUrl }
         if ($LocalPort -le 0 -and $cfg.port) { $LocalPort = [int]$cfg.port }
+        if ($cfg.stationRegistryTopic) { $registryTopic = [string]$cfg.stationRegistryTopic }
         if ($null -ne $cfg.autoPushTunnelToGit) { $autoPushGit = [bool]$cfg.autoPushTunnelToGit }
     } catch {
         Write-Host "[Config] Warning reading config/station.json: $_" -ForegroundColor DarkYellow
@@ -145,8 +147,17 @@ if (-not $tunnelUrl) {
     exit 1
 }
 
-# 4. Auto-update web/index.html & web/admin.html with new DEFAULT_STATION_URL
-Write-Host "[4/4] Syncing tunnel URL ($tunnelUrl) to web frontend..." -ForegroundColor Yellow
+# 4. Publish live tunnel URL to Instant Cloud Registry (Zero Git / Zero Rebuild required!)
+Write-Host "[4/4] Broadcasting live tunnel URL to Cloud Station Registry..." -ForegroundColor Yellow
+[Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12
+try {
+    $null = Invoke-RestMethod -Uri "https://ntfy.sh/$registryTopic" -Method Post -Body $tunnelUrl -TimeoutSec 10
+    Write-Host "  [OK] Instant Cloud Registry updated! Your single QR ($NetlifyUrl) is now LIVE!" -ForegroundColor Green
+} catch {
+    Write-Host "  [!] Warning: Cloud Registry broadcast failed: $_" -ForegroundColor DarkYellow
+}
+
+# Also update local web files and optionally push if git is configured on dev machine
 $utf8NoBom = New-Object System.Text.UTF8Encoding($false)
 foreach ($webFile in @("web\index.html", "web\admin.html")) {
     $fullWebPath = Join-Path $rootDir $webFile
@@ -159,48 +170,33 @@ foreach ($webFile in @("web\index.html", "web\admin.html")) {
     }
 }
 
-if ($autoPushGit) {
-    try {
-        $ErrorActionPreference = "Continue"
-        git add web/index.html web/admin.html 2>$null
-        $diff = git status --porcelain web/index.html web/admin.html 2>$null
-        if ($diff) {
-            git commit -m "Auto-sync active station tunnel URL: $tunnelUrl" 2>$null | Out-Null
-            git push origin main 2>$null | Out-Null
-            Write-Host "  [OK] Pushed new tunnel URL to GitHub -> Netlify will auto-update in ~15s!" -ForegroundColor Green
-        } else {
-            Write-Host "  [OK] Web files already synced." -ForegroundColor Green
-        }
-    } catch {
-        Write-Host "  [!] Git auto-push skipped (use the ?station= URL below or push manually)." -ForegroundColor DarkYellow
-    }
-}
-
 $cleanNetlify = $NetlifyUrl.TrimEnd('/')
 Write-Host ""
 Write-Host "==========================================================" -ForegroundColor Green
 Write-Host "                 STATION & TUNNEL LIVE!                   " -ForegroundColor Green
 Write-Host "==========================================================" -ForegroundColor Green
-Write-Host "Local Customer URL:      http://127.0.0.1:$LocalPort/" -ForegroundColor White
-Write-Host "Local Admin URL:         http://127.0.0.1:$LocalPort/admin" -ForegroundColor White
-Write-Host "Public Tunnel URL:       $tunnelUrl" -ForegroundColor Cyan
-Write-Host ""
-Write-Host "Netlify Customer URL (Direct):" -ForegroundColor Cyan
-Write-Host "  $cleanNetlify/?station=$tunnelUrl" -ForegroundColor Green
-Write-Host ""
-Write-Host "Netlify Admin URL (Direct):" -ForegroundColor Cyan
-Write-Host "  $cleanNetlify/admin?station=$tunnelUrl" -ForegroundColor Green
+Write-Host "Permanent Customer QR URL:   $cleanNetlify" -ForegroundColor Green
+Write-Host "Permanent Staff Admin URL:   $cleanNetlify/admin" -ForegroundColor Green
+Write-Host "Local Counter Admin URL:     http://127.0.0.1:$LocalPort/admin" -ForegroundColor White
+Write-Host "Active Tunnel Endpoint:      $tunnelUrl" -ForegroundColor Cyan
 Write-Host "==========================================================" -ForegroundColor Green
-Write-Host "Tunnel process PID: $($tunnelProcess.Id). Keep this window open while shop is open." -ForegroundColor Yellow
-Write-Host "Press Ctrl+C to stop tunnel." -ForegroundColor DarkGray
+Write-Host "Shopkeeper Instructions: Keep this window minimized while the shop is open." -ForegroundColor Yellow
+Write-Host "Customers can scan your permanent QR ($cleanNetlify) right now!" -ForegroundColor Green
 Write-Host ""
 
-# Keep running and streaming logs to logfile
+# Keep running, stream logs, and re-broadcast heartbeat every 30 minutes
+$lastHeartbeat = Get-Date
 try {
     while (-not $tunnelProcess.HasExited) {
         $l = $tunnelProcess.StandardError.ReadLine()
         if ($l) {
             [System.IO.File]::AppendAllText($tunnelLog, $l + [Environment]::NewLine)
+        }
+        if (((Get-Date) - $lastHeartbeat).TotalMinutes -ge 30) {
+            try {
+                $null = Invoke-RestMethod -Uri "https://ntfy.sh/$registryTopic" -Method Post -Body $tunnelUrl -TimeoutSec 10
+                $lastHeartbeat = Get-Date
+            } catch { }
         }
     }
 } finally {

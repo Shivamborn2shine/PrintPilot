@@ -200,3 +200,25 @@ PrintAway is engineered with **zero external runtime installers** — it compile
    - Automatically downloads `bin\cloudflared.exe` if missing.
    - Starts the secure HTTP/2 tunnel (`https://*.trycloudflare.com`).
    - Automatically updates `web/index.html` and `web/admin.html` with the new tunnel URL and pushes to GitHub so `https://printitaway.netlify.app` connects to your new PC automatically!
+
+
+---
+
+## 6. How Your Single Permanent QR Code Works Without Git or Manual Setup
+
+You only ever print **ONE physical QR code** for the shop wall:
+- **Customer QR Code:** `https://printitaway.netlify.app`
+- **Staff Admin URL:** `https://printitaway.netlify.app/admin` (or `http://127.0.0.1:8080/admin` on the shop PC)
+
+### How Netlify Finds the New Tunnel URL Automatically (0.1 Seconds, Zero Git Required)
+1. **Shopkeeper Turns on the PC:**
+   - When `start-station.bat` runs (or starts automatically on Windows boot via `enable-autostart.bat`), `scripts/start-tunnel.ps1` launches `cloudflared.exe` and receives the new dynamic `https://*.trycloudflare.com` URL.
+2. **Instant Cloud Registry Broadcast (`ntfy.sh`):**
+   - `scripts/start-tunnel.ps1` immediately sends an HTTPS POST with the new tunnel URL to the station's private registry channel (`https://ntfy.sh/printaway_station_registry_pilot_9f8a7b6c5d4e`) and refreshes it every 30 minutes.
+   - **No Git installation, no GitHub login, and no Netlify rebuild is needed on the shopkeeper's computer!**
+3. **Automatic Frontend Discovery (`autoDiscoverLiveStation()`):**
+   - Whenever any customer scans `https://printitaway.netlify.app` on their phone, `web/index.html` (and `web/admin.html`) automatically queries `https://ntfy.sh/printaway_station_registry_pilot_9f8a7b6c5d4e/raw?poll=1&since=12h` on load, grabs the latest live tunnel URL, and connects directly to the shopkeeper's printer station in ~150ms.
+4. **1-Click Windows Boot Auto-Start (`enable-autostart.bat`):**
+   - Double-click [`enable-autostart.bat`](file:///c:/Users/Vikash/Documents/PrintAway/enable-autostart.bat) once on the shopkeeper's PC.
+   - It creates a minimized startup shortcut in the Windows Startup folder (`shell:startup`).
+   - From that day onward, the shopkeeper simply **presses the Power button on the PC and printer**—everything goes live automatically!

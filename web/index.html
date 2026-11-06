@@ -522,7 +522,35 @@
   </div>
 
   <script>
-    const DEFAULT_STATION_URL = 'https://proportion-detailed-tab-neck.trycloudflare.com';
+    const DEFAULT_STATION_URL = 'https://anybody-vpn-slim-suited.trycloudflare.com';
+    const STATION_REGISTRY_TOPIC = 'printaway_station_registry_pilot_9f8a7b6c5d4e';
+
+    async function autoDiscoverLiveStation() {
+      if (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1') {
+        return '';
+      }
+      const sp = new URLSearchParams(window.location.search).get('station');
+      if (sp) {
+        const cleanSp = sp.trim().replace(/\/+$/, '');
+        localStorage.setItem('printaway_api_base', cleanSp);
+        return cleanSp;
+      }
+      try {
+        const res = await fetch('https://ntfy.sh/' + STATION_REGISTRY_TOPIC + '/raw?poll=1&since=12h', { cache: 'no-store' });
+        if (res.ok) {
+          const text = await res.text();
+          const lines = text.split(/\r?\n/).map(l => l.trim()).filter(l => l.startsWith('https://'));
+          if (lines.length > 0) {
+            const latest = lines[lines.length - 1].replace(/\/+$/, '');
+            localStorage.setItem('printaway_api_base', latest);
+            return latest;
+          }
+        }
+      } catch (e) {
+        console.warn('Live station registry lookup skipped:', e);
+      }
+      return localStorage.getItem('printaway_api_base') || DEFAULT_STATION_URL;
+    }
 
     function apiUrl(path) {
       let base = (localStorage.getItem('printaway_api_base') || '').trim();
@@ -566,6 +594,7 @@
 
     async function loadShopStatus() {
       try {
+        await autoDiscoverLiveStation();
         const res = await fetch(apiUrl('/api/shop/status'));
         const data = await res.json();
         shopCapabilities = data;

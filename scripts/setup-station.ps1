@@ -116,12 +116,20 @@ $newConfig = [ordered]@{
     activePrinterQueue = $selectedQueue
     autoFallbackToPhysicalPrinter = $true
     netlifySiteUrl = $netlifyUrl
+    stationRegistryTopic = "printaway_station_registry_pilot_9f8a7b6c5d4e"
     autoPushTunnelToGit = $true
 }
 
 $utf8NoBom = New-Object System.Text.UTF8Encoding($false)
 [System.IO.File]::WriteAllText($configPath, ($newConfig | ConvertTo-Json -Depth 5), $utf8NoBom)
 Write-Host "  [OK] Saved $configPath" -ForegroundColor Green
+
+if (-not $NonInteractive) {
+    $autoBoot = Read-Host "`nEnable Auto-Start on Windows Boot so the shopkeeper only needs to turn on the PC? (Y/n)"
+    if ($autoBoot -eq "" -or $autoBoot -match "^[Yy]") {
+        powershell -NoProfile -ExecutionPolicy Bypass -File (Join-Path $rootDir "scripts\enable-autostart.ps1")
+    }
+}
 
 Write-Host "`n======================================================================" -ForegroundColor Green
 Write-Host "  SETUP COMPLETE! Your PC and Printer ($selectedQueue) are ready." -ForegroundColor Green
@@ -133,3 +141,4 @@ if (-not $NonInteractive) {
         powershell -NoProfile -ExecutionPolicy Bypass -File (Join-Path $rootDir "scripts\start-tunnel.ps1") -PrinterQueue $selectedQueue
     }
 }
+
