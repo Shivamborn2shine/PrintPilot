@@ -81,6 +81,35 @@ namespace PrintAway.SaaS
             get { return _currentQuota; }
         }
 
+        public string GetFleetShopsJson()
+        {
+            if (!IsConfigured) return "[]";
+            string url = string.Format(CultureInfo.InvariantCulture, "{0}/rest/v1/shops?select=*&order=created_at.desc", _supabaseUrl);
+            return ExecuteHttpRequest(url, "GET", null, null);
+        }
+
+        public string GetDailyTelemetryJson(string dateStr)
+        {
+            if (!IsConfigured) return "[]";
+            string url = string.Format(CultureInfo.InvariantCulture, "{0}/rest/v1/daily_telemetry?date=eq.{1}&select=*", _supabaseUrl, Uri.EscapeDataString(dateStr));
+            return ExecuteHttpRequest(url, "GET", null, null);
+        }
+
+        public string UpdateShop(string shopId, string jsonPayload)
+        {
+            if (!IsConfigured) throw new InvalidOperationException("Supabase is not configured.");
+            string url = string.Format(CultureInfo.InvariantCulture, "{0}/rest/v1/shops?shop_id=eq.{1}", _supabaseUrl, Uri.EscapeDataString(shopId));
+            return ExecuteHttpRequest(url, "PATCH", jsonPayload, null);
+        }
+
+        public string CreateShop(string jsonPayload)
+        {
+            if (!IsConfigured) throw new InvalidOperationException("Supabase is not configured.");
+            string url = string.Format(CultureInfo.InvariantCulture, "{0}/rest/v1/shops", _supabaseUrl);
+            var headers = new Dictionary<string, string> { { "Prefer", "return=representation" } };
+            return ExecuteHttpRequest(url, "POST", jsonPayload, headers);
+        }
+
         public void TriggerSyncNow()
         {
             ThreadPool.QueueUserWorkItem(state => PerformSync());
@@ -258,6 +287,7 @@ namespace PrintAway.SaaS
 
         private string ExecuteHttpRequest(string url, string method, string jsonBody, Dictionary<string, string> extraHeaders)
         {
+            ServicePointManager.SecurityProtocol = SecurityProtocolType.Tls12 | SecurityProtocolType.Tls11 | SecurityProtocolType.Tls;
             var req = (HttpWebRequest)WebRequest.Create(url);
             req.Method = method;
             req.ContentType = "application/json; charset=utf-8";
@@ -316,3 +346,4 @@ namespace PrintAway.SaaS
         }
     }
 }
+

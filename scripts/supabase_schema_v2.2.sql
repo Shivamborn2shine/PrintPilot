@@ -58,11 +58,21 @@ CREATE TABLE IF NOT EXISTS public.saas_subscriptions (
     created_at TIMESTAMPTZ DEFAULT NOW()
 );
 
--- 4. Fast Lookups
+-- 4. Fast Lookups & Row-Level Security
 CREATE INDEX IF NOT EXISTS idx_shops_shop_id ON public.shops(shop_id);
 CREATE INDEX IF NOT EXISTS idx_daily_telemetry_shop_date ON public.daily_telemetry(shop_id, date);
+
+-- Enable RLS and grant read access to publishable API key for live browser dashboards
+ALTER TABLE public.shops ENABLE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS "Allow public read to shops" ON public.shops;
+CREATE POLICY "Allow public read to shops" ON public.shops FOR SELECT USING (true);
+
+ALTER TABLE public.daily_telemetry ENABLE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS "Allow public read to daily_telemetry" ON public.daily_telemetry;
+CREATE POLICY "Allow public read to daily_telemetry" ON public.daily_telemetry FOR SELECT USING (true);
 
 -- 5. Seed Initial Pilot Shop
 INSERT INTO public.shops (shop_id, shop_name, owner_name, owner_phone, upi_vpa, subscription_tier, daily_page_quota)
 VALUES ('pilot', 'PrintAway Pilot Shop', 'Shivam', '9999999999', 'shivam@upi', 'pro_annual', 99999)
 ON CONFLICT (shop_id) DO NOTHING;
+

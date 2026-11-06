@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Globalization;
 using System.IO;
+using System.Net;
 using System.Runtime.InteropServices;
 using System.Threading;
 using System.Web.Script.Serialization;
@@ -34,6 +35,7 @@ namespace PrintAway
         [STAThread]
         public static int Main(string[] args)
         {
+            ServicePointManager.SecurityProtocol = SecurityProtocolType.Tls12 | SecurityProtocolType.Tls11 | SecurityProtocolType.Tls;
             string baseDir = AppDomain.CurrentDomain.BaseDirectory;
             string repoRoot = baseDir;
             if (Directory.Exists(Path.Combine(baseDir, "web")))

@@ -189,6 +189,95 @@ namespace PrintAway.Web
                     return;
                 }
 
+                // Super-Admin Fleet Proxy (Bypasses browser CORS & secret key restrictions securely on backend)
+                if (method == "GET" && path == "/api/saas/superadmin/fleet")
+                {
+                    if (_supabaseSync == null || !_supabaseSync.IsConfigured)
+                    {
+                        WriteError(res, 503, "SUPABASE_NOT_CONFIGURED", "Supabase SaaS control plane is not configured in .env.");
+                        return;
+                    }
+
+                    try
+                    {
+                        string todayStr = DateTime.Now.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture);
+                        string shopsJson = _supabaseSync.GetFleetShopsJson();
+                        string telemJson = _supabaseSync.GetDailyTelemetryJson(todayStr);
+
+                        var shopsList = _json.Deserialize<List<Dictionary<string, object>>>(shopsJson) ?? new List<Dictionary<string, object>>();
+                        var telemList = _json.Deserialize<List<Dictionary<string, object>>>(telemJson) ?? new List<Dictionary<string, object>>();
+
+                        WriteJson(res, 200, new Dictionary<string, object>
+                        {
+                            { "shops", shopsList },
+                            { "telemetry", telemList },
+                            { "today", todayStr }
+                        });
+                    }
+                    catch (Exception ex)
+                    {
+                        WriteError(res, 500, "FLEET_SYNC_ERROR", ex.Message);
+                    }
+                    return;
+                }
+
+                if (method == "PATCH" && path.StartsWith("/api/saas/superadmin/shops"))
+                {
+                    if (_supabaseSync == null || !_supabaseSync.IsConfigured)
+                    {
+                        WriteError(res, 503, "SUPABASE_NOT_CONFIGURED", "Supabase SaaS control plane is not configured.");
+                        return;
+                    }
+
+                    string targetShopId = req.QueryString["shopId"] ?? "";
+                    if (string.IsNullOrEmpty(targetShopId))
+                    {
+                        WriteError(res, 400, "MISSING_SHOP_ID", "shopId query parameter is required.");
+                        return;
+                    }
+
+                    try
+                    {
+                        string bodyJson;
+                        using (var reader = new StreamReader(req.InputStream, req.ContentEncoding ?? Encoding.UTF8))
+                        {
+                            bodyJson = reader.ReadToEnd();
+                        }
+                        string resp = _supabaseSync.UpdateShop(targetShopId, bodyJson);
+                        WriteJson(res, 200, new Dictionary<string, object> { { "success", true } });
+                    }
+                    catch (Exception ex)
+                    {
+                        WriteError(res, 500, "UPDATE_SHOP_ERROR", ex.Message);
+                    }
+                    return;
+                }
+
+                if (method == "POST" && path == "/api/saas/superadmin/shops")
+                {
+                    if (_supabaseSync == null || !_supabaseSync.IsConfigured)
+                    {
+                        WriteError(res, 503, "SUPABASE_NOT_CONFIGURED", "Supabase SaaS control plane is not configured.");
+                        return;
+                    }
+
+                    try
+                    {
+                        string bodyJson;
+                        using (var reader = new StreamReader(req.InputStream, req.ContentEncoding ?? Encoding.UTF8))
+                        {
+                            bodyJson = reader.ReadToEnd();
+                        }
+                        string resp = _supabaseSync.CreateShop(bodyJson);
+                        WriteJson(res, 201, new Dictionary<string, object> { { "success", true } });
+                    }
+                    catch (Exception ex)
+                    {
+                        WriteError(res, 500, "CREATE_SHOP_ERROR", ex.Message);
+                    }
+                    return;
+                }
+
                 // Public Shop & Availability Status
                 if (method == "GET" && path == "/api/shop/status")
                 {

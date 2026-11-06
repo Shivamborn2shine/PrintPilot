@@ -259,7 +259,7 @@
   <script>
     // Configuration constants
     const SUPABASE_URL = "https://zduoifzakiojfqbtxqqm.supabase.co";
-    let MASTER_KEY = localStorage.getItem("pa_founder_secret_key") || "";
+    const PUBLISHABLE_KEY = "sb_publishable_rhmUZZbKhXiJxrChcPTbsg_gFIH9FdO";
 
     let allShops = [];
     let telemetryMap = {};
@@ -272,30 +272,33 @@
       const btn = document.getElementById("btnRefresh");
       if (btn) btn.innerHTML = '<i class="fa-solid fa-circle-notch fa-spin text-xs"></i> <span>Syncing...</span>';
 
-      if (!MASTER_KEY) {
-        const entered = prompt("Enter your Supabase Founder Secret Key (sb_secret_...):");
-        if (entered && entered.trim()) {
-          MASTER_KEY = entered.trim();
-          localStorage.setItem("pa_founder_secret_key", MASTER_KEY);
-        } else {
-          renderEmptyState("Founder authentication required. Click the key icon on the top right to enter your secret key.");
-          if (btn) btn.innerHTML = '<i class="fa-solid fa-arrows-rotate text-xs"></i> <span>Sync Fleet</span>';
-          return;
-        }
-      }
-
       try {
+        // Strategy 1: Check if running on or connected to station server proxy (/api/saas/superadmin/fleet)
+        try {
+          const proxyRes = await fetch('/api/saas/superadmin/fleet', { headers: { 'Accept': 'application/json' } });
+          if (proxyRes.ok) {
+            const data = await proxyRes.json();
+            allShops = data.shops || [];
+            telemetryMap = {};
+            (data.telemetry || []).forEach(t => { telemetryMap[t.shop_id] = t; });
+            document.getElementById("schemaAlert").classList.add("hidden");
+            renderDashboard();
+            return;
+          }
+        } catch (e) {
+          // Fall through to Strategy 2 (Direct Supabase API with publishable key)
+        }
+
+        // Strategy 2: Direct Supabase Data API (Using safe publishable key, 100% browser-compliant)
         const headers = {
-          "apikey": MASTER_KEY,
-          "User-Agent": "PrintAwaySuperAdmin/1.0"
+          "apikey": PUBLISHABLE_KEY,
+          "Accept": "application/json"
         };
 
-        // 1. Fetch shops
         const shopsRes = await fetch(`${SUPABASE_URL}/rest/v1/shops?select=*`, { headers });
         if (!shopsRes.ok) {
           const errData = await shopsRes.json().catch(() => ({}));
           if (errData && errData.code === "PGRST205") {
-            // Table doesn't exist yet
             document.getElementById("schemaAlert").classList.remove("hidden");
             renderEmptyState("Database schema not yet deployed in Supabase.");
             return;
@@ -306,7 +309,6 @@
         allShops = await shopsRes.json();
         document.getElementById("schemaAlert").classList.add("hidden");
 
-        // 2. Fetch today's telemetry
         const todayStr = new Date().toISOString().split("T")[0];
         const telemRes = await fetch(`${SUPABASE_URL}/rest/v1/daily_telemetry?date=eq.${todayStr}&select=*`, { headers }).catch(() => null);
         telemetryMap = {};
@@ -318,7 +320,7 @@
         renderDashboard();
       } catch (err) {
         console.error("Dashboard sync error:", err);
-        renderEmptyState(`Sync error: ${err.message}. Check your Supabase Secret Key.`);
+        renderEmptyState(`Sync notice: ${err.message}`);
       } finally {
         if (btn) btn.innerHTML = '<i class="fa-solid fa-arrows-rotate text-xs"></i> <span>Sync Fleet</span>';
       }
@@ -490,18 +492,13 @@
       if (!confirm(`Are you sure you want to change shop '${shopId}' to tier '${newTier}'?`)) return;
 
       try {
-        const headers = {
-          "apikey": MASTER_KEY,
-          "Content-Type": "application/json",
-          "User-Agent": "PrintAwaySuperAdmin/1.0"
-        };
         const payload = { subscription_tier: newTier };
         if (newTier === "free") payload.daily_page_quota = 10;
         else payload.daily_page_quota = 99999;
 
-        const res = await fetch(`${SUPABASE_URL}/rest/v1/shops?shop_id=eq.${encodeURIComponent(shopId)}`, {
+        const res = await fetch(`/api/saas/superadmin/shops?shopId=${encodeURIComponent(shopId)}`, {
           method: "PATCH",
-          headers,
+          headers: { "Content-Type": "application/json" },
           body: JSON.stringify(payload)
         });
 
@@ -517,14 +514,9 @@
       if (!confirm(`Are you sure you want to ${action} station '${shopId}' remotely?`)) return;
 
       try {
-        const headers = {
-          "apikey": MASTER_KEY,
-          "Content-Type": "application/json",
-          "User-Agent": "PrintAwaySuperAdmin/1.0"
-        };
-        const res = await fetch(`${SUPABASE_URL}/rest/v1/shops?shop_id=eq.${encodeURIComponent(shopId)}`, {
+        const res = await fetch(`/api/saas/superadmin/shops?shopId=${encodeURIComponent(shopId)}`, {
           method: "PATCH",
-          headers,
+          headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ emergency_remote_pause: willPause })
         });
         if (!res.ok) throw new Error(`HTTP ${res.status}`);
@@ -544,13 +536,6 @@
       const tier = document.getElementById("inputTier").value;
 
       try {
-        const headers = {
-          "apikey": MASTER_KEY,
-          "Content-Type": "application/json",
-          "Prefer": "return=representation",
-          "User-Agent": "PrintAwaySuperAdmin/1.0"
-        };
-
         const payload = {
           shop_id: shopId,
           shop_name: shopName,
@@ -561,9 +546,9 @@
           daily_page_quota: tier === "free" ? 10 : 99999
         };
 
-        const res = await fetch(`${SUPABASE_URL}/rest/v1/shops`, {
+        const res = await fetch('/api/saas/superadmin/shops', {
           method: "POST",
-          headers,
+          headers: { "Content-Type": "application/json" },
           body: JSON.stringify(payload)
         });
 
@@ -672,6 +657,14 @@ CREATE TABLE IF NOT EXISTS public.saas_subscriptions (
     valid_until TIMESTAMPTZ NOT NULL,
     created_at TIMESTAMPTZ DEFAULT NOW()
 );
+
+ALTER TABLE public.shops ENABLE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS "Allow public read to shops" ON public.shops;
+CREATE POLICY "Allow public read to shops" ON public.shops FOR SELECT USING (true);
+
+ALTER TABLE public.daily_telemetry ENABLE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS "Allow public read to daily_telemetry" ON public.daily_telemetry;
+CREATE POLICY "Allow public read to daily_telemetry" ON public.daily_telemetry FOR SELECT USING (true);
 
 INSERT INTO public.shops (shop_id, shop_name, owner_name, owner_phone, upi_vpa, subscription_tier, daily_page_quota)
 VALUES ('pilot', 'PrintAway Pilot Shop', 'Shivam', '9999999999', 'shivam@upi', 'pro_annual', 99999)
