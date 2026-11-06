@@ -84,7 +84,7 @@ if (-not $serverRunning) {
         $argList += " --printer `"$PrinterQueue`""
     }
     Write-Host "  Starting PrintAway.exe ($argList)..." -ForegroundColor Yellow
-    Start-Process -FilePath $serverExe -ArgumentList $argList -WindowStyle Minimized
+    Start-Process -FilePath $serverExe -ArgumentList $argList
     for ($w = 0; $w -lt 15; $w++) {
         Start-Sleep -Seconds 1
         try {

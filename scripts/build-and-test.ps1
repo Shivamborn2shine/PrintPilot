@@ -23,6 +23,11 @@ if (-not (Test-Path $csc)) {
 }
 
 $outExe = Join-Path $binDir "PrintAway.exe"
+
+# Stop any running station instance so file lock on bin\PrintAway.exe is released
+Get-Process -Name "PrintAway" -ErrorAction SilentlyContinue | Stop-Process -Force -ErrorAction SilentlyContinue
+Start-Sleep -Milliseconds 500
+
 $sources = @(
     Join-Path $repoRoot "src\SqliteInterop.cs"
     Join-Path $repoRoot "src\PdfAndPrinterEngine.cs"
@@ -51,6 +56,10 @@ if ($LASTEXITCODE -ne 0) {
     throw "Compilation failed with exit code $LASTEXITCODE"
 }
 Write-Host "Compiled successfully -> $outExe" -ForegroundColor Green
+
+# Copy binary to root for 1-click execution directly from project folder
+Copy-Item -Path $outExe -Destination (Join-Path $repoRoot "PrintAway.exe") -Force
+Write-Host "Created root executable -> $(Join-Path $repoRoot 'PrintAway.exe')" -ForegroundColor Green
 
 if (-not $SkipTests) {
     Write-Host "`n=== Running Automated PRD §14 Integration & Critical Test Matrix ===" -ForegroundColor Cyan

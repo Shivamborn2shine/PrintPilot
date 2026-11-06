@@ -21,6 +21,10 @@ secrets/
 bin/cloudflared.exe
 bin/*.yml
 
+# Root binary & station profile downloads
+/PrintAway.exe
+station-*.json
+
 # Distribution packaging & updater temporary files
 dist/
 *.update

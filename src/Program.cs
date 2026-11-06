@@ -30,6 +30,13 @@ namespace PrintAway
         [DllImport("user32.dll")]
         private static extern bool PostMessage(IntPtr hWnd, int Msg, IntPtr wParam, IntPtr lParam);
 
+        [DllImport("user32.dll")]
+        private static extern bool ShowWindow(IntPtr hWnd, int nCmdShow);
+
+        [DllImport("user32.dll")]
+        private static extern bool SetForegroundWindow(IntPtr hWnd);
+
+        private const int SW_RESTORE = 9;
         private static readonly IntPtr HWND_BROADCAST = new IntPtr(0xffff);
 
         [STAThread]
@@ -157,16 +164,48 @@ namespace PrintAway
 
             bool createdNewMutex = false;
             Mutex singleInstanceMutex = null;
+            EventWaitHandle restoreEvent = null;
             if (!cliMode)
             {
                 singleInstanceMutex = new Mutex(true, "PrintAway_Station_SingleInstance_Mutex_9f8a", out createdNewMutex);
                 if (!createdNewMutex)
                 {
-                    // PrintAway Station is already running! Signal existing window to restore and exit cleanly.
+                    // PrintAway Station is already running! Signal existing window to restore and bring to front.
+                    try
+                    {
+                        EventWaitHandle existingEvent;
+                        if (EventWaitHandle.TryOpenExisting("PrintAway_Station_Restore_Event_9f8a", out existingEvent))
+                        {
+                            existingEvent.Set();
+                            existingEvent.Close();
+                        }
+                    }
+                    catch { }
+
+                    try
+                    {
+                        var cur = System.Diagnostics.Process.GetCurrentProcess();
+                        foreach (var p in System.Diagnostics.Process.GetProcessesByName("PrintAway"))
+                        {
+                            if (p.Id != cur.Id && p.MainWindowHandle != IntPtr.Zero)
+                            {
+                                ShowWindow(p.MainWindowHandle, SW_RESTORE);
+                                SetForegroundWindow(p.MainWindowHandle);
+                            }
+                        }
+                    }
+                    catch { }
+
                     int wmShowMe = RegisterWindowMessage("PRINTAWAY_SHOWME_RESTORE_MSG");
                     PostMessage(HWND_BROADCAST, wmShowMe, IntPtr.Zero, IntPtr.Zero);
                     return 0;
                 }
+
+                try
+                {
+                    restoreEvent = new EventWaitHandle(false, EventResetMode.AutoReset, "PrintAway_Station_Restore_Event_9f8a");
+                }
+                catch { }
             }
 
             try
@@ -195,6 +234,12 @@ namespace PrintAway
                         Console.ForegroundColor = ConsoleColor.Green;
                         Console.WriteLine("[Payment Gateway] Razorpay Active -> Key ID: " + rzpKey);
                         Console.ResetColor();
+                    }
+
+                    // Always ensure shop identity from config is synced to local repository
+                    if (!string.IsNullOrWhiteSpace(configShopId) || !string.IsNullOrWhiteSpace(configShopName))
+                    {
+                        repo.UpdateShopAndPrinterControls(null, null, null, null, "config-load", null, null, null, null, null, configBwQueue, configColorQueue, configShopId, configShopName);
                     }
 
                     // Resolve printer queue for easy hardware/PC migration
@@ -266,9 +311,44 @@ namespace PrintAway
 
                         if (!cliMode)
                         {
+                            Application.SetUnhandledExceptionMode(UnhandledExceptionMode.CatchException);
+                            Application.ThreadException += (s, e) =>
+                            {
+                                try { File.AppendAllText(Path.Combine(repoRoot, "data", "crash.log"), DateTime.UtcNow.ToString("o") + " [ThreadException] " + e.Exception.ToString() + "\r\n"); } catch { }
+                            };
+                            AppDomain.CurrentDomain.UnhandledException += (s, e) =>
+                            {
+                                try { File.AppendAllText(Path.Combine(repoRoot, "data", "crash.log"), DateTime.UtcNow.ToString("o") + " [UnhandledException] " + e.ExceptionObject.ToString() + "\r\n"); } catch { }
+                            };
                             Application.EnableVisualStyles();
                             Application.SetCompatibleTextRenderingDefault(false);
-                            Application.Run(new StationGuiForm(repo, worker, server, tunnel, repoRoot, port, supabaseSync));
+                            var mainForm = new StationGuiForm(repo, worker, server, tunnel, repoRoot, port, supabaseSync);
+
+                            if (restoreEvent != null)
+                            {
+                                var restoreThread = new Thread(() =>
+                                {
+                                    while (true)
+                                    {
+                                        try
+                                        {
+                                            if (restoreEvent.WaitOne())
+                                            {
+                                                if (mainForm != null && !mainForm.IsDisposed)
+                                                {
+                                                    mainForm.RestoreWindow();
+                                                }
+                                            }
+                                        }
+                                        catch (ThreadAbortException) { break; }
+                                        catch { }
+                                    }
+                                });
+                                restoreThread.IsBackground = true;
+                                restoreThread.Start();
+                            }
+
+                            Application.Run(mainForm);
                         }
                         else
                         {

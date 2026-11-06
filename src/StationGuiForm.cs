@@ -514,13 +514,21 @@ namespace PrintAway.Gui
 
         public void RestoreWindow()
         {
+            if (this.IsDisposed) return;
             if (this.InvokeRequired)
             {
                 this.BeginInvoke(new Action(RestoreWindow));
                 return;
             }
-            this.Show();
-            this.WindowState = FormWindowState.Normal;
+            if (!this.Visible)
+            {
+                this.Show();
+            }
+            if (this.WindowState == FormWindowState.Minimized)
+            {
+                this.WindowState = FormWindowState.Normal;
+            }
+            this.ShowInTaskbar = true;
             ShowWindow(this.Handle, SW_RESTORE);
             SetForegroundWindow(this.Handle);
             this.BringToFront();
@@ -619,51 +627,62 @@ namespace PrintAway.Gui
 
         private void OnQuotaChanged(QuotaStatus quota)
         {
-            if (!this.IsHandleCreated) return;
-            if (this.InvokeRequired)
+            if (this.IsDisposed || !this.IsHandleCreated) return;
+            try
             {
-                this.BeginInvoke(new Action<QuotaStatus>(OnQuotaChanged), quota);
-                return;
-            }
-
-            if (_lblQuotaBadge == null || quota == null) return;
-
-            bool isPro = !string.IsNullOrEmpty(quota.Tier) && quota.Tier.StartsWith("pro", StringComparison.OrdinalIgnoreCase);
-            if (isPro)
-            {
-                _lblQuotaBadge.Text = string.Format(CultureInfo.InvariantCulture, "✨ Pro Tier Active ({0}) • Unlimited Daily Printing", quota.Tier == "pro_annual" ? "₹149/mo Annual" : "₹249/mo Monthly");
-                _lblQuotaBadge.ForeColor = Color.FromArgb(21, 128, 61);
-            }
-            else
-            {
-                if (quota.IsHardBlocked)
+                if (this.InvokeRequired)
                 {
-                    _lblQuotaBadge.Text = string.Format(CultureInfo.InvariantCulture, "🚫 Daily Quota Exceeded ({0}/10)! Printing Blocked • Upgrade to Pro", quota.PagesPrintedToday);
-                    _lblQuotaBadge.ForeColor = Color.FromArgb(220, 38, 38);
+                    this.BeginInvoke(new Action<QuotaStatus>(OnQuotaChanged), quota);
+                    return;
                 }
-                else if (quota.IsQuotaExceeded)
+
+                if (_lblQuotaBadge == null || quota == null) return;
+
+                bool isPro = !string.IsNullOrEmpty(quota.Tier) && quota.Tier.StartsWith("pro", StringComparison.OrdinalIgnoreCase);
+                if (isPro)
                 {
-                    _lblQuotaBadge.Text = string.Format(CultureInfo.InvariantCulture, "⚠️ Daily Quota Reached ({0}/10)! Grace Buffer Active • Upgrade Pro", quota.PagesPrintedToday);
-                    _lblQuotaBadge.ForeColor = Color.FromArgb(180, 83, 9);
+                    _lblQuotaBadge.Text = string.Format(CultureInfo.InvariantCulture, "✨ Pro Tier Active ({0}) • Unlimited Daily Printing", quota.Tier == "pro_annual" ? "₹149/mo Annual" : "₹249/mo Monthly");
+                    _lblQuotaBadge.ForeColor = Color.FromArgb(21, 128, 61);
                 }
                 else
                 {
-                    _lblQuotaBadge.Text = string.Format(CultureInfo.InvariantCulture, "📊 Daily Quota: {0} / 10 Free Pages Used • Pro: ₹149/mo (Unlimited)", quota.PagesPrintedToday);
-                    _lblQuotaBadge.ForeColor = Color.FromArgb(79, 70, 229);
+                    if (quota.IsHardBlocked)
+                    {
+                        _lblQuotaBadge.Text = string.Format(CultureInfo.InvariantCulture, "🚫 Daily Quota Exceeded ({0}/10)! Printing Blocked • Upgrade to Pro", quota.PagesPrintedToday);
+                        _lblQuotaBadge.ForeColor = Color.FromArgb(220, 38, 38);
+                    }
+                    else if (quota.IsQuotaExceeded)
+                    {
+                        _lblQuotaBadge.Text = string.Format(CultureInfo.InvariantCulture, "⚠️ Daily Quota Reached ({0}/10)! Grace Buffer Active • Upgrade Pro", quota.PagesPrintedToday);
+                        _lblQuotaBadge.ForeColor = Color.FromArgb(180, 83, 9);
+                    }
+                    else
+                    {
+                        _lblQuotaBadge.Text = string.Format(CultureInfo.InvariantCulture, "📊 Daily Quota: {0} / 10 Free Pages Used • Pro: ₹149/mo (Unlimited)", quota.PagesPrintedToday);
+                        _lblQuotaBadge.ForeColor = Color.FromArgb(79, 70, 229);
+                    }
                 }
             }
+            catch { }
         }
 
         private void OnTunnelCaptured(string url)
         {
-            if (!this.IsHandleCreated) return;
-            if (this.InvokeRequired)
+            if (this.IsDisposed || !this.IsHandleCreated) return;
+            try
             {
-                this.BeginInvoke(new Action<string>(OnTunnelCaptured), url);
-                return;
+                if (this.InvokeRequired)
+                {
+                    this.BeginInvoke(new Action<string>(OnTunnelCaptured), url);
+                    return;
+                }
+                if (_lblTunnelUrl != null)
+                {
+                    _lblTunnelUrl.Text = "Cloudflare Tunnel (Active): " + url;
+                    _lblTunnelUrl.ForeColor = Color.FromArgb(21, 128, 61);
+                }
             }
-            _lblTunnelUrl.Text = "Cloudflare Tunnel (Active): " + url;
-            _lblTunnelUrl.ForeColor = Color.FromArgb(21, 128, 61);
+            catch { }
         }
 
         private void OnPrinterSelectionChanged(object sender, EventArgs e)
