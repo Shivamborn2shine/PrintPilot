@@ -1,37 +1,52 @@
 <#
 .SYNOPSIS
-    PrintAway Zero-Config Station & Secure Tunnel Launcher
+    PrintAway Multi-Shop & Multi-Printer Zero-Config Station & Secure Tunnel Launcher
     1. Compiles PrintAway.exe if missing (using built-in Windows .NET 4.8 csc.exe)
     2. Starts local PrintAway server on port 8080 (with physical printer auto-discovery)
     3. Downloads cloudflared.exe if missing and starts an HTTP/2 TLS tunnel
-    4. Publishes the live tunnel URL to the instant cloud registry (ntfy.sh) so the
-       permanent QR code (https://printitaway.netlify.app) connects in 0.1s with ZERO Git or manual setup!
+    4. Publishes the live tunnel URL to the shop's isolated cloud registry topic (ntfy.sh)
+       so the shop's permanent QR code (https://printitaway.netlify.app/?shop=<shopId>) connects in 0.1s!
 #>
 
 param(
     [string]$NetlifyUrl = "",
     [int]$LocalPort = 0,
-    [string]$PrinterQueue = ""
+    [string]$PrinterQueue = "",
+    [string]$ShopId = ""
 )
 
 $ErrorActionPreference = "Stop"
 $rootDir = (Resolve-Path (Join-Path $PSScriptRoot "..")).Path
 Set-Location $rootDir
 
+function Get-RegistryTopicForShop([string]$sid) {
+    $clean = ($sid -replace '[^a-zA-Z0-9_-]', '').ToLower()
+    if (-not $clean -or $clean -eq "pilot") {
+        return "printaway_station_registry_pilot_9f8a7b6c5d4e"
+    }
+    return "printaway_station_registry_${clean}_9f8a7b"
+}
+
 # Load portable config/station.json if present
 $configPath = Join-Path $rootDir "config\station.json"
-$autoPushGit = $true
-$registryTopic = "printaway_station_registry_pilot_9f8a7b6c5d4e"
+$activeShopId = "pilot"
+$registryTopic = ""
 if (Test-Path $configPath) {
     try {
         $cfg = Get-Content $configPath -Raw | ConvertFrom-Json
         if (-not $NetlifyUrl -and $cfg.netlifySiteUrl) { $NetlifyUrl = $cfg.netlifySiteUrl }
         if ($LocalPort -le 0 -and $cfg.port) { $LocalPort = [int]$cfg.port }
+        if ($cfg.shopId) { $activeShopId = [string]$cfg.shopId }
         if ($cfg.stationRegistryTopic) { $registryTopic = [string]$cfg.stationRegistryTopic }
-        if ($null -ne $cfg.autoPushTunnelToGit) { $autoPushGit = [bool]$cfg.autoPushTunnelToGit }
     } catch {
         Write-Host "[Config] Warning reading config/station.json: $_" -ForegroundColor DarkYellow
     }
+}
+if ($ShopId) { $activeShopId = $ShopId }
+$activeShopId = ($activeShopId -replace '[^a-zA-Z0-9_-]', '').ToLower()
+if (-not $activeShopId) { $activeShopId = "pilot" }
+if (-not $registryTopic -or ($activeShopId -ne "pilot" -and $registryTopic -eq "printaway_station_registry_pilot_9f8a7b6c5d4e")) {
+    $registryTopic = Get-RegistryTopicForShop $activeShopId
 }
 if (-not $NetlifyUrl) { $NetlifyUrl = "https://printitaway.netlify.app" }
 if ($LocalPort -le 0) { $LocalPort = 8080 }
@@ -48,7 +63,11 @@ try {
     $res = Invoke-RestMethod -Uri $localApiUrl -TimeoutSec 3 -ErrorAction Stop
     if ($res.shopName) {
         $serverRunning = $true
-        Write-Host "  [OK] PrintAway server is running (`"$($res.shopName)`" -> Queue: $($res.activeQueueName))" -ForegroundColor Green
+        if ($res.shopId) {
+            $activeShopId = [string]$res.shopId
+            $registryTopic = Get-RegistryTopicForShop $activeShopId
+        }
+        Write-Host "  [OK] PrintAway server is running (Shop: [$activeShopId] `"$($res.shopName)`" -> Primary Queue: $($res.activeQueueName))" -ForegroundColor Green
     }
 } catch {
     Write-Host "  [!] PrintAway server not running yet on port $LocalPort." -ForegroundColor DarkYellow
@@ -75,7 +94,11 @@ if (-not $serverRunning) {
     }
     try {
         $res = Invoke-RestMethod -Uri $localApiUrl -TimeoutSec 5 -ErrorAction Stop
-        Write-Host "  [OK] Local server started. Active Printer Queue: $($res.activeQueueName)" -ForegroundColor Green
+        if ($res.shopId) {
+            $activeShopId = [string]$res.shopId
+            $registryTopic = Get-RegistryTopicForShop $activeShopId
+        }
+        Write-Host "  [OK] Local server started (Shop: [$activeShopId] `"$($res.shopName)`" -> Queue: $($res.activeQueueName))" -ForegroundColor Green
     } catch {
         Write-Host "  [ERROR] Failed to start local PrintAway server: $_" -ForegroundColor Red
         exit 1
@@ -147,41 +170,31 @@ if (-not $tunnelUrl) {
     exit 1
 }
 
-# 4. Publish live tunnel URL to Instant Cloud Registry (Zero Git / Zero Rebuild required!)
-Write-Host "[4/4] Broadcasting live tunnel URL to Cloud Station Registry..." -ForegroundColor Yellow
+# 4. Publish live tunnel URL to Shop's Isolated Cloud Registry Topic (Zero Git / Zero Rebuild required!)
+Write-Host "[4/4] Broadcasting live tunnel URL for Shop [$activeShopId] to Cloud Registry ($registryTopic)..." -ForegroundColor Yellow
 [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12
 try {
     $null = Invoke-RestMethod -Uri "https://ntfy.sh/$registryTopic" -Method Post -Body $tunnelUrl -TimeoutSec 10
-    Write-Host "  [OK] Instant Cloud Registry updated! Your single QR ($NetlifyUrl) is now LIVE!" -ForegroundColor Green
+    Write-Host "  [OK] Instant Cloud Registry updated for Shop [$activeShopId]!" -ForegroundColor Green
 } catch {
     Write-Host "  [!] Warning: Cloud Registry broadcast failed: $_" -ForegroundColor DarkYellow
 }
 
-# Also update local web files and optionally push if git is configured on dev machine
-$utf8NoBom = New-Object System.Text.UTF8Encoding($false)
-foreach ($webFile in @("web\index.html", "web\admin.html")) {
-    $fullWebPath = Join-Path $rootDir $webFile
-    if (Test-Path $fullWebPath) {
-        $content = [System.IO.File]::ReadAllText($fullWebPath, [System.Text.Encoding]::UTF8)
-        $updated = [regex]::Replace($content, "const DEFAULT_STATION_URL = '[^']*';", "const DEFAULT_STATION_URL = '$tunnelUrl';")
-        if ($updated -ne $content) {
-            [System.IO.File]::WriteAllText($fullWebPath, $updated, $utf8NoBom)
-        }
-    }
-}
-
 $cleanNetlify = $NetlifyUrl.TrimEnd('/')
+$shopQrUrl = if ($activeShopId -eq "pilot") { "$cleanNetlify/?shop=pilot" } else { "$cleanNetlify/?shop=$activeShopId" }
+$shopAdminUrl = "$cleanNetlify/admin?shop=$activeShopId"
+
 Write-Host ""
 Write-Host "==========================================================" -ForegroundColor Green
-Write-Host "                 STATION & TUNNEL LIVE!                   " -ForegroundColor Green
+Write-Host "        STATION & TUNNEL LIVE FOR SHOP: [$activeShopId]" -ForegroundColor Green
 Write-Host "==========================================================" -ForegroundColor Green
-Write-Host "Permanent Customer QR URL:   $cleanNetlify" -ForegroundColor Green
-Write-Host "Permanent Staff Admin URL:   $cleanNetlify/admin" -ForegroundColor Green
+Write-Host "Permanent Shop QR URL:       $shopQrUrl" -ForegroundColor Green
+Write-Host "Permanent Shop Admin URL:    $shopAdminUrl" -ForegroundColor Green
 Write-Host "Local Counter Admin URL:     http://127.0.0.1:$LocalPort/admin" -ForegroundColor White
 Write-Host "Active Tunnel Endpoint:      $tunnelUrl" -ForegroundColor Cyan
 Write-Host "==========================================================" -ForegroundColor Green
 Write-Host "Shopkeeper Instructions: Keep this window minimized while the shop is open." -ForegroundColor Yellow
-Write-Host "Customers can scan your permanent QR ($cleanNetlify) right now!" -ForegroundColor Green
+Write-Host "Customers can scan your permanent QR ($shopQrUrl) right now!" -ForegroundColor Green
 Write-Host ""
 
 # Keep running, stream logs, and re-broadcast heartbeat every 30 minutes

@@ -222,3 +222,42 @@ You only ever print **ONE physical QR code** for the shop wall:
    - Double-click [`enable-autostart.bat`](file:///c:/Users/Vikash/Documents/PrintAway/enable-autostart.bat) once on the shopkeeper's PC.
    - It creates a minimized startup shortcut in the Windows Startup folder (`shell:startup`).
    - From that day onward, the shopkeeper simply **presses the Power button on the PC and printer**—everything goes live automatically!
+
+---
+
+## 7. Scaling to Multiple Franchise Shops & Multiple Printers per Shop
+
+PrintAway now includes a built-in **Multi-Shop Franchise & Multi-Printer Smart Routing** architecture:
+
+### A. How Multiple Shops Work Under One PrintAway Deployment
+Every shop that clones this repository operates its own isolated local database, its own local PC + printers, and its own isolated cloud auto-discovery channel—all under the single `https://printitaway.netlify.app` frontend:
+
+1. **Unique Shop ID (`shopId`) & Permanent QR Code:**
+   - Each shop has a unique `shopId` (for example: `pilot`, `shop-02`, `campus-north`, `library-01`).
+   - That shop's permanent customer QR code URL is:
+     `https://printitaway.netlify.app/?shop=<shopId>` (e.g. `https://printitaway.netlify.app/?shop=shop-02`)
+   - That shop's permanent remote Admin URL is:
+     `https://printitaway.netlify.app/admin?shop=<shopId>`
+2. **Isolated Instant Cloud Discovery per Shop:**
+   - When Shop `shop-02` runs [`start-station.bat`](file:///c:/Users/Vikash/Documents/PrintAway/start-station.bat), [`scripts/start-tunnel.ps1`](file:///c:/Users/Vikash/Documents/PrintAway/scripts/start-tunnel.ps1) broadcasts its Cloudflare tunnel URL to its own dedicated cloud registry topic (`https://ntfy.sh/printaway_station_registry_shop-02_9f8a7b`).
+   - When a customer scans `https://printitaway.netlify.app/?shop=shop-02`, the browser resolves `shop-02`'s tunnel automatically and remembers `shop-02` on that phone.
+3. **Onboarding a New Franchise Shop in 60 Seconds:**
+   - Clone this repository on the new shop's Windows PC.
+   - Double-click [`setup-new-pc.bat`](file:///c:/Users/Vikash/Documents/PrintAway/setup-new-pc.bat).
+   - Enter the new shop's `Shop ID` (e.g. `shop-02`) and `Shop Name` (e.g. `PrintAway Sector 62`), pick the printers, and enable Windows boot auto-start.
+   - You can also edit `Shop ID` and `Shop Name` anytime live from the **Admin Dashboard (`/admin`) -> Hardware Capabilities & Multi-Printer Routing** panel.
+
+### B. How Multiple Printers Work Inside a Single Shop
+A single shop PC can connect **multiple physical printers** (via USB, Wi-Fi, or Ethernet LAN) and route jobs across them in three ways:
+
+1. **Primary / Default Printer Queue (`activeQueueName`):**
+   - Used as the default printer whenever no specialized queue or per-order override is set.
+2. **Automatic B&W vs. Color Smart Routing (`bwQueueName` & `colorQueueName`):**
+   - In the Admin Dashboard (or in [`config/station.json`](file:///c:/Users/Vikash/Documents/PrintAway/config/station.json)), a shop can assign:
+     - **Dedicated B&W Printer Queue:** e.g., high-speed laser printer (`Xerox B1025 Multifunction Printer PCL6`)
+     - **Dedicated Color Printer Queue:** e.g., color inkjet/laser printer (`EPSON L3250 Series` / `HP Color LaserJet`)
+   - When an order is approved, [`AdminApproveOrder`](file:///c:/Users/Vikash/Documents/PrintAway/src/DatabaseSchemaAndRepo.cs#L951-L976) automatically routes **B&W orders** to `bwQueueName` and **Color orders** to `colorQueueName` (falling back to the Primary printer if left blank).
+3. **Per-Order Target Printer Selection (`targetQueueName`):**
+   - Before approving any order, counter staff can click **⚙️ Edit Print Settings** on that order in the Admin Dashboard and choose **any specific connected Windows printer** from the **Target Printer for This Order** dropdown.
+   - [`LocalPrintWorker`](file:///c:/Users/Vikash/Documents/PrintAway/src/PrintWorker.cs#L43-L50) dispatches that specific job directly to the chosen printer queue via `-PrintTo "<targetQueueName>"`.
+

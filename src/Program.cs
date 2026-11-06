@@ -28,6 +28,10 @@ namespace PrintAway
             string cliPrinterQueue = null;
             string configPrinterQueue = null;
             bool autoFallbackPrinter = true;
+            string configShopId = null;
+            string configShopName = null;
+            string configBwQueue = null;
+            string configColorQueue = null;
 
             // Load portable station config from config/station.json if present
             string configPath = Path.Combine(repoRoot, "config", "station.json");
@@ -45,6 +49,14 @@ namespace PrintAway
                             configPrinterQueue = Convert.ToString(cfg["activePrinterQueue"]).Trim();
                         if (cfg.ContainsKey("autoFallbackToPhysicalPrinter") && cfg["autoFallbackToPhysicalPrinter"] != null)
                             bool.TryParse(Convert.ToString(cfg["autoFallbackToPhysicalPrinter"]), out autoFallbackPrinter);
+                        if (cfg.ContainsKey("shopId") && cfg["shopId"] != null)
+                            configShopId = Convert.ToString(cfg["shopId"]).Trim();
+                        if (cfg.ContainsKey("shopName") && cfg["shopName"] != null)
+                            configShopName = Convert.ToString(cfg["shopName"]).Trim();
+                        if (cfg.ContainsKey("bwPrinterQueue") && cfg["bwPrinterQueue"] != null)
+                            configBwQueue = Convert.ToString(cfg["bwPrinterQueue"]).Trim();
+                        if (cfg.ContainsKey("colorPrinterQueue") && cfg["colorPrinterQueue"] != null)
+                            configColorQueue = Convert.ToString(cfg["colorPrinterQueue"]).Trim();
                     }
                 }
                 catch (Exception ex)
@@ -125,12 +137,12 @@ namespace PrintAway
 
                     if (foundExact)
                     {
-                        repo.UpdateShopAndPrinterControls(null, null, null, null, "system-startup", null, null, null, null, desiredQueue);
+                        repo.UpdateShopAndPrinterControls(null, null, null, null, "system-startup", null, null, null, null, desiredQueue, configBwQueue, configColorQueue, configShopId, configShopName);
                     }
                     else if ((string.Equals(desiredQueue, "auto", StringComparison.OrdinalIgnoreCase) || autoFallbackPrinter) && !string.IsNullOrWhiteSpace(firstPhysicalQueue))
                     {
                         Console.WriteLine("[Printer Auto-Detect] Configured queue '" + desiredQueue + "' not on host; auto-selecting physical printer: " + firstPhysicalQueue);
-                        repo.UpdateShopAndPrinterControls(null, null, null, null, "system-startup", null, null, null, null, firstPhysicalQueue);
+                        repo.UpdateShopAndPrinterControls(null, null, null, null, "system-startup", null, null, null, null, firstPhysicalQueue, configBwQueue, configColorQueue, configShopId, configShopName);
                     }
                 }
 

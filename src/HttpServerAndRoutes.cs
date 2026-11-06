@@ -420,11 +420,15 @@ namespace PrintAway.Web
                         string allowedPaperSizes = body.ContainsKey("allowedPaperSizes") ? GetString(body, "allowedPaperSizes", null) : null;
                         int? maxCopies = body.ContainsKey("maxCopies") ? (int?)GetInt(body, "maxCopies", 50) : null;
                         string activeQueueName = body.ContainsKey("activeQueueName") ? GetString(body, "activeQueueName", null) : null;
+                        string bwQueueName = body.ContainsKey("bwQueueName") ? GetString(body, "bwQueueName", "") : null;
+                        string colorQueueName = body.ContainsKey("colorQueueName") ? GetString(body, "colorQueueName", "") : null;
+                        string shopId = body.ContainsKey("shopId") ? GetString(body, "shopId", null) : null;
+                        string shopName = body.ContainsKey("shopName") ? GetString(body, "shopName", null) : null;
                         bool? printerReady = body.ContainsKey("printerReady") ? (bool?)GetBool(body, "printerReady", true) : null;
 
                         var updated = _repo.UpdateShopAndPrinterControls(
                             intakePaused, pauseReason, supportsDuplex, printerReady, Convert.ToString(adminSess["username"]),
-                            supportsColor, supportsPageRange, allowedPaperSizes, maxCopies, activeQueueName);
+                            supportsColor, supportsPageRange, allowedPaperSizes, maxCopies, activeQueueName, bwQueueName, colorQueueName, shopId, shopName);
                         WriteJson(res, 200, updated);
                         return;
                     }
@@ -489,7 +493,8 @@ namespace PrintAway.Web
                             {
                                 int st;
                                 string err;
-                                var appRes = _repo.AdminApproveOrder(orderId, adminSess, reason, out st, out err);
+                                string targetQueue = GetString(body, "targetQueueName", null);
+                                var appRes = _repo.AdminApproveOrder(orderId, adminSess, reason, out st, out err, targetQueue);
                                 if (appRes == null)
                                 {
                                     WriteError(res, st, "APPROVAL_REJECTED", err);
@@ -564,7 +569,7 @@ namespace PrintAway.Web
                                 string err;
                                 var ovRes = _repo.AdminOverrideOrderPrintSettings(
                                     orderId, pageRange, copies, duplexMode, colorMode, paperSize, orientation, pagesPerSheet, collate,
-                                    Convert.ToString(adminSess["username"]), out err);
+                                    Convert.ToString(adminSess["username"]), out err, GetString(body, "targetQueueName", null));
                                 if (ovRes == null) { WriteError(res, 400, "OVERRIDE_FAILED", err); return; }
                                 WriteJson(res, 200, ovRes);
                                 return;

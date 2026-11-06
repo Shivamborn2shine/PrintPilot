@@ -135,6 +135,7 @@
     </div>
     <div style="display:flex;gap:10px;align-items:center;">
       <a href="/" style="color:#93c5fd;text-decoration:none;font-size:0.85rem;font-weight:600;">&larr; Customer Portal</a>
+      <a href="#" onclick="switchShopPrompt(); return false;" style="color:#a7f3d0;text-decoration:none;font-size:0.85rem;font-weight:600;border:1px solid #059669;padding:4px 8px;border-radius:6px;">🏪 Shop: <span id="lblAdminShopBadge">pilot</span></a>
       <a href="#" onclick="configureStationUrl(); return false;" style="color:#38bdf8;text-decoration:none;font-size:0.85rem;font-weight:600;border:1px solid #0284c7;padding:4px 8px;border-radius:6px;">⚙️ Station URL</a>
       <button id="btnRefreshTop" class="btn btn-secondary hidden" onclick="loadDashboard()">Refresh Now</button>
     </div>
@@ -249,7 +250,36 @@
             <label style="font-size:0.8rem;font-weight:700;">Target Windows Print Queue</label>
             <div style="display:flex;gap:8px;">
               <select id="selQueueSwitch" style="flex:1;"></select>
-              <button class="btn btn-secondary" onclick="saveTargetQueueSelection()">Set Active</button>
+              <button class="btn btn-secondary" onclick="saveTargetQueueSelection()">Set Primary</button>
+            </div>
+          </div>
+
+          <div style="margin-bottom:12px;background:#f8fafc;border:1px solid #cbd5e1;border-radius:8px;padding:10px;">
+            <div style="font-size:0.78rem;font-weight:700;color:#0f172a;margin-bottom:6px;">🖨️ Multi-Printer Smart Auto-Routing (B&amp;W vs Color Fleet)</div>
+            <div class="grid-2" style="gap:8px;margin-bottom:8px;">
+              <div>
+                <label style="font-size:0.74rem;font-weight:600;">⚫ Dedicated B&amp;W Printer</label>
+                <select id="selBwQueueSwitch" style="width:100%;font-size:0.8rem;"><option value="">(Use Primary Queue)</option></select>
+              </div>
+              <div>
+                <label style="font-size:0.74rem;font-weight:600;">🎨 Dedicated Color Printer</label>
+                <select id="selColorQueueSwitch" style="width:100%;font-size:0.8rem;"><option value="">(Use Primary Queue)</option></select>
+              </div>
+            </div>
+            <div style="font-size:0.78rem;font-weight:700;color:#0f172a;margin-bottom:6px;">🏪 Multi-Shop Franchise Identity</div>
+            <div class="grid-2" style="gap:8px;">
+              <div>
+                <label style="font-size:0.74rem;font-weight:600;">Shop ID / QR Slug (e.g. pilot, shop-02)</label>
+                <input type="text" id="inpShopId" value="pilot" style="width:100%;font-size:0.8rem;" />
+              </div>
+              <div>
+                <label style="font-size:0.74rem;font-weight:600;">Shop Display Name</label>
+                <input type="text" id="inpShopName" value="PrintAway Pilot Shop" style="width:100%;font-size:0.8rem;" />
+              </div>
+            </div>
+            <div style="font-size:0.73rem;color:#0369a1;margin-top:6px;">
+              Shop Permanent QR Link: <code id="lblShopQrUrl">https://printitaway.netlify.app/?shop=pilot</code>
+            </div>
             </div>
           </div>
 
@@ -397,6 +427,12 @@
             <option value="4">4 Pages per Side (4-in-1)</option>
           </select>
         </div>
+        <div style="grid-column:1 / -1;">
+          <label style="font-size:0.78rem;font-weight:600;">🖨️ Target Printer Queue for This Order</label>
+          <select id="inpOvTargetQueue" style="width:100%;">
+            <option value="">(Auto-Route by B&amp;W / Color Fleet Setting)</option>
+          </select>
+        </div>
       </div>
       <div style="display:flex;justify-content:flex-end;gap:8px;margin-top:14px;">
         <button class="btn btn-secondary" onclick="closeOverrideModal()">Cancel</button>
@@ -413,7 +449,36 @@
     }
 
     const DEFAULT_STATION_URL = 'https://anybody-vpn-slim-suited.trycloudflare.com';
-    const STATION_REGISTRY_TOPIC = 'printaway_station_registry_pilot_9f8a7b6c5d4e';
+    function getActiveShopId() {
+      const spShop = new URLSearchParams(window.location.search).get('shop');
+      if (spShop && spShop.trim()) {
+        const clean = spShop.trim().toLowerCase().replace(/[^a-z0-9_-]/g, '');
+        localStorage.setItem('printaway_shop_id', clean);
+        return clean;
+      }
+      return localStorage.getItem('printaway_shop_id') || 'pilot';
+    }
+
+    function getRegistryTopicForShop(shopId) {
+      const sid = (shopId || 'pilot').trim().toLowerCase();
+      if (!sid || sid === 'pilot' || sid === 'printaway-pilot') {
+        return 'printaway_station_registry_pilot_9f8a7b6c5d4e';
+      }
+      return 'printaway_station_registry_' + sid + '_9f8a7b';
+    }
+
+    function switchShopPrompt() {
+      const cur = getActiveShopId();
+      const entered = prompt("Enter Shop ID / Code to manage (e.g. 'pilot', 'shop-02', 'campus-01'):", cur);
+      if (entered !== null && entered.trim()) {
+        const clean = entered.trim().toLowerCase().replace(/[^a-z0-9_-]/g, '');
+        localStorage.setItem('printaway_shop_id', clean);
+        localStorage.removeItem('printaway_api_base');
+        const url = new URL(window.location.href);
+        url.searchParams.set('shop', clean);
+        window.location.href = url.toString();
+      }
+    }
 
     async function autoDiscoverLiveStation() {
       if (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1') {
@@ -426,7 +491,11 @@
         return cleanSp;
       }
       try {
-        const res = await fetch('https://ntfy.sh/' + STATION_REGISTRY_TOPIC + '/raw?poll=1&since=12h', { cache: 'no-store' });
+        const shopId = getActiveShopId();
+        const badgeEl = document.getElementById('lblAdminShopBadge');
+        if (badgeEl) badgeEl.textContent = shopId;
+        const topic = getRegistryTopicForShop(shopId);
+        const res = await fetch('https://ntfy.sh/' + topic + '/raw?poll=1&since=12h', { cache: 'no-store' });
         if (res.ok) {
           const text = await res.text();
           const lines = text.split(/\r?\n/).map(l => l.trim()).filter(l => l.startsWith('https://'));
@@ -503,6 +572,7 @@
         document.getElementById('loginCard').classList.add('hidden');
         document.getElementById('dashboardContent').classList.remove('hidden');
         document.getElementById('btnRefreshTop').classList.remove('hidden');
+        await loadLiveWindowsQueues();
         await loadDashboard();
         await loadLiveWindowsQueues();
         if (dashTimer) clearInterval(dashTimer);
@@ -544,6 +614,12 @@
         document.getElementById('lblStationStatus').textContent = shop.statusReason;
         document.getElementById('lblFreeDisk').textContent = m.freeDiskMb;
         document.getElementById('lblActiveQueueTop').textContent = shop.activeQueueName || 'Xerox B1025 Multifunction Printer PCL6';
+        if (document.getElementById('inpShopId')) document.getElementById('inpShopId').value = shop.shopId || 'pilot';
+        if (document.getElementById('inpShopName')) document.getElementById('inpShopName').value = shop.shopName || '';
+        if (document.getElementById('lblAdminShopBadge')) document.getElementById('lblAdminShopBadge').textContent = '🏪 Shop: ' + (shop.shopId || getActiveShopId());
+        if (document.getElementById('lblShopQrUrl')) document.getElementById('lblShopQrUrl').textContent = `https://printitaway.netlify.app/?shop=${shop.shopId || 'pilot'}`;
+        if (document.getElementById('selBwQueueSwitch') && shop.bwQueueName !== undefined) document.getElementById('selBwQueueSwitch').value = shop.bwQueueName || '';
+        if (document.getElementById('selColorQueueSwitch') && shop.colorQueueName !== undefined) document.getElementById('selColorQueueSwitch').value = shop.colorQueueName || '';
 
         if (shop.pricing) {
           document.getElementById('lblPriceVer').textContent = 'v' + shop.pricing.version;
@@ -626,6 +702,7 @@
           </td>
           <td>
             <div>${colorBadge} <strong>${o.paperSize || 'A4'}</strong>${nUp} | <strong>${o.duplexMode}</strong></div>
+            <div style="font-size:0.75rem;color:#334155;margin-top:2px;">🖨️ Target Printer: <strong>${o.target_queue_name || 'Auto-Route'}</strong></div>
             <div style="font-size:0.78rem;color:var(--muted);margin-top:2px;">
               Pages: <strong>${o.pageRange}</strong> (${o.selectedPages}/${o.documentPages}p) × <strong>${o.copies} copy</strong>
             </div>
@@ -671,6 +748,7 @@
       document.getElementById('inpOvDuplexMode').value = o.duplexMode || 'OneSided';
       document.getElementById('inpOvPaperSize').value = o.paperSize || 'A4';
       document.getElementById('inpOvPagesPerSheet').value = o.pagesPerSheet || 1;
+      if (document.getElementById('inpOvTargetQueue')) document.getElementById('inpOvTargetQueue').value = o.target_queue_name || '';
       document.getElementById('modalOverride').classList.remove('hidden');
     }
 
@@ -686,13 +764,14 @@
       const duplexMode = document.getElementById('inpOvDuplexMode').value;
       const paperSize = document.getElementById('inpOvPaperSize').value;
       const pagesPerSheet = parseInt(document.getElementById('inpOvPagesPerSheet').value || '1', 10);
+      const targetQueueName = document.getElementById('inpOvTargetQueue') ? document.getElementById('inpOvTargetQueue').value : '';
 
       showNotice(null);
       try {
         const res = await fetch(apiUrl(`/api/admin/orders/${orderId}/override-settings`), {
           method: 'POST',
           headers: adminHeaders(),
-          body: JSON.stringify({ pageRange, copies, colorMode, duplexMode, paperSize, pagesPerSheet, collate: true })
+          body: JSON.stringify({ pageRange, copies, colorMode, duplexMode, paperSize, pagesPerSheet, targetQueueName, collate: true })
         });
         const data = await res.json();
         if (!res.ok || data.error) {
@@ -778,7 +857,11 @@
       const supportsDuplex = document.getElementById('chkSupportsDuplex').checked;
       const supportsPageRange = document.getElementById('chkSupportsPageRange').checked;
       const allowedPaperSizes = document.getElementById('inpAllowedPapers').value;
-      await updateControls({ supportsColor, supportsDuplex, supportsPageRange, allowedPaperSizes });
+      const bwQueueName = document.getElementById('selBwQueueSwitch') ? document.getElementById('selBwQueueSwitch').value : undefined;
+      const colorQueueName = document.getElementById('selColorQueueSwitch') ? document.getElementById('selColorQueueSwitch').value : undefined;
+      const shopId = document.getElementById('inpShopId') ? document.getElementById('inpShopId').value.trim() : undefined;
+      const shopName = document.getElementById('inpShopName') ? document.getElementById('inpShopName').value.trim() : undefined;
+      await updateControls({ supportsColor, supportsDuplex, supportsPageRange, allowedPaperSizes, bwQueueName, colorQueueName, shopId, shopName });
     }
 
     async function saveTargetQueueSelection() {
@@ -793,6 +876,13 @@
         const data = await res.json();
         const box = document.getElementById('liveQueuesBox');
         const selSwitch = document.getElementById('selQueueSwitch');
+        const selBw = document.getElementById('selBwQueueSwitch');
+        const selColor = document.getElementById('selColorQueueSwitch');
+        const selOvTarget = document.getElementById('inpOvTargetQueue');
+        const optHtml = '<option value="">(Use Primary / Smart Auto-Route)</option>' + (data.liveWindowsQueues || []).map(q => `<option value="${q.QueueName}">${q.QueueName} [${q.PortName}]</option>`).join('');
+        if (selBw) selBw.innerHTML = optHtml;
+        if (selColor) selColor.innerHTML = optHtml;
+        if (selOvTarget) selOvTarget.innerHTML = optHtml;
 
         selSwitch.innerHTML = (data.liveWindowsQueues || []).map(q => {
           const isAct = (q.QueueName === data.activeVerifiedQueue);

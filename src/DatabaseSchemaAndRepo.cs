@@ -293,6 +293,8 @@ CREATE TABLE IF NOT EXISTS audit_events (
             try { _db.ExecuteNonQuery("ALTER TABLE quotes ADD COLUMN orientation TEXT NOT NULL DEFAULT 'auto';"); } catch { }
             try { _db.ExecuteNonQuery("ALTER TABLE quotes ADD COLUMN pages_per_sheet INTEGER NOT NULL DEFAULT 1;"); } catch { }
             try { _db.ExecuteNonQuery("ALTER TABLE quotes ADD COLUMN is_collated INTEGER NOT NULL DEFAULT 1;"); } catch { }
+            try { _db.ExecuteNonQuery("ALTER TABLE printers ADD COLUMN bw_queue_name TEXT;"); } catch { }
+            try { _db.ExecuteNonQuery("ALTER TABLE printers ADD COLUMN color_queue_name TEXT;"); } catch { }
 
             string now = UtcNowIso();
             long shopCount = _db.ExecuteScalarLong("SELECT COUNT(*) FROM shops;");
@@ -473,7 +475,10 @@ CREATE TABLE IF NOT EXISTS audit_events (
 
             return new Dictionary<string, object>
             {
+                { "shopId", shop.ContainsKey("slug") && shop["slug"] != null ? shop["slug"] : "pilot" },
                 { "shopName", shop["name"] },
+                { "bwQueueName", printer.ContainsKey("bw_queue_name") && printer["bw_queue_name"] != null ? Convert.ToString(printer["bw_queue_name"]) : "" },
+                { "colorQueueName", printer.ContainsKey("color_queue_name") && printer["color_queue_name"] != null ? Convert.ToString(printer["color_queue_name"]) : "" },
                 { "tagline", shop["tagline"] },
                 { "operatingHours", shop["operating_hours"] },
                 { "turnaroundText", shop["turnaround_text"] },
@@ -762,7 +767,8 @@ CREATE TABLE IF NOT EXISTS audit_events (
             string customerName,
             string customerPhone,
             bool consentAccepted,
-            out string errorMsg)
+            out string errorMsg,
+            string targetQueueName = null)
         {
             errorMsg = null;
             if (!consentAccepted)
@@ -871,7 +877,8 @@ CREATE TABLE IF NOT EXISTS audit_events (
             long amountPaise,
             string paymentOutcome,
             out int httpStatus,
-            out string errorMsg)
+            out string errorMsg,
+            string targetQueueName = null)
         {
             errorMsg = null;
             httpStatus = 200;
@@ -1161,7 +1168,7 @@ CREATE TABLE IF NOT EXISTS audit_events (
         }
 
         // HARD RULE: Explicit Admin Approval Gate (paid_awaiting_approval / on_hold -> approved -> queued)
-        public Dictionary<string, object> AdminApproveOrder(long orderId, Dictionary<string, object> adminSession, string reason, out int httpStatus, out string errorMsg)
+        public Dictionary<string, object> AdminApproveOrder(long orderId, Dictionary<string, object> adminSession, string reason, out int httpStatus, out string errorMsg, string targetQueueOverride = null)
         {
             errorMsg = null;
             httpStatus = 200;
@@ -1202,6 +1209,24 @@ CREATE TABLE IF NOT EXISTS audit_events (
                     var quote = _db.QuerySingle("SELECT * FROM quotes WHERE id = @qid;", new Dictionary<string, object> { { "qid", order["quote_id"] } });
                     var activeQueueRow = _db.QuerySingle("SELECT * FROM printer_queues WHERE is_active_selected = 1 LIMIT 1;");
                     string targetQueue = activeQueueRow != null ? Convert.ToString(activeQueueRow["windows_queue_name"]) : VerifiedXeroxQueueName;
+                    var printerRow = _db.QuerySingle("SELECT * FROM printers WHERE id = 1;");
+                    string quoteColor = quote != null && quote.ContainsKey("color_mode") && quote["color_mode"] != null ? Convert.ToString(quote["color_mode"]) : "bw";
+                    if (!string.IsNullOrWhiteSpace(targetQueueOverride))
+                    {
+                        targetQueue = targetQueueOverride.Trim();
+                    }
+                    else if (order.ContainsKey("target_queue_name") && !string.IsNullOrWhiteSpace(Convert.ToString(order["target_queue_name"])))
+                    {
+                        targetQueue = Convert.ToString(order["target_queue_name"]).Trim();
+                    }
+                    else if (string.Equals(quoteColor, "color", StringComparison.OrdinalIgnoreCase) && printerRow != null && printerRow.ContainsKey("color_queue_name") && !string.IsNullOrWhiteSpace(Convert.ToString(printerRow["color_queue_name"])))
+                    {
+                        targetQueue = Convert.ToString(printerRow["color_queue_name"]).Trim();
+                    }
+                    else if (string.Equals(quoteColor, "bw", StringComparison.OrdinalIgnoreCase) && printerRow != null && printerRow.ContainsKey("bw_queue_name") && !string.IsNullOrWhiteSpace(Convert.ToString(printerRow["bw_queue_name"])))
+                    {
+                        targetQueue = Convert.ToString(printerRow["bw_queue_name"]).Trim();
+                    }
                     string now = UtcNowIso();
                     string approvalReason = string.IsNullOrWhiteSpace(reason) ? "Approved by counter admin for Xerox B1025 dispatch" : reason.Trim();
 
@@ -1820,7 +1845,8 @@ CREATE TABLE IF NOT EXISTS audit_events (
             string newState,
             int? windowsSpoolerJobId,
             string details,
-            out string errorMsg)
+            out string errorMsg,
+            string targetQueueName = null)
         {
             errorMsg = null;
             try
@@ -1974,7 +2000,11 @@ CREATE TABLE IF NOT EXISTS audit_events (
             bool? supportsPageRange = null,
             string allowedPaperSizes = null,
             int? maxCopies = null,
-            string activeQueueName = null)
+            string activeQueueName = null,
+            string bwQueueName = null,
+            string colorQueueName = null,
+            string shopSlug = null,
+            string shopName = null)
         {
             _db.RunInTransaction(() =>
             {
@@ -2035,6 +2065,26 @@ CREATE TABLE IF NOT EXISTS audit_events (
                             new Dictionary<string, object> { { "qn", qName }, { "now", UtcNowIso() } });
                     }
                 }
+                if (bwQueueName != null)
+                {
+                    _db.ExecuteNonQuery("UPDATE printers SET bw_queue_name = @bwq WHERE id = 1;",
+                        new Dictionary<string, object> { { "bwq", bwQueueName.Trim() } });
+                }
+                if (colorQueueName != null)
+                {
+                    _db.ExecuteNonQuery("UPDATE printers SET color_queue_name = @cq WHERE id = 1;",
+                        new Dictionary<string, object> { { "cq", colorQueueName.Trim() } });
+                }
+                if (!string.IsNullOrWhiteSpace(shopSlug))
+                {
+                    _db.ExecuteNonQuery("UPDATE shops SET slug = @sl WHERE id = 1;",
+                        new Dictionary<string, object> { { "sl", shopSlug.Trim() } });
+                }
+                if (!string.IsNullOrWhiteSpace(shopName))
+                {
+                    _db.ExecuteNonQuery("UPDATE shops SET name = @sn WHERE id = 1;",
+                        new Dictionary<string, object> { { "sn", shopName.Trim() } });
+                }
                 if (printerReadyOverride.HasValue)
                 {
                     _db.ExecuteNonQuery(
@@ -2066,7 +2116,8 @@ CREATE TABLE IF NOT EXISTS audit_events (
             int pagesPerSheet,
             bool collate,
             string adminUsername,
-            out string errorMsg)
+            out string errorMsg,
+            string targetQueueName = null)
         {
             errorMsg = null;
             try
@@ -2138,6 +2189,13 @@ CREATE TABLE IF NOT EXISTS audit_events (
                             { "oid", orderId }
                         });
 
+                    if (!string.IsNullOrWhiteSpace(targetQueueName))
+                    {
+                        _db.ExecuteNonQuery("UPDATE orders SET target_queue_name = @tq WHERE id = @oid;",
+                            new Dictionary<string, object> { { "tq", targetQueueName.Trim() }, { "oid", orderId } });
+                        _db.ExecuteNonQuery("UPDATE print_jobs SET target_queue_name = @tq WHERE order_id = @oid AND state IN ('queued', 'reconciliation_required');",
+                            new Dictionary<string, object> { { "tq", targetQueueName.Trim() }, { "oid", orderId } });
+                    }
                     LogAudit(orderId, "admin", adminUsername, "ADMIN_PRINT_SETTINGS_OVERRIDDEN", Convert.ToString(order["state"]), Convert.ToString(order["state"]),
                         string.Format(CultureInfo.InvariantCulture, "Range={0}, Copies={1}, Color={2}, Duplex={3}, Paper={4}, Orientation={5}, NUp={6} -> Sides={7}, Sheets={8}",
                             calc.NormalizedPageRange, calc.Copies, calc.ColorMode, calc.DuplexMode, calc.PaperSize, calc.Orientation, calc.PagesPerSheet, calc.TotalPrintedSides, calc.TotalPhysicalSheets));

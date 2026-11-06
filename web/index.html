@@ -239,6 +239,7 @@
       <div class="nav-links">
         <a href="/" onclick="resetToNewOrder(); return false;">New Order</a>
         <a href="/admin">Staff Admin &amp; Printer Controls</a>
+        <a href="#" onclick="switchShopPrompt(); return false;" id="btnShopSwitch" style="border-color:#a7f3d0;color:#a7f3d0;">🏪 Shop: <span id="lblActiveShopBadge">pilot</span></a>
         <a href="#" onclick="configureStationUrl(); return false;" id="btnStationConfig" style="border-color:#38bdf8;color:#38bdf8;">⚙️ Station URL</a>
       </div>
     </div>
@@ -523,7 +524,36 @@
 
   <script>
     const DEFAULT_STATION_URL = 'https://anybody-vpn-slim-suited.trycloudflare.com';
-    const STATION_REGISTRY_TOPIC = 'printaway_station_registry_pilot_9f8a7b6c5d4e';
+    function getActiveShopId() {
+      const spShop = new URLSearchParams(window.location.search).get('shop');
+      if (spShop && spShop.trim()) {
+        const clean = spShop.trim().toLowerCase().replace(/[^a-z0-9_-]/g, '');
+        localStorage.setItem('printaway_shop_id', clean);
+        return clean;
+      }
+      return localStorage.getItem('printaway_shop_id') || 'pilot';
+    }
+
+    function getRegistryTopicForShop(shopId) {
+      const sid = (shopId || 'pilot').trim().toLowerCase();
+      if (!sid || sid === 'pilot' || sid === 'printaway-pilot') {
+        return 'printaway_station_registry_pilot_9f8a7b6c5d4e';
+      }
+      return 'printaway_station_registry_' + sid + '_9f8a7b';
+    }
+
+    function switchShopPrompt() {
+      const cur = getActiveShopId();
+      const entered = prompt("Enter Shop ID / Code to connect (e.g. 'pilot', 'shop-02', 'campus-01'):", cur);
+      if (entered !== null && entered.trim()) {
+        const clean = entered.trim().toLowerCase().replace(/[^a-z0-9_-]/g, '');
+        localStorage.setItem('printaway_shop_id', clean);
+        localStorage.removeItem('printaway_api_base');
+        const url = new URL(window.location.href);
+        url.searchParams.set('shop', clean);
+        window.location.href = url.toString();
+      }
+    }
 
     async function autoDiscoverLiveStation() {
       if (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1') {
@@ -536,7 +566,11 @@
         return cleanSp;
       }
       try {
-        const res = await fetch('https://ntfy.sh/' + STATION_REGISTRY_TOPIC + '/raw?poll=1&since=12h', { cache: 'no-store' });
+        const shopId = getActiveShopId();
+        const badgeEl = document.getElementById('lblActiveShopBadge');
+        if (badgeEl) badgeEl.textContent = shopId;
+        const topic = getRegistryTopicForShop(shopId);
+        const res = await fetch('https://ntfy.sh/' + topic + '/raw?poll=1&since=12h', { cache: 'no-store' });
         if (res.ok) {
           const text = await res.text();
           const lines = text.split(/\r?\n/).map(l => l.trim()).filter(l => l.startsWith('https://'));
@@ -611,7 +645,9 @@
 
         if (data.acceptingOrders) {
           banner.className = 'status-banner status-open';
-          txt.textContent = '● ' + data.statusReason + ' — ' + data.printerModel + ' (' + capTags.join(' / ') + ')';
+          const bEl = document.getElementById('lblActiveShopBadge');
+          if (bEl && data.shopId) bEl.textContent = data.shopId;
+          txt.textContent = '● ' + (data.shopName ? data.shopName + ' — ' : '') + data.statusReason + ' — ' + data.printerModel + ' (' + capTags.join(' / ') + ')';
           turn.textContent = 'Est. turnaround: ' + data.turnaroundText;
         } else {
           banner.className = 'status-banner status-closed';
