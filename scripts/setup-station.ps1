@@ -197,8 +197,10 @@ Write-Host "  Permanent Shop Admin URL:       $adminUrl" -ForegroundColor Green
 Write-Host "======================================================================" -ForegroundColor Green
 
 if (-not $NonInteractive) {
-    $launchNow = Read-Host "Would you like to start the PrintAway Server & Cloudflare Tunnel now? (Y/n)"
+    $launchNow = Read-Host "Would you like to start the PrintAway Station now? (Y/n)"
     if ($launchNow -eq "" -or $launchNow -match "^[Yy]") {
-        powershell -NoProfile -ExecutionPolicy Bypass -File (Join-Path $rootDir "scripts\start-tunnel.ps1") -PrinterQueue $selectedQueue -ShopId $selectedShopId
+        $serverExe = Join-Path $rootDir "bin\PrintAway.exe"
+        Start-Process -FilePath $serverExe
+        Write-Host "`n  [OK] PrintAway Station launched successfully!" -ForegroundColor Green
     }
 }

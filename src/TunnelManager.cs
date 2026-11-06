@@ -78,6 +78,22 @@ namespace PrintAway.Tunnel
                 _tunnelProcess = new Process { StartInfo = psi };
                 _tunnelProcess.OutputDataReceived += HandleProcessOutput;
                 _tunnelProcess.ErrorDataReceived += HandleProcessOutput;
+                _tunnelProcess.EnableRaisingEvents = true;
+                _tunnelProcess.Exited += (s, e) =>
+                {
+                    if (!_disposed && string.IsNullOrEmpty(_liveTunnelUrl))
+                    {
+                        Log("Tunnel process exited before capturing URL (rate-limit 429 or network). Retrying in 20 seconds...");
+                        ThreadPool.QueueUserWorkItem(state =>
+                        {
+                            Thread.Sleep(20000);
+                            if (!_disposed && string.IsNullOrEmpty(_liveTunnelUrl))
+                            {
+                                Start();
+                            }
+                        });
+                    }
+                };
 
                 _tunnelProcess.Start();
                 _tunnelProcess.BeginOutputReadLine();

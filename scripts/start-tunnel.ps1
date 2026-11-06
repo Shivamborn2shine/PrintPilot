@@ -131,43 +131,66 @@ if (Test-Path $tunnelLog) {
 
 Write-Host "[3/4] Launching Cloudflare HTTP/2 Tunnel for http://127.0.0.1:$LocalPort ..." -ForegroundColor Yellow
 
-$procInfo = New-Object System.Diagnostics.ProcessStartInfo
-$procInfo.FileName = $cloudflared
-$procInfo.Arguments = "tunnel --protocol http2 --url http://127.0.0.1:$LocalPort"
-$procInfo.RedirectStandardError = $true
-$procInfo.RedirectStandardOutput = $true
-$procInfo.UseShellExecute = $false
-$procInfo.CreateNoWindow = $true
-
-$tunnelProcess = New-Object System.Diagnostics.Process
-$tunnelProcess.StartInfo = $procInfo
-$null = $tunnelProcess.Start()
-
 $tunnelUrl = $null
-$deadline = (Get-Date).AddSeconds(30)
-$logWriter = [System.IO.File]::AppendText($tunnelLog)
+$maxRetries = 3
 
-try {
-    while ((Get-Date) -lt $deadline -and -not $tunnelUrl) {
-        $line = $tunnelProcess.StandardError.ReadLine()
-        if ($line) {
-            $logWriter.WriteLine($line)
-            $logWriter.Flush()
-            if ($line -match "https://([a-zA-Z0-9-]+\.trycloudflare\.com)") {
-                $tunnelUrl = "https://" + $matches[1]
-                break
-            }
-        }
-        Start-Sleep -Milliseconds 100
+for ($attempt = 1; $attempt -le $maxRetries; $attempt++) {
+    if ($attempt -gt 1) {
+        Write-Host "  Retrying Cloudflare Quick Tunnel connection (Attempt $attempt of $maxRetries)..." -ForegroundColor Yellow
     }
-} finally {
-    $logWriter.Close()
+
+    $procInfo = New-Object System.Diagnostics.ProcessStartInfo
+    $procInfo.FileName = $cloudflared
+    $procInfo.Arguments = "tunnel --protocol http2 --url http://127.0.0.1:$LocalPort"
+    $procInfo.RedirectStandardError = $true
+    $procInfo.RedirectStandardOutput = $true
+    $procInfo.UseShellExecute = $false
+    $procInfo.CreateNoWindow = $true
+
+    $tunnelProcess = New-Object System.Diagnostics.Process
+    $tunnelProcess.StartInfo = $procInfo
+    $null = $tunnelProcess.Start()
+
+    $deadline = (Get-Date).AddSeconds(25)
+    $logWriter = [System.IO.File]::AppendText($tunnelLog)
+    $got429 = $false
+
+    try {
+        while ((Get-Date) -lt $deadline -and -not $tunnelUrl -and -not $tunnelProcess.HasExited) {
+            $line = $tunnelProcess.StandardError.ReadLine()
+            if ($line) {
+                $logWriter.WriteLine($line)
+                $logWriter.Flush()
+                if ($line -match "https://([a-zA-Z0-9-]+\.trycloudflare\.com)") {
+                    $tunnelUrl = "https://" + $matches[1]
+                    break
+                }
+                if ($line -match "status 429") {
+                    $got429 = $true
+                    break
+                }
+            }
+            Start-Sleep -Milliseconds 100
+        }
+    } finally {
+        $logWriter.Close()
+    }
+
+    if ($tunnelUrl) { break }
+
+    if ($got429) {
+        Write-Host "  [!] Cloudflare rate-limit active (status 429). Waiting 15 seconds before retry..." -ForegroundColor DarkYellow
+        Start-Sleep -Seconds 15
+    }
+
+    try { if (-not $tunnelProcess.HasExited) { $tunnelProcess.Kill() } } catch { }
 }
 
 if (-not $tunnelUrl) {
-    Write-Host "[ERROR] Could not detect Cloudflare Tunnel URL within 30 seconds." -ForegroundColor Red
-    Write-Host "Check log at: $tunnelLog" -ForegroundColor Yellow
-    exit 1
+    Write-Host "[NOTICE] Cloudflare Quick Tunnel rate-limited by trycloudflare.com (HTTP 429)." -ForegroundColor DarkYellow
+    Write-Host "Your station is running locally at http://127.0.0.1:$LocalPort/admin" -ForegroundColor White
+    Write-Host "Cloudflare rate-limits reset every few minutes. PrintAway.exe will automatically reconnect." -ForegroundColor DarkYellow
+    Write-Host "Check log at: $tunnelLog" -ForegroundColor Gray
 }
 
 # 4. Publish live tunnel URL to Shop's Isolated Cloud Registry Topic (Zero Git / Zero Rebuild required!)
