@@ -66,12 +66,34 @@ namespace PrintAway
             string configBwQueue = null;
             string configColorQueue = null;
 
-            // Load portable station config from config/station.json if present
+            // Load portable station config from config/station.json or any station-*.json if present
             string configPath = Path.Combine(repoRoot, "config", "station.json");
+            if (!File.Exists(configPath))
+            {
+                configPath = Path.Combine(repoRoot, "station.json");
+            }
+            if (!File.Exists(configPath))
+            {
+                string configDir = Path.Combine(repoRoot, "config");
+                if (Directory.Exists(configDir))
+                {
+                    string[] candidates = Directory.GetFiles(configDir, "station-*.json");
+                    if (candidates != null && candidates.Length > 0)
+                        configPath = candidates[0];
+                }
+            }
+            if (!File.Exists(configPath))
+            {
+                string[] candidates = Directory.GetFiles(repoRoot, "station-*.json");
+                if (candidates != null && candidates.Length > 0)
+                    configPath = candidates[0];
+            }
+
             if (File.Exists(configPath))
             {
                 try
                 {
+                    Console.WriteLine("[Config] Found station configuration: " + Path.GetFileName(configPath));
                     var json = new JavaScriptSerializer();
                     var cfg = json.Deserialize<Dictionary<string, object>>(File.ReadAllText(configPath));
                     if (cfg != null)

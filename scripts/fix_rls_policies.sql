@@ -32,3 +32,4 @@ CREATE POLICY "Allow public read to saas_subscriptions" ON public.saas_subscript
 
 DROP POLICY IF EXISTS "Allow public insert to saas_subscriptions" ON public.saas_subscriptions;
 CREATE POLICY "Allow public insert to saas_subscriptions" ON public.saas_subscriptions FOR INSERT WITH CHECK (true);
+

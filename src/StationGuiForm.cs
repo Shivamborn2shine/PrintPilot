@@ -6,6 +6,7 @@ using System.Globalization;
 using System.IO;
 using System.Runtime.InteropServices;
 using System.Text.RegularExpressions;
+using System.Web.Script.Serialization;
 using System.Windows.Forms;
 using PrintAway.Engine;
 using PrintAway.SaaS;
@@ -172,9 +173,20 @@ namespace PrintAway.Gui
                 Text = "Shop: Loading...",
                 Font = new Font("Segoe UI", 9.5f, FontStyle.Bold),
                 ForeColor = Color.FromArgb(30, 41, 59),
-                Location = new Point(14, 25),
-                Size = new Size(585, 20)
+                Location = new Point(14, 22),
+                Size = new Size(480, 22)
             };
+
+            var btnSetShop = new Button
+            {
+                Text = "⚙️ Import Config",
+                Size = new Size(95, 26),
+                Location = new Point(505, 14),
+                BackColor = Color.White,
+                FlatStyle = FlatStyle.System,
+                Cursor = Cursors.Hand
+            };
+            btnSetShop.Click += (s, e) => OnSetShopClicked();
 
             _lblCustomerLink = new Label
             {
@@ -182,7 +194,7 @@ namespace PrintAway.Gui
                 Font = new Font("Segoe UI", 8.5f, FontStyle.Regular),
                 ForeColor = Color.FromArgb(29, 78, 216),
                 Location = new Point(14, 48),
-                Size = new Size(475, 20)
+                Size = new Size(480, 20)
             };
 
             var btnCopyLink = new Button
@@ -237,6 +249,7 @@ namespace PrintAway.Gui
             btnUpgradePro.Click += (s, e) => LaunchBrowser("http://127.0.0.1:" + _port + "/admin#pro-upgrade");
 
             grpShop.Controls.Add(_lblShopTitle);
+            grpShop.Controls.Add(btnSetShop);
             grpShop.Controls.Add(_lblCustomerLink);
             grpShop.Controls.Add(btnCopyLink);
             grpShop.Controls.Add(_lblTunnelUrl);
@@ -807,6 +820,69 @@ namespace PrintAway.Gui
             }
             catch { }
             return "pilot";
+        }
+
+        private void OnSetShopClicked()
+        {
+            using (var ofd = new OpenFileDialog())
+            {
+                ofd.Title = "Select Franchise Station Configuration (e.g. station-*.json)";
+                ofd.Filter = "Station Config (*.json)|*.json|All Files (*.*)|*.*";
+                string cfgDir = Path.Combine(_repoRoot, "config");
+                ofd.InitialDirectory = Directory.Exists(cfgDir) ? cfgDir : _repoRoot;
+
+                if (ofd.ShowDialog() == DialogResult.OK)
+                {
+                    try
+                    {
+                        string text = File.ReadAllText(ofd.FileName);
+                        var json = new JavaScriptSerializer();
+                        var cfg = json.Deserialize<Dictionary<string, object>>(text);
+                        if (cfg != null && cfg.ContainsKey("shopId"))
+                        {
+                            string newShopId = Convert.ToString(cfg["shopId"]).Trim();
+                            string newShopName = cfg.ContainsKey("shopName") && cfg["shopName"] != null
+                                ? Convert.ToString(cfg["shopName"]).Trim()
+                                : newShopId;
+
+                            // 1. Save / overwrite config/station.json
+                            Directory.CreateDirectory(cfgDir);
+                            string destCfg = Path.Combine(cfgDir, "station.json");
+                            File.WriteAllText(destCfg, text);
+
+                            // 2. Update local SQLite DB
+                            _repo.UpdateShopAndPrinterControls(null, null, null, null, "gui-set-shop", null, null, null, null, null, null, null, newShopId, newShopName);
+
+                            // 3. Update UI Labels immediately
+                            _lblShopTitle.Text = string.Format(CultureInfo.InvariantCulture, "{0} (ID: {1})", newShopName, newShopId);
+                            _lblCustomerLink.Text = "Customer QR: https://printitaway.netlify.app/?shop=" + newShopId;
+
+                            // 4. Trigger cloud telemetry sync with new shop identity
+                            if (_supabaseSync != null)
+                            {
+                                _supabaseSync.TriggerSyncNow();
+                            }
+
+                            MessageBox.Show(
+                                string.Format(CultureInfo.InvariantCulture,
+                                    "Station successfully updated!\n\nFranchise: {0}\nShop ID: {1}\n\nLive Customer QR Link:\nhttps://printitaway.netlify.app/?shop={1}",
+                                    newShopName, newShopId),
+                                "PrintAway Station Configured",
+                                MessageBoxButtons.OK,
+                                MessageBoxIcon.Information);
+                            return;
+                        }
+                        else
+                        {
+                            MessageBox.Show("Selected JSON file does not contain a valid 'shopId' field.", "Invalid Config", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                        }
+                    }
+                    catch (Exception ex)
+                    {
+                        MessageBox.Show("Could not load configuration file: " + ex.Message, "Error", MessageBoxButtons.OK, MessageBoxIcon.Error);
+                    }
+                }
+            }
         }
 
         private void UpdateStationJson(string key, object val)
