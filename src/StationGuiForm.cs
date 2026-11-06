@@ -151,37 +151,38 @@ namespace PrintAway.Gui
             pnlHeader.Controls.Add(lblHeaderSub);
             pnlHeader.Controls.Add(_lblStatusBadge);
 
-            // 2. Body Scrollable Container (Fills rest of form)
+            // 2. Body Scrollable Container (Starts directly below 65px header bar)
             var pnlBody = new Panel
             {
-                Dock = DockStyle.Fill,
+                Location = new Point(0, 65),
+                Size = new Size(this.ClientSize.Width, this.ClientSize.Height - 65),
+                Anchor = AnchorStyles.Top | AnchorStyles.Bottom | AnchorStyles.Left | AnchorStyles.Right,
                 BackColor = Color.FromArgb(248, 250, 252),
                 AutoScroll = true
             };
             this.Controls.Add(pnlBody);
             this.Controls.Add(pnlHeader);
-            pnlBody.SendToBack();
 
             int y = 14;
 
             // 3. Card: Shop Identity & Live Customer QR Link
-            var grpShop = CreateCardPanel("🏪 Shop Identity & Live Customer QR", 18, y, 620, 142);
-            y += 154;
+            var grpShop = CreateCardPanel("🏪 Shop Identity & Live Customer QR", 18, y, 620, 150);
+            y += 162;
 
             _lblShopTitle = new Label
             {
                 Text = "Shop: Loading...",
-                Font = new Font("Segoe UI", 9.5f, FontStyle.Bold),
+                Font = new Font("Segoe UI", 10f, FontStyle.Bold),
                 ForeColor = Color.FromArgb(30, 41, 59),
-                Location = new Point(14, 22),
-                Size = new Size(480, 22)
+                Location = new Point(14, 28),
+                Size = new Size(470, 22)
             };
 
             var btnSetShop = new Button
             {
                 Text = "⚙️ Import Config",
-                Size = new Size(95, 26),
-                Location = new Point(505, 14),
+                Size = new Size(115, 26),
+                Location = new Point(490, 10),
                 BackColor = Color.White,
                 FlatStyle = FlatStyle.System,
                 Cursor = Cursors.Hand
@@ -193,15 +194,15 @@ namespace PrintAway.Gui
                 Text = "Customer QR: https://printitaway.netlify.app/?shop=pilot",
                 Font = new Font("Segoe UI", 8.5f, FontStyle.Regular),
                 ForeColor = Color.FromArgb(29, 78, 216),
-                Location = new Point(14, 48),
-                Size = new Size(480, 20)
+                Location = new Point(14, 54),
+                Size = new Size(470, 20)
             };
 
             var btnCopyLink = new Button
             {
                 Text = "📋 Copy Link",
-                Size = new Size(95, 26),
-                Location = new Point(505, 44),
+                Size = new Size(115, 26),
+                Location = new Point(490, 48),
                 BackColor = Color.White,
                 FlatStyle = FlatStyle.System
             };
@@ -220,8 +221,8 @@ namespace PrintAway.Gui
                 Text = "Cloudflare Tunnel: Initializing secure HTTP/2 tunnel...",
                 Font = new Font("Segoe UI", 8f, FontStyle.Regular),
                 ForeColor = Color.FromArgb(71, 85, 105),
-                Location = new Point(14, 72),
-                Size = new Size(585, 36)
+                Location = new Point(14, 80),
+                Size = new Size(585, 34)
             };
 
             _lblQuotaBadge = new Label
@@ -229,8 +230,8 @@ namespace PrintAway.Gui
                 Text = "📊 Daily Quota: 0 / 10 Free Pages • Pro: ₹149/mo (Unlimited)",
                 Font = new Font("Segoe UI", 8f, FontStyle.Bold),
                 ForeColor = Color.FromArgb(79, 70, 229),
-                Location = new Point(14, 112),
-                Size = new Size(475, 20),
+                Location = new Point(14, 118),
+                Size = new Size(470, 24),
                 Cursor = Cursors.Hand
             };
             _lblQuotaBadge.Click += (s, e) => LaunchBrowser("http://127.0.0.1:" + _port + "/admin#pro-upgrade");
@@ -238,8 +239,8 @@ namespace PrintAway.Gui
             var btnUpgradePro = new Button
             {
                 Text = "⚡ Pro Upgrade",
-                Size = new Size(95, 24),
-                Location = new Point(505, 108),
+                Size = new Size(115, 26),
+                Location = new Point(490, 114),
                 BackColor = Color.FromArgb(238, 242, 255),
                 ForeColor = Color.FromArgb(67, 56, 202),
                 Font = new Font("Segoe UI", 8f, FontStyle.Bold),
@@ -255,6 +256,7 @@ namespace PrintAway.Gui
             grpShop.Controls.Add(_lblTunnelUrl);
             grpShop.Controls.Add(_lblQuotaBadge);
             grpShop.Controls.Add(btnUpgradePro);
+            pnlBody.Controls.Add(grpShop);
             pnlBody.Controls.Add(grpShop);
 
             // 4. Card: Printer Fleet & Dispatch Control
