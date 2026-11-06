@@ -62,14 +62,28 @@ CREATE TABLE IF NOT EXISTS public.saas_subscriptions (
 CREATE INDEX IF NOT EXISTS idx_shops_shop_id ON public.shops(shop_id);
 CREATE INDEX IF NOT EXISTS idx_daily_telemetry_shop_date ON public.daily_telemetry(shop_id, date);
 
--- Enable RLS and grant read access to publishable API key for live browser dashboards
+-- Enable RLS and grant read/write access to publishable API key for live browser dashboards and station sync
 ALTER TABLE public.shops ENABLE ROW LEVEL SECURITY;
 DROP POLICY IF EXISTS "Allow public read to shops" ON public.shops;
 CREATE POLICY "Allow public read to shops" ON public.shops FOR SELECT USING (true);
+DROP POLICY IF EXISTS "Allow public insert to shops" ON public.shops;
+CREATE POLICY "Allow public insert to shops" ON public.shops FOR INSERT WITH CHECK (true);
+DROP POLICY IF EXISTS "Allow public update to shops" ON public.shops;
+CREATE POLICY "Allow public update to shops" ON public.shops FOR UPDATE USING (true) WITH CHECK (true);
 
 ALTER TABLE public.daily_telemetry ENABLE ROW LEVEL SECURITY;
 DROP POLICY IF EXISTS "Allow public read to daily_telemetry" ON public.daily_telemetry;
 CREATE POLICY "Allow public read to daily_telemetry" ON public.daily_telemetry FOR SELECT USING (true);
+DROP POLICY IF EXISTS "Allow public insert to daily_telemetry" ON public.daily_telemetry;
+CREATE POLICY "Allow public insert to daily_telemetry" ON public.daily_telemetry FOR INSERT WITH CHECK (true);
+DROP POLICY IF EXISTS "Allow public update to daily_telemetry" ON public.daily_telemetry;
+CREATE POLICY "Allow public update to daily_telemetry" ON public.daily_telemetry FOR UPDATE USING (true) WITH CHECK (true);
+
+ALTER TABLE public.saas_subscriptions ENABLE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS "Allow public read to saas_subscriptions" ON public.saas_subscriptions;
+CREATE POLICY "Allow public read to saas_subscriptions" ON public.saas_subscriptions FOR SELECT USING (true);
+DROP POLICY IF EXISTS "Allow public insert to saas_subscriptions" ON public.saas_subscriptions;
+CREATE POLICY "Allow public insert to saas_subscriptions" ON public.saas_subscriptions FOR INSERT WITH CHECK (true);
 
 -- 5. Seed Initial Pilot Shop
 INSERT INTO public.shops (shop_id, shop_name, owner_name, owner_phone, upi_vpa, subscription_tier, daily_page_quota)

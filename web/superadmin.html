@@ -31,6 +31,10 @@
       </div>
 
       <div class="flex items-center space-x-3">
+        <button onclick="copyRlsSql()" class="px-3 py-1.5 rounded-lg bg-gray-800 hover:bg-gray-700 text-indigo-400 text-xs font-medium transition flex items-center space-x-1.5 border border-indigo-500/30">
+          <i class="fa-solid fa-shield-halved text-xs"></i>
+          <span>Copy RLS SQL</span>
+        </button>
         <button id="btnRefresh" onclick="loadDashboardData()" class="px-3 py-1.5 rounded-lg bg-gray-800 hover:bg-gray-700 text-gray-300 text-xs font-medium transition flex items-center space-x-1.5 border border-gray-700">
           <i class="fa-solid fa-arrows-rotate text-xs"></i>
           <span>Sync Fleet</span>
@@ -253,6 +257,41 @@
           </button>
         </div>
       </form>
+    </div>
+  </div>
+
+  <!-- RLS POLICY NOTICE MODAL -->
+  <div id="rlsNoticeModal" class="fixed inset-0 z-50 flex items-center justify-center p-4 bg-gray-950/80 backdrop-blur-sm hidden">
+    <div class="glass max-w-lg w-full rounded-2xl p-6 border border-amber-500/40 shadow-2xl relative">
+      <div class="flex items-center space-x-3 mb-4">
+        <div class="w-10 h-10 rounded-xl bg-amber-500/20 text-amber-400 flex items-center justify-center text-lg">
+          <i class="fa-solid fa-shield-halved"></i>
+        </div>
+        <div>
+          <h3 class="text-base font-bold text-white">Supabase RLS Policy Required</h3>
+          <p class="text-xs text-amber-300">Grant INSERT &amp; UPDATE permissions to allow cloud registration.</p>
+        </div>
+      </div>
+      <p class="text-xs text-gray-300 leading-relaxed mb-4">
+        Supabase Row Level Security is currently preventing the publishable key from registering new shops or updating subscriptions. Run the 3-second permission script in your Supabase SQL Editor:
+      </p>
+      <div class="bg-gray-950 p-3 rounded-xl border border-gray-800 font-mono text-[11px] text-gray-400 mb-5 max-h-36 overflow-y-auto">
+        CREATE POLICY "Allow public insert to shops" ON public.shops FOR INSERT WITH CHECK (true);<br/>
+        CREATE POLICY "Allow public update to shops" ON public.shops FOR UPDATE USING (true) WITH CHECK (true);<br/>
+        CREATE POLICY "Allow public insert to daily_telemetry" ON public.daily_telemetry FOR INSERT WITH CHECK (true);<br/>
+        CREATE POLICY "Allow public insert to saas_subscriptions" ON public.saas_subscriptions FOR INSERT WITH CHECK (true);
+      </div>
+      <div class="flex items-center justify-end space-x-3">
+        <button onclick="closeRlsAlertModal()" class="px-4 py-2 rounded-xl bg-gray-800 hover:bg-gray-700 text-gray-300 text-xs font-medium transition">Close</button>
+        <button onclick="copyRlsSql()" class="px-4 py-2 rounded-xl bg-amber-500 hover:bg-amber-400 text-gray-950 text-xs font-bold transition flex items-center space-x-1.5 shadow-lg shadow-amber-500/20">
+          <i class="fa-solid fa-copy"></i>
+          <span>Copy SQL Fix</span>
+        </button>
+        <a href="https://supabase.com/dashboard/project/zduoifzakiojfqbtxqqm/sql" target="_blank" class="px-4 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-bold transition flex items-center space-x-1.5 shadow-lg shadow-indigo-600/30">
+          <span>Open SQL Editor</span>
+          <i class="fa-solid fa-arrow-up-right-from-square text-[10px]"></i>
+        </a>
+      </div>
     </div>
   </div>
 
@@ -496,13 +535,42 @@
         if (newTier === "free") payload.daily_page_quota = 10;
         else payload.daily_page_quota = 99999;
 
-        const res = await fetch(`/api/saas/superadmin/shops?shopId=${encodeURIComponent(shopId)}`, {
-          method: "PATCH",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify(payload)
-        });
+        let updated = false;
 
-        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+        // Try local station server proxy if on localhost
+        if (window.location.hostname === "localhost" || window.location.hostname === "127.0.0.1") {
+          try {
+            const res = await fetch(`/api/saas/superadmin/shops?shopId=${encodeURIComponent(shopId)}`, {
+              method: "PATCH",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify(payload)
+            });
+            if (res.ok) updated = true;
+          } catch (e) { }
+        }
+
+        // Direct Supabase API (For Netlify and Cloud Control Plane)
+        if (!updated) {
+          const res = await fetch(`${SUPABASE_URL}/rest/v1/shops?shop_id=eq.${encodeURIComponent(shopId)}`, {
+            method: "PATCH",
+            headers: {
+              "apikey": PUBLISHABLE_KEY,
+              "Authorization": `Bearer ${PUBLISHABLE_KEY}`,
+              "Content-Type": "application/json",
+              "Prefer": "return=representation"
+            },
+            body: JSON.stringify(payload)
+          });
+          if (!res.ok) {
+            const err = await res.json().catch(() => ({}));
+            if (err && (err.code === "42501" || (err.message && err.message.includes("row-level security")))) {
+              showRlsAlertModal();
+              throw new Error("Supabase RLS: Update permission required. Click 'Copy RLS SQL' and run in Supabase SQL editor.");
+            }
+            throw new Error(err.message || `HTTP ${res.status}`);
+          }
+        }
+
         loadDashboardData();
       } catch (err) {
         alert("Failed to update tier: " + err.message);
@@ -514,12 +582,43 @@
       if (!confirm(`Are you sure you want to ${action} station '${shopId}' remotely?`)) return;
 
       try {
-        const res = await fetch(`/api/saas/superadmin/shops?shopId=${encodeURIComponent(shopId)}`, {
-          method: "PATCH",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ emergency_remote_pause: willPause })
-        });
-        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+        const payload = { emergency_remote_pause: willPause };
+        let updated = false;
+
+        // Try local station server proxy if on localhost
+        if (window.location.hostname === "localhost" || window.location.hostname === "127.0.0.1") {
+          try {
+            const res = await fetch(`/api/saas/superadmin/shops?shopId=${encodeURIComponent(shopId)}`, {
+              method: "PATCH",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify(payload)
+            });
+            if (res.ok) updated = true;
+          } catch (e) { }
+        }
+
+        // Direct Supabase API (For Netlify and Cloud Control Plane)
+        if (!updated) {
+          const res = await fetch(`${SUPABASE_URL}/rest/v1/shops?shop_id=eq.${encodeURIComponent(shopId)}`, {
+            method: "PATCH",
+            headers: {
+              "apikey": PUBLISHABLE_KEY,
+              "Authorization": `Bearer ${PUBLISHABLE_KEY}`,
+              "Content-Type": "application/json",
+              "Prefer": "return=representation"
+            },
+            body: JSON.stringify(payload)
+          });
+          if (!res.ok) {
+            const err = await res.json().catch(() => ({}));
+            if (err && (err.code === "42501" || (err.message && err.message.includes("row-level security")))) {
+              showRlsAlertModal();
+              throw new Error("Supabase RLS: Update permission required. Click 'Copy RLS SQL' and run in Supabase SQL editor.");
+            }
+            throw new Error(err.message || `HTTP ${res.status}`);
+          }
+        }
+
         loadDashboardData();
       } catch (err) {
         alert("Failed to toggle remote pause: " + err.message);
@@ -528,12 +627,22 @@
 
     async function handleCreateShop(e) {
       e.preventDefault();
-      const shopId = document.getElementById("inputShopId").value.trim();
+      const rawShopId = document.getElementById("inputShopId").value.trim().toLowerCase();
+      const shopId = rawShopId.replace(/[^a-z0-9_-]/g, "");
       const shopName = document.getElementById("inputShopName").value.trim();
       const ownerName = document.getElementById("inputOwnerName").value.trim();
       const ownerPhone = document.getElementById("inputOwnerPhone").value.trim();
       const upiVpa = document.getElementById("inputUpiVpa").value.trim();
       const tier = document.getElementById("inputTier").value;
+
+      if (!shopId || !shopName || !ownerPhone || !upiVpa) {
+        alert("Please fill in all required shop fields.");
+        return;
+      }
+
+      const btn = document.getElementById("btnSubmitShop");
+      const origText = btn ? btn.innerHTML : "";
+      if (btn) btn.innerHTML = '<i class="fa-solid fa-circle-notch fa-spin text-xs"></i> <span>Registering...</span>';
 
       try {
         const payload = {
@@ -546,22 +655,54 @@
           daily_page_quota: tier === "free" ? 10 : 99999
         };
 
-        const res = await fetch('/api/saas/superadmin/shops', {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify(payload)
-        });
+        let registered = false;
 
-        if (!res.ok) {
-          const err = await res.json().catch(() => ({}));
-          throw new Error(err.message || `HTTP ${res.status}`);
+        // Strategy A: If running locally on station PC (localhost / 127.0.0.1)
+        if (window.location.hostname === "localhost" || window.location.hostname === "127.0.0.1") {
+          try {
+            const res = await fetch('/api/saas/superadmin/shops', {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify(payload)
+            });
+            if (res.ok) registered = true;
+          } catch (e) { }
+        }
+
+        // Strategy B: Direct Supabase Cloud Data API (For hosted Netlify & remote access)
+        if (!registered) {
+          const res = await fetch(`${SUPABASE_URL}/rest/v1/shops`, {
+            method: "POST",
+            headers: {
+              "apikey": PUBLISHABLE_KEY,
+              "Authorization": `Bearer ${PUBLISHABLE_KEY}`,
+              "Content-Type": "application/json",
+              "Prefer": "return=representation"
+            },
+            body: JSON.stringify(payload)
+          });
+
+          if (!res.ok) {
+            const err = await res.json().catch(() => ({}));
+            if (err && (err.code === "42501" || (err.message && err.message.includes("row-level security")))) {
+              showRlsAlertModal();
+              throw new Error("Supabase RLS Policy: Insert permission not yet granted. Run the quick SQL script in Supabase SQL editor (see popup).");
+            }
+            if (err && err.code === "23505") {
+              throw new Error(`Shop ID '${shopId}' is already registered in the system.`);
+            }
+            throw new Error(err.message || `HTTP ${res.status}`);
+          }
         }
 
         closeNewShopModal();
         downloadStationConfigObj(shopId, shopName, upiVpa);
+        alert(`🎉 Franchise station '${shopName}' successfully registered!\n\nDownloaded station-${shopId}.json.\nPut this file into your shop's PrintAway Station folder and run PrintAway.exe.`);
         loadDashboardData();
       } catch (err) {
         alert("Error registering shop: " + err.message);
+      } finally {
+        if (btn) btn.innerHTML = origText;
       }
     }
 
@@ -610,7 +751,10 @@
     }
 
     function copySqlScript() {
-      const sql = `-- PrintAway SaaS Control Plane Schema (v2.2)
+      const sql = `-- ====================================================================
+-- PrintAway SaaS Control Plane Schema (v2.2)
+-- ====================================================================
+
 CREATE TABLE IF NOT EXISTS public.shops (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     shop_id TEXT UNIQUE NOT NULL,
@@ -658,30 +802,79 @@ CREATE TABLE IF NOT EXISTS public.saas_subscriptions (
     created_at TIMESTAMPTZ DEFAULT NOW()
 );
 
+-- Enable RLS and grant read/write access to publishable API key
 ALTER TABLE public.shops ENABLE ROW LEVEL SECURITY;
 DROP POLICY IF EXISTS "Allow public read to shops" ON public.shops;
 CREATE POLICY "Allow public read to shops" ON public.shops FOR SELECT USING (true);
+DROP POLICY IF EXISTS "Allow public insert to shops" ON public.shops;
+CREATE POLICY "Allow public insert to shops" ON public.shops FOR INSERT WITH CHECK (true);
+DROP POLICY IF EXISTS "Allow public update to shops" ON public.shops;
+CREATE POLICY "Allow public update to shops" ON public.shops FOR UPDATE USING (true) WITH CHECK (true);
 
 ALTER TABLE public.daily_telemetry ENABLE ROW LEVEL SECURITY;
 DROP POLICY IF EXISTS "Allow public read to daily_telemetry" ON public.daily_telemetry;
 CREATE POLICY "Allow public read to daily_telemetry" ON public.daily_telemetry FOR SELECT USING (true);
+DROP POLICY IF EXISTS "Allow public insert to daily_telemetry" ON public.daily_telemetry;
+CREATE POLICY "Allow public insert to daily_telemetry" ON public.daily_telemetry FOR INSERT WITH CHECK (true);
+DROP POLICY IF EXISTS "Allow public update to daily_telemetry" ON public.daily_telemetry;
+CREATE POLICY "Allow public update to daily_telemetry" ON public.daily_telemetry FOR UPDATE USING (true) WITH CHECK (true);
+
+ALTER TABLE public.saas_subscriptions ENABLE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS "Allow public read to saas_subscriptions" ON public.saas_subscriptions;
+CREATE POLICY "Allow public read to saas_subscriptions" ON public.saas_subscriptions FOR SELECT USING (true);
+DROP POLICY IF EXISTS "Allow public insert to saas_subscriptions" ON public.saas_subscriptions;
+CREATE POLICY "Allow public insert to saas_subscriptions" ON public.saas_subscriptions FOR INSERT WITH CHECK (true);
 
 INSERT INTO public.shops (shop_id, shop_name, owner_name, owner_phone, upi_vpa, subscription_tier, daily_page_quota)
 VALUES ('pilot', 'PrintAway Pilot Shop', 'Shivam', '9999999999', 'shivam@upi', 'pro_annual', 99999)
 ON CONFLICT (shop_id) DO NOTHING;`;
 
       navigator.clipboard.writeText(sql).then(() => {
-        alert("SQL Schema copied to clipboard! Paste it into the Supabase SQL Editor and hit Run.");
+        alert("Full SQL Schema + RLS Policies copied to clipboard! Paste it into the Supabase SQL Editor and hit Run.");
       });
     }
 
+    function copyRlsSql() {
+      const sql = `-- Run this in Supabase SQL Editor to grant INSERT & UPDATE permissions
+ALTER TABLE public.shops ENABLE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS "Allow public read to shops" ON public.shops;
+CREATE POLICY "Allow public read to shops" ON public.shops FOR SELECT USING (true);
+DROP POLICY IF EXISTS "Allow public insert to shops" ON public.shops;
+CREATE POLICY "Allow public insert to shops" ON public.shops FOR INSERT WITH CHECK (true);
+DROP POLICY IF EXISTS "Allow public update to shops" ON public.shops;
+CREATE POLICY "Allow public update to shops" ON public.shops FOR UPDATE USING (true) WITH CHECK (true);
+
+ALTER TABLE public.daily_telemetry ENABLE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS "Allow public read to daily_telemetry" ON public.daily_telemetry;
+CREATE POLICY "Allow public read to daily_telemetry" ON public.daily_telemetry FOR SELECT USING (true);
+DROP POLICY IF EXISTS "Allow public insert to daily_telemetry" ON public.daily_telemetry;
+CREATE POLICY "Allow public insert to daily_telemetry" ON public.daily_telemetry FOR INSERT WITH CHECK (true);
+DROP POLICY IF EXISTS "Allow public update to daily_telemetry" ON public.daily_telemetry;
+CREATE POLICY "Allow public update to daily_telemetry" ON public.daily_telemetry FOR UPDATE USING (true) WITH CHECK (true);
+
+ALTER TABLE public.saas_subscriptions ENABLE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS "Allow public read to saas_subscriptions" ON public.saas_subscriptions;
+CREATE POLICY "Allow public read to saas_subscriptions" ON public.saas_subscriptions FOR SELECT USING (true);
+DROP POLICY IF EXISTS "Allow public insert to saas_subscriptions" ON public.saas_subscriptions;
+CREATE POLICY "Allow public insert to saas_subscriptions" ON public.saas_subscriptions FOR INSERT WITH CHECK (true);`;
+
+      navigator.clipboard.writeText(sql).then(() => {
+        alert("RLS Policy Update SQL copied to clipboard! Paste it into Supabase SQL Editor and click 'Run'.");
+      });
+    }
+
+    function showRlsAlertModal() {
+      const el = document.getElementById("rlsNoticeModal");
+      if (el) el.classList.remove("hidden");
+    }
+
+    function closeRlsAlertModal() {
+      const el = document.getElementById("rlsNoticeModal");
+      if (el) el.classList.add("hidden");
+    }
+
     function logoutFounder() {
-      const key = prompt("Enter Supabase Founder Secret Key (or leave empty to reset):", MASTER_KEY);
-      if (key !== null) {
-        MASTER_KEY = key.trim();
-        localStorage.setItem("pa_founder_secret_key", MASTER_KEY);
-        loadDashboardData();
-      }
+      copyRlsSql();
     }
 
     function escapeHtml(text) {

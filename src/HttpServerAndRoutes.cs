@@ -278,6 +278,84 @@ namespace PrintAway.Web
                     return;
                 }
 
+                // SaaS Upgrade: Create Razorpay Order (POST /api/saas/upgrade/create-order)
+                if (method == "POST" && path == "/api/saas/upgrade/create-order")
+                {
+                    var body = ReadJsonBody(req);
+                    string tier = GetString(body, "tier", "pro_annual");
+                    long amountPaise = (tier == "pro_monthly") ? 24900 : 178800; // ₹249/mo or ₹1,788/yr
+                    string rzpErr;
+                    string receipt = "saas_" + tier + "_" + DateTime.UtcNow.Ticks;
+                    string orderId = _repo.CreateRazorpayOrder(receipt, amountPaise, out rzpErr);
+                    if (string.IsNullOrEmpty(orderId))
+                    {
+                        WriteError(res, 500, "RAZORPAY_ORDER_FAILED", rzpErr ?? "Failed to create Razorpay upgrade order.");
+                        return;
+                    }
+
+                    var orderResp = new Dictionary<string, object>
+                    {
+                        { "razorpayOrderId", orderId },
+                        { "razorpayKeyId", _repo.RazorpayKeyId },
+                        { "amountPaise", amountPaise },
+                        { "currency", "INR" },
+                        { "tier", tier }
+                    };
+                    WriteJson(res, 200, orderResp);
+                    return;
+                }
+
+                // SaaS Upgrade: Verify Razorpay Payment Callback (POST /api/saas/upgrade/verify)
+                if (method == "POST" && path == "/api/saas/upgrade/verify")
+                {
+                    var body = ReadJsonBody(req);
+                    string tier = GetString(body, "tier", "pro_annual");
+                    string razorpayOrderId = GetString(body, "razorpayOrderId", "");
+                    string razorpayPaymentId = GetString(body, "razorpayPaymentId", "");
+                    string razorpaySignature = GetString(body, "razorpaySignature", "");
+
+                    if (string.IsNullOrWhiteSpace(razorpayOrderId) ||
+                        string.IsNullOrWhiteSpace(razorpayPaymentId) ||
+                        string.IsNullOrWhiteSpace(razorpaySignature))
+                    {
+                        WriteError(res, 400, "MISSING_RAZORPAY_FIELDS", "razorpayOrderId, razorpayPaymentId, and razorpaySignature are required.");
+                        return;
+                    }
+
+                    bool validSig = _repo.VerifyRazorpayClientSignature(razorpayOrderId, razorpayPaymentId, razorpaySignature);
+                    if (!validSig)
+                    {
+                        WriteError(res, 400, "INVALID_RAZORPAY_SIGNATURE", "Razorpay HMAC-SHA256 signature verification failed.");
+                        return;
+                    }
+
+                    double amountInr = (tier == "pro_monthly") ? 249.0 : 1788.0;
+                    string currentShopId = "pilot";
+                    try
+                    {
+                        var shopInfo = _repo.GetShopAndAvailabilityStatus();
+                        if (shopInfo.ContainsKey("shopId") && shopInfo["shopId"] != null)
+                        {
+                            currentShopId = Convert.ToString(shopInfo["shopId"]);
+                        }
+                    }
+                    catch { }
+
+                    if (_supabaseSync != null && _supabaseSync.IsConfigured)
+                    {
+                        _supabaseSync.RecordSubscription(currentShopId, tier, amountInr, razorpayPaymentId);
+                    }
+
+                    WriteJson(res, 200, new Dictionary<string, object>
+                    {
+                        { "status", "success" },
+                        { "tier", tier },
+                        { "paymentId", razorpayPaymentId },
+                        { "message", "Shop successfully upgraded to PrintAway Pro Unlimited!" }
+                    });
+                    return;
+                }
+
                 // Public Shop & Availability Status
                 if (method == "GET" && path == "/api/shop/status")
                 {

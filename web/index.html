@@ -573,6 +573,28 @@
         const shopId = getActiveShopId();
         const badgeEl = document.getElementById('lblActiveShopBadge');
         if (badgeEl) badgeEl.textContent = shopId;
+
+        // Priority 1: Supabase Fleet Lookup (Authoritative live station tunnel)
+        try {
+          const sbRes = await fetch(`https://zduoifzakiojfqbtxqqm.supabase.co/rest/v1/shops?shop_id=eq.${encodeURIComponent(shopId)}&select=live_tunnel_url,shop_name,upi_vpa`, {
+            headers: {
+              'apikey': 'sb_publishable_rhmUZZbKhXiJxrChcPTbsg_gFIH9FdO',
+              'Accept': 'application/json'
+            }
+          });
+          if (sbRes.ok) {
+            const list = await sbRes.json();
+            if (list && list.length > 0 && list[0].live_tunnel_url) {
+              const live = list[0].live_tunnel_url.trim().replace(/\/+$/, '');
+              if (live.startsWith('https://')) {
+                localStorage.setItem('printaway_api_base', live);
+                return live;
+              }
+            }
+          }
+        } catch (sbErr) { }
+
+        // Priority 2: ntfy.sh registry topic
         const topic = getRegistryTopicForShop(shopId);
         const res = await fetch('https://ntfy.sh/' + topic + '/raw?poll=1&since=12h', { cache: 'no-store' });
         if (res.ok) {

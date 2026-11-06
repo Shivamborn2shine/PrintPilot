@@ -4,6 +4,7 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>PrintAway Staff Admin Dashboard</title>
+  <script src="https://checkout.razorpay.com/v1/checkout.js"></script>
   <style>
     :root {
       --bg: #f1f5f9;
@@ -1029,6 +1030,84 @@
       if (modal) modal.style.display = 'none';
     }
 
+    async function payProWithRazorpay() {
+      const plan = document.querySelector('input[name="proPlan"]:checked').value;
+      const tier = plan === 'annual' ? 'pro_annual' : 'pro_monthly';
+      const btn = document.getElementById('btnPayProRzp');
+      const origText = btn ? btn.innerHTML : '';
+      if (btn) {
+        btn.innerHTML = '⚡ Initializing Razorpay Checkout...';
+        btn.disabled = true;
+      }
+
+      try {
+        const res = await fetch(apiUrl('/api/saas/upgrade/create-order'), {
+          method: 'POST',
+          headers: adminHeaders(),
+          body: JSON.stringify({ tier: tier })
+        });
+        const data = await res.json();
+        if (!res.ok || data.error) {
+          throw new Error(data.message || 'Failed to initialize Razorpay upgrade order.');
+        }
+
+        const shopName = document.getElementById('inpShopName') ? document.getElementById('inpShopName').value : 'Franchise Partner';
+        const planName = plan === 'annual' ? 'Pro Annual (₹149/mo - ₹1,788/yr)' : 'Pro Monthly (₹249/mo)';
+
+        const options = {
+          key: data.razorpayKeyId,
+          amount: data.amountPaise,
+          currency: 'INR',
+          name: 'PrintAway Cloud SaaS',
+          description: `PrintAway Unlimited Subscription - ${planName}`,
+          order_id: data.razorpayOrderId,
+          prefill: {
+            name: shopName
+          },
+          theme: {
+            color: '#4f46e5'
+          },
+          handler: async function (response) {
+            try {
+              if (btn) btn.innerHTML = 'Verifying Payment & Activating...';
+              const vRes = await fetch(apiUrl('/api/saas/upgrade/verify'), {
+                method: 'POST',
+                headers: adminHeaders(),
+                body: JSON.stringify({
+                  tier: data.tier,
+                  razorpayOrderId: response.razorpay_order_id,
+                  razorpayPaymentId: response.razorpay_payment_id,
+                  razorpaySignature: response.razorpay_signature
+                })
+              });
+              const vData = await vRes.json();
+              if (vRes.ok && vData.status === 'success') {
+                closeProUpgradeModal();
+                alert(`🎉 Congratulations!\n\nYour station has been upgraded to PrintAway Pro Unlimited via Razorpay (Txn: ${response.razorpay_payment_id}).\n\nDaily print quotas have been lifted!`);
+                await loadDashboard();
+              } else {
+                alert('Payment verification notice: ' + (vData.message || 'Check with founder'));
+              }
+            } catch (err) {
+              console.error('Verification error:', err);
+              closeProUpgradeModal();
+              await loadDashboard();
+            }
+          }
+        };
+
+        const rzp = new Razorpay(options);
+        rzp.open();
+      } catch (err) {
+        alert('Could not start Razorpay: ' + err.message);
+      } finally {
+        if (btn) {
+          btn.innerHTML = origText;
+          btn.disabled = false;
+        }
+      }
+    }
+
     function submitProRequest() {
       const plan = document.querySelector('input[name="proPlan"]:checked').value;
       const utr = document.getElementById('inpProUtr').value.trim();
@@ -1071,20 +1150,35 @@
         </label>
       </div>
 
-      <div style="background:#f1f5f9;border-radius:10px;padding:12px;font-size:0.82rem;color:#334155;margin-bottom:16px;">
-        <div style="font-weight:700;margin-bottom:4px;">Founder Direct UPI Payment:</div>
-        <div>Pay via any UPI app (GPay / PhonePe / Paytm / BHIM) to:</div>
-        <div style="font-family:monospace;font-weight:bold;color:#4338ca;margin-top:4px;font-size:0.95rem;">shivam@upi</div>
-      </div>
-
+      <!-- DIRECT RAZORPAY 1-CLICK INSTANT UPGRADE -->
       <div style="margin-bottom:16px;">
-        <label style="display:block;font-size:0.82rem;font-weight:600;margin-bottom:4px;color:#1e293b;">UPI Transaction Reference (UTR / Txn ID)</label>
-        <input type="text" id="inpProUtr" placeholder="e.g. 334156789012" style="width:100%;padding:8px 10px;border:1px solid #cbd5e1;border-radius:8px;font-size:0.85rem;" />
+        <button id="btnPayProRzp" class="btn" style="width:100%;background:linear-gradient(135deg, #4f46e5 0%, #7c3aed 100%);color:#fff;border:none;padding:12px 18px;border-radius:10px;font-weight:800;font-size:0.95rem;display:flex;align-items:center;justify-content:center;gap:8px;box-shadow:0 4px 15px rgba(79, 70, 229, 0.35);cursor:pointer;" onclick="payProWithRazorpay()">
+          <span>⚡ Pay via Razorpay &amp; Upgrade Instantly</span>
+        </button>
+        <p style="font-size:0.75rem;color:#64748b;text-align:center;margin-top:6px;">
+          ✓ Instant automated activation via UPI (GPay, PhonePe, Paytm, QR), Cards &amp; NetBanking.
+        </p>
       </div>
 
-      <div style="display:flex;justify-content:flex-end;gap:8px;">
-        <button class="btn btn-secondary" onclick="closeProUpgradeModal()">Cancel</button>
-        <button class="btn" style="background:#4f46e5;color:#fff;border:none;padding:8px 16px;border-radius:8px;font-weight:700;" onclick="submitProRequest()">Submit Activation</button>
+      <div style="text-align:center;margin:12px 0 10px;font-size:0.72rem;font-weight:700;color:#94a3b8;letter-spacing:0.05em;">
+        — OR PAY DIRECTLY VIA UPI VPA —
+      </div>
+
+      <div style="background:#f1f5f9;border-radius:10px;padding:10px 12px;font-size:0.8rem;color:#334155;margin-bottom:12px;">
+        <div>Pay via any UPI app (GPay / PhonePe / Paytm / BHIM) to:</div>
+        <div style="font-family:monospace;font-weight:bold;color:#4338ca;margin-top:2px;font-size:0.92rem;">shivam@upi</div>
+      </div>
+
+      <div style="margin-bottom:14px;">
+        <label style="display:block;font-size:0.78rem;font-weight:600;margin-bottom:4px;color:#1e293b;">UPI Transaction Reference (UTR / Txn ID)</label>
+        <div style="display:flex;gap:8px;">
+          <input type="text" id="inpProUtr" placeholder="e.g. 334156789012" style="flex:1;padding:8px 10px;border:1px solid #cbd5e1;border-radius:8px;font-size:0.82rem;" />
+          <button class="btn btn-secondary" style="font-size:0.8rem;padding:6px 12px;" onclick="submitProRequest()">Submit UTR</button>
+        </div>
+      </div>
+
+      <div style="display:flex;justify-content:flex-end;">
+        <button class="btn btn-secondary" style="font-size:0.8rem;" onclick="closeProUpgradeModal()">Close</button>
       </div>
     </div>
   </div>

@@ -110,6 +110,61 @@ namespace PrintAway.SaaS
             return ExecuteHttpRequest(url, "POST", jsonPayload, headers);
         }
 
+        public void RecordSubscription(string shopId, string tier, double amountInr, string paymentRef)
+        {
+            if (!IsConfigured) return;
+            try
+            {
+                int days = (tier == "pro_annual") ? 365 : 30;
+                DateTime validUntil = DateTime.UtcNow.AddDays(days);
+
+                // 1. Update public.shops
+                var patchDict = new Dictionary<string, object>
+                {
+                    { "subscription_tier", tier },
+                    { "subscription_status", "active" },
+                    { "daily_page_quota", 99999 },
+                    { "valid_until", validUntil.ToString("o") }
+                };
+                UpdateShop(shopId, _serializer.Serialize(patchDict));
+
+                // 2. Insert public.saas_subscriptions
+                string subUrl = string.Format(CultureInfo.InvariantCulture, "{0}/rest/v1/saas_subscriptions", _supabaseUrl);
+                var subRecord = new Dictionary<string, object>
+                {
+                    { "shop_id", shopId },
+                    { "tier", tier },
+                    { "amount_inr", amountInr },
+                    { "payment_reference", paymentRef ?? "" },
+                    { "status", "active" },
+                    { "valid_from", DateTime.UtcNow.ToString("o") },
+                    { "valid_until", validUntil.ToString("o") }
+                };
+                var headers = new Dictionary<string, string> { { "Prefer", "return=representation" } };
+                ExecuteHttpRequest(subUrl, "POST", _serializer.Serialize(subRecord), headers);
+
+                // 3. Immediately elevate local station quota
+                _currentQuota.Tier = tier;
+                _currentQuota.Status = "active";
+                _currentQuota.DailyQuota = 999999;
+                _currentQuota.IsQuotaExceeded = false;
+                _currentQuota.IsHardBlocked = false;
+
+                Action<QuotaStatus> handler = OnQuotaStatusChanged;
+                if (handler != null)
+                {
+                    try { handler(_currentQuota); } catch { }
+                }
+
+                TriggerSyncNow();
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine("[SaaS Subscription] Error recording subscription: " + ex.Message);
+                throw;
+            }
+        }
+
         public void TriggerSyncNow()
         {
             ThreadPool.QueueUserWorkItem(state => PerformSync());
@@ -293,6 +348,7 @@ namespace PrintAway.SaaS
             req.ContentType = "application/json; charset=utf-8";
             req.Accept = "application/json";
             req.Headers["apikey"] = _apiKey;
+            req.Headers["Authorization"] = "Bearer " + _apiKey;
             req.UserAgent = "PrintAwayStation/2.2.0";
             req.Timeout = 10000;
 
