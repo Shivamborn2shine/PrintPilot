@@ -2,8 +2,10 @@ using System;
 using System.Collections.Generic;
 using System.Globalization;
 using System.IO;
+using System.Net;
 using System.Security.Cryptography;
 using System.Text;
+using System.Web.Script.Serialization;
 using PrintAway.Engine;
 
 namespace PrintAway.Storage
@@ -37,6 +39,135 @@ namespace PrintAway.Storage
         public string VaultDirectory { get { return _vaultDirectory; } }
         public string WebhookSecret { get { return _webhookSecret; } }
         public string WorkerSharedToken { get { return _workerSharedToken; } }
+
+        private string _razorpayKeyId;
+        private string _razorpayKeySecret;
+        private string _razorpayWebhookSecret;
+
+        public void ConfigureRazorpay(string keyId, string keySecret, string webhookSecret)
+        {
+            _razorpayKeyId = !string.IsNullOrWhiteSpace(keyId) ? keyId.Trim() : null;
+            _razorpayKeySecret = !string.IsNullOrWhiteSpace(keySecret) ? keySecret.Trim() : null;
+            _razorpayWebhookSecret = !string.IsNullOrWhiteSpace(webhookSecret) ? webhookSecret.Trim() : null;
+        }
+
+        public string RazorpayKeyId { get { return _razorpayKeyId; } }
+        public bool HasRazorpayConfigured
+        {
+            get { return !string.IsNullOrWhiteSpace(_razorpayKeyId) && !string.IsNullOrWhiteSpace(_razorpayKeySecret); }
+        }
+
+        public string CreateRazorpayOrder(string receipt, long amountPaise, out string error)
+        {
+            error = null;
+            if (!HasRazorpayConfigured)
+            {
+                error = "Razorpay is not configured.";
+                return null;
+            }
+
+            try
+            {
+                ServicePointManager.SecurityProtocol = SecurityProtocolType.Tls12 | SecurityProtocolType.Tls11 | SecurityProtocolType.Tls;
+                var request = (HttpWebRequest)WebRequest.Create("https://api.razorpay.com/v1/orders");
+                request.Method = "POST";
+                request.ContentType = "application/json";
+
+                string auth = Convert.ToBase64String(Encoding.ASCII.GetBytes(_razorpayKeyId + ":" + _razorpayKeySecret));
+                request.Headers["Authorization"] = "Basic " + auth;
+
+                var serializer = new JavaScriptSerializer();
+                var payload = new Dictionary<string, object>
+                {
+                    { "amount", amountPaise },
+                    { "currency", "INR" },
+                    { "receipt", receipt }
+                };
+                string json = serializer.Serialize(payload);
+                byte[] bytes = Encoding.UTF8.GetBytes(json);
+                request.ContentLength = bytes.Length;
+
+                using (var stream = request.GetRequestStream())
+                {
+                    stream.Write(bytes, 0, bytes.Length);
+                }
+
+                using (var response = (HttpWebResponse)request.GetResponse())
+                using (var reader = new StreamReader(response.GetResponseStream(), Encoding.UTF8))
+                {
+                    string respJson = reader.ReadToEnd();
+                    var respObj = serializer.Deserialize<Dictionary<string, object>>(respJson);
+                    if (respObj != null && respObj.ContainsKey("id"))
+                    {
+                        return Convert.ToString(respObj["id"]);
+                    }
+                }
+            }
+            catch (WebException wex)
+            {
+                if (wex.Response != null)
+                {
+                    using (var reader = new StreamReader(wex.Response.GetResponseStream(), Encoding.UTF8))
+                    {
+                        error = reader.ReadToEnd();
+                    }
+                }
+                else
+                {
+                    error = wex.Message;
+                }
+            }
+            catch (Exception ex)
+            {
+                error = ex.Message;
+            }
+            return null;
+        }
+
+        public bool VerifyRazorpayClientSignature(string razorpayOrderId, string razorpayPaymentId, string razorpaySignature)
+        {
+            if (string.IsNullOrWhiteSpace(_razorpayKeySecret) ||
+                string.IsNullOrWhiteSpace(razorpayOrderId) ||
+                string.IsNullOrWhiteSpace(razorpayPaymentId) ||
+                string.IsNullOrWhiteSpace(razorpaySignature))
+            {
+                return false;
+            }
+
+            string data = razorpayOrderId.Trim() + "|" + razorpayPaymentId.Trim();
+            using (var hmac = new HMACSHA256(Encoding.UTF8.GetBytes(_razorpayKeySecret)))
+            {
+                byte[] hash = hmac.ComputeHash(Encoding.UTF8.GetBytes(data));
+                var sb = new StringBuilder();
+                foreach (byte b in hash)
+                {
+                    sb.Append(b.ToString("x2"));
+                }
+                string expectedSig = sb.ToString();
+                return CryptographicEquals(expectedSig, razorpaySignature.Trim());
+            }
+        }
+
+        public bool VerifyRazorpayWebhookSignature(string rawBody, string providedSignatureHex)
+        {
+            string secret = !string.IsNullOrWhiteSpace(_razorpayWebhookSecret) ? _razorpayWebhookSecret : _razorpayKeySecret;
+            if (string.IsNullOrWhiteSpace(secret) || string.IsNullOrWhiteSpace(providedSignatureHex))
+            {
+                return false;
+            }
+
+            using (var hmac = new HMACSHA256(Encoding.UTF8.GetBytes(secret)))
+            {
+                byte[] hash = hmac.ComputeHash(Encoding.UTF8.GetBytes(rawBody));
+                var sb = new StringBuilder();
+                foreach (byte b in hash)
+                {
+                    sb.Append(b.ToString("x2"));
+                }
+                string expectedSig = sb.ToString();
+                return CryptographicEquals(expectedSig, providedSignatureHex.Trim());
+            }
+        }
 
         public static string UtcNowIso(double offsetSeconds = 0)
         {
@@ -796,6 +927,16 @@ CREATE TABLE IF NOT EXISTS audit_events (
             string publicToken = "pub_" + GenerateRandomToken(16);
             string pickupCode = GeneratePickupCode();
             string gatewayOrderId = "upi_ord_" + GenerateRandomToken(10);
+            string rzpOrderId = null;
+            if (HasRazorpayConfigured)
+            {
+                string rzpErr;
+                rzpOrderId = CreateRazorpayOrder(orderCode, Convert.ToInt64(quote["total_amount_paise"]), out rzpErr);
+                if (!string.IsNullOrWhiteSpace(rzpOrderId))
+                {
+                    gatewayOrderId = rzpOrderId;
+                }
+            }
             string targetQueue = Convert.ToString(status["activeQueueName"]);
             string now = UtcNowIso();
 
@@ -850,8 +991,11 @@ CREATE TABLE IF NOT EXISTS audit_events (
                 { "orderId", orderId },
                 { "orderCode", orderCode },
                 { "publicToken", publicToken },
+                { "pickupCode", pickupCode },
                 { "state", "awaiting_payment" },
                 { "gatewayOrderId", gatewayOrderId },
+                { "razorpayOrderId", rzpOrderId },
+                { "razorpayKeyId", _razorpayKeyId },
                 { "amountInr", quote["total_amount_inr"] },
                 { "amountPaise", quote["total_amount_paise"] },
                 { "upiIntentUri", string.Format(CultureInfo.InvariantCulture, "upi://pay?pa=printaway@upi&pn=PrintAway&tr={0}&am={1:0.00}&cu=INR", gatewayOrderId, quote["total_amount_inr"]) }

@@ -22,6 +22,9 @@ namespace PrintAway
                 repoRoot = Directory.GetCurrentDirectory();
             }
 
+            // Load local environment variables from .env if present
+            LoadDotEnvFile(Path.Combine(repoRoot, ".env"));
+
             bool runSelfTest = false;
             bool forceSimulation = false;
             int port = 8080;
@@ -106,6 +109,17 @@ namespace PrintAway
             {
                 var repo = new PrintAwayRepository(sqlite, vaultDir, webhookSecret, workerToken);
 
+                string rzpKey = Environment.GetEnvironmentVariable("RAZORPAY_KEY_ID");
+                string rzpSec = Environment.GetEnvironmentVariable("RAZORPAY_KEY_SECRET");
+                string rzpWhSec = Environment.GetEnvironmentVariable("RAZORPAY_WEBHOOK_SECRET");
+                if (!string.IsNullOrWhiteSpace(rzpKey) && !string.IsNullOrWhiteSpace(rzpSec))
+                {
+                    repo.ConfigureRazorpay(rzpKey, rzpSec, rzpWhSec);
+                    Console.ForegroundColor = ConsoleColor.Green;
+                    Console.WriteLine("[Payment Gateway] Razorpay Active -> Key ID: " + rzpKey);
+                    Console.ResetColor();
+                }
+
                 // Resolve printer queue for easy hardware/PC migration
                 string desiredQueue = !string.IsNullOrWhiteSpace(cliPrinterQueue) ? cliPrinterQueue : configPrinterQueue;
                 if (!string.IsNullOrWhiteSpace(desiredQueue))
@@ -182,6 +196,34 @@ namespace PrintAway
                 }
             }
             return 0;
+        }
+
+        private static void LoadDotEnvFile(string envPath)
+        {
+            if (!File.Exists(envPath)) return;
+            try
+            {
+                foreach (string rawLine in File.ReadAllLines(envPath))
+                {
+                    string line = rawLine != null ? rawLine.Trim() : "";
+                    if (string.IsNullOrEmpty(line) || line.StartsWith("#")) continue;
+                    int eqIdx = line.IndexOf('=');
+                    if (eqIdx > 0)
+                    {
+                        string key = line.Substring(0, eqIdx).Trim();
+                        string val = line.Substring(eqIdx + 1).Trim();
+                        if ((val.StartsWith("\"") && val.EndsWith("\"")) || (val.StartsWith("'") && val.EndsWith("'")))
+                        {
+                            val = val.Substring(1, val.Length - 2);
+                        }
+                        Environment.SetEnvironmentVariable(key, val);
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine("[Config] Warning reading .env: " + ex.Message);
+            }
         }
     }
 }

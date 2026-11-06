@@ -273,11 +273,152 @@ namespace PrintAway.Web
                     return;
                 }
 
+                // Verify Razorpay Client Payment Callback (POST /api/payments/verify-razorpay)
+                if (method == "POST" && path == "/api/payments/verify-razorpay")
+                {
+                    var body = ReadJsonBody(req);
+                    long orderId = GetLong(body, "orderId", 0);
+                    string razorpayOrderId = GetString(body, "razorpayOrderId", "");
+                    string razorpayPaymentId = GetString(body, "razorpayPaymentId", "");
+                    string razorpaySignature = GetString(body, "razorpaySignature", "");
+
+                    if (string.IsNullOrWhiteSpace(razorpayOrderId) ||
+                        string.IsNullOrWhiteSpace(razorpayPaymentId) ||
+                        string.IsNullOrWhiteSpace(razorpaySignature))
+                    {
+                        WriteError(res, 400, "MISSING_RAZORPAY_FIELDS", "razorpayOrderId, razorpayPaymentId, and razorpaySignature are required.");
+                        return;
+                    }
+
+                    bool validSig = _repo.VerifyRazorpayClientSignature(razorpayOrderId, razorpayPaymentId, razorpaySignature);
+                    if (!validSig)
+                    {
+                        WriteError(res, 400, "INVALID_RAZORPAY_SIGNATURE", "Razorpay HMAC-SHA256 signature verification failed.");
+                        return;
+                    }
+
+                    var orderRow = _repo.Db.QuerySingle("SELECT * FROM orders WHERE id = @oid LIMIT 1;",
+                        new Dictionary<string, object> { { "oid", orderId } });
+                    if (orderRow == null && !string.IsNullOrWhiteSpace(razorpayOrderId))
+                    {
+                        orderRow = _repo.Db.QuerySingle("SELECT * FROM payments WHERE gateway_order_id = @goid LIMIT 1;",
+                            new Dictionary<string, object> { { "goid", razorpayOrderId } });
+                    }
+
+                    long amountPaise = 0;
+                    if (orderRow != null && orderRow.ContainsKey("quote_id"))
+                    {
+                        var quoteRow = _repo.Db.QuerySingle("SELECT total_amount_paise FROM quotes WHERE id = @qid;",
+                            new Dictionary<string, object> { { "qid", orderRow["quote_id"] } });
+                        if (quoteRow != null) amountPaise = Convert.ToInt64(quoteRow["total_amount_paise"]);
+                    }
+                    else if (orderRow != null && orderRow.ContainsKey("amount_paise"))
+                    {
+                        amountPaise = Convert.ToInt64(orderRow["amount_paise"]);
+                    }
+
+                    int whStatus;
+                    string whErr;
+                    string synthPayload = "razorpay_client_verified_" + razorpayPaymentId;
+                    string synthSig = _repo.ComputeWebhookHmac(synthPayload);
+                    var whRes = _repo.ProcessVerifiedPaymentWebhook(
+                        synthPayload,
+                        synthSig,
+                        "rzp_client_" + razorpayPaymentId,
+                        razorpayOrderId,
+                        razorpayPaymentId,
+                        amountPaise,
+                        "success",
+                        out whStatus,
+                        out whErr);
+
+                    if (whRes == null)
+                    {
+                        WriteError(res, whStatus, "VERIFICATION_FAILED", whErr);
+                        return;
+                    }
+
+                    WriteJson(res, 200, new Dictionary<string, object>
+                    {
+                        { "status", "success" },
+                        { "state", whRes["state"] },
+                        { "orderCode", whRes["orderCode"] },
+                        { "message", "Payment verified successfully via Razorpay" }
+                    });
+                    return;
+                }
+
                 // Verified Payment Webhook (POST /api/payments/webhook)
                 if (method == "POST" && path == "/api/payments/webhook")
                 {
                     string rawBody = ReadRawBody(req);
-                    string sig = req.Headers["X-PrintAway-Signature"] ?? "";
+                    string rzpSig = req.Headers["X-Razorpay-Signature"];
+                    string customSig = req.Headers["X-PrintAway-Signature"] ?? "";
+
+                    // Official Razorpay server-to-server webhook
+                    if (!string.IsNullOrWhiteSpace(rzpSig))
+                    {
+                        bool validRzp = _repo.VerifyRazorpayWebhookSignature(rawBody, rzpSig);
+                        if (!validRzp)
+                        {
+                            WriteError(res, 401, "INVALID_RAZORPAY_SIGNATURE", "X-Razorpay-Signature HMAC verification failed.");
+                            return;
+                        }
+
+                        var rzpBody = _json.Deserialize<Dictionary<string, object>>(rawBody);
+                        string rzpEvent = GetString(rzpBody, "event", "");
+                        if (rzpEvent == "order.paid" || rzpEvent == "payment.captured")
+                        {
+                            string goid = "";
+                            string gpid = "";
+                            long amtPaise = 0;
+
+                            if (rzpBody.ContainsKey("payload") && rzpBody["payload"] is Dictionary<string, object>)
+                            {
+                                var payloadMap = (Dictionary<string, object>)rzpBody["payload"];
+                                if (payloadMap.ContainsKey("payment") && payloadMap["payment"] is Dictionary<string, object>)
+                                {
+                                    var paymentMap = (Dictionary<string, object>)payloadMap["payment"];
+                                    if (paymentMap.ContainsKey("entity") && paymentMap["entity"] is Dictionary<string, object>)
+                                    {
+                                        var entityMap = (Dictionary<string, object>)paymentMap["entity"];
+                                        gpid = GetString(entityMap, "id", "");
+                                        goid = GetString(entityMap, "order_id", "");
+                                        amtPaise = GetLong(entityMap, "amount", 0);
+                                    }
+                                }
+                                if (string.IsNullOrWhiteSpace(goid) && payloadMap.ContainsKey("order") && payloadMap["order"] is Dictionary<string, object>)
+                                {
+                                    var orderMap = (Dictionary<string, object>)payloadMap["order"];
+                                    if (orderMap.ContainsKey("entity") && orderMap["entity"] is Dictionary<string, object>)
+                                    {
+                                        var entityMap = (Dictionary<string, object>)orderMap["entity"];
+                                        goid = GetString(entityMap, "id", "");
+                                        if (amtPaise == 0) amtPaise = GetLong(entityMap, "amount", 0);
+                                    }
+                                }
+                            }
+
+                            string rzpEventId = "rzp_wh_" + gpid;
+                            int rzpStatus;
+                            string rzpErrMsg;
+                            string synthPayload = "rzp_wh_verified_" + gpid;
+                            string synthSig = _repo.ComputeWebhookHmac(synthPayload);
+                            var whRes = _repo.ProcessVerifiedPaymentWebhook(synthPayload, synthSig, rzpEventId, goid, gpid, amtPaise, "success", out rzpStatus, out rzpErrMsg);
+                            if (whRes == null)
+                            {
+                                WriteError(res, rzpStatus, "WEBHOOK_REJECTED", rzpErrMsg);
+                                return;
+                            }
+                            WriteJson(res, 200, whRes);
+                            return;
+                        }
+
+                        WriteJson(res, 200, new Dictionary<string, object> { { "status", "ignored" }, { "event", rzpEvent } });
+                        return;
+                    }
+
+                    // Standard PrintAway HMAC webhook
                     var body = _json.Deserialize<Dictionary<string, object>>(rawBody);
                     string eventId = GetString(body, "eventId", "");
                     string gatewayOrderId = GetString(body, "gatewayOrderId", "");
@@ -285,14 +426,14 @@ namespace PrintAway.Web
                     long amountPaise = GetLong(body, "amountPaise", 0);
                     string outcome = GetString(body, "status", "success");
 
-                    int status;
-                    string errMsg;
+                    int statusWh;
+                    string errMsgWh;
                     try
                     {
-                        var whRes = _repo.ProcessVerifiedPaymentWebhook(rawBody, sig, eventId, gatewayOrderId, gatewayPaymentId, amountPaise, outcome, out status, out errMsg);
+                        var whRes = _repo.ProcessVerifiedPaymentWebhook(rawBody, customSig, eventId, gatewayOrderId, gatewayPaymentId, amountPaise, outcome, out statusWh, out errMsgWh);
                         if (whRes == null)
                         {
-                            WriteError(res, status, "WEBHOOK_REJECTED", errMsg);
+                            WriteError(res, statusWh, "WEBHOOK_REJECTED", errMsgWh);
                             return;
                         }
                         WriteJson(res, 200, whRes);

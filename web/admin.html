@@ -590,6 +590,26 @@
       };
     }
 
+    let knownPaidApprovalIds = null;
+    function playApprovalChime() {
+      try {
+        const AudioCtx = window.AudioContext || window.webkitAudioContext;
+        if (!AudioCtx) return;
+        const ctx = new AudioCtx();
+        const osc = ctx.createOscillator();
+        const gain = ctx.createGain();
+        osc.connect(gain);
+        gain.connect(ctx.destination);
+        osc.type = 'sine';
+        osc.frequency.setValueAtTime(587.33, ctx.currentTime); // D5
+        osc.frequency.setValueAtTime(880, ctx.currentTime + 0.15); // A5
+        gain.gain.setValueAtTime(0.25, ctx.currentTime);
+        gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.6);
+        osc.start();
+        osc.stop(ctx.currentTime + 0.6);
+      } catch (e) { }
+    }
+
     async function loadDashboard() {
       if (!adminSessionToken) return;
       const st = document.getElementById('filterState').value;
@@ -646,6 +666,20 @@
         cachedOrders = data.orders || [];
         renderOrdersTable(cachedOrders);
         renderAuditTable(data.recentAuditEvents || []);
+
+        // Trigger audible chime and browser tab badge if new orders require approval
+        const currentApprovalIds = new Set((data.orders || []).filter(o => o.state === 'paid_awaiting_approval').map(o => o.id));
+        if (knownPaidApprovalIds !== null) {
+          let hasNew = false;
+          currentApprovalIds.forEach(id => {
+            if (!knownPaidApprovalIds.has(id)) hasNew = true;
+          });
+          if (hasNew) playApprovalChime();
+        }
+        knownPaidApprovalIds = currentApprovalIds;
+
+        const pendingCount = currentApprovalIds.size;
+        document.title = (pendingCount > 0 ? `(${pendingCount}) 🔔 ` : '') + 'PrintAway Admin — Operations & Hardware Hub';
       } catch (e) {
         console.error(e);
       }
@@ -711,7 +745,8 @@
             </div>
           </td>
           <td>
-            <span class="badge">${o.paymentStatus}</span><br/>
+            <span class="badge" style="${o.paymentStatus === 'paid' ? 'background:#dcfce7;color:#15803d;font-weight:700;' : ''}">${o.paymentStatus === 'paid' ? '✓ Paid (Razorpay)' : o.paymentStatus}</span><br/>
+            ${o.gatewayPaymentId ? `<span style="font-size:0.72rem;color:#475569;display:block;word-break:break-all;">${o.gatewayPaymentId}</span>` : ''}
             <span style="font-size:0.74rem;color:var(--muted);">Webhooks: ${o.webhookCallsCount || 0}</span>
           </td>
           <td>

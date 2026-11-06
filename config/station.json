@@ -5,7 +5,7 @@
   "operatingHours": "09:00 AM - 09:00 PM IST",
   "turnaroundText": "3-5 mins after counter admin approval",
   "port": 8080,
-  "activePrinterQueue": "Xerox B1025 Multifunction Printer PCL6",
+  "activePrinterQueue": "Xerox B1025 Multifunction Printer",
   "bwPrinterQueue": "",
   "colorPrinterQueue": "",
   "autoFallbackToPhysicalPrinter": true,

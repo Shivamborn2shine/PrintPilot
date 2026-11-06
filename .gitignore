@@ -10,5 +10,12 @@ Thumbs.db
 *.png
 *.jpg
 
+# Environment variables and secrets
+.env
+.env.*
+!.env.example
+config/*.local.json
+secrets/
+
 # Tunnel binary
 bin/cloudflared.exe

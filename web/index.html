@@ -4,6 +4,7 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>PrintAway — Upload. Configure. Pay. Print. Collect.</title>
+  <script src="https://checkout.razorpay.com/v1/checkout.js"></script>
   <style>
     :root {
       --bg: #f8fafc;
@@ -484,18 +485,21 @@
       <div id="trkStateDesc" class="alert alert-info"></div>
 
       <!-- Payment Action Box (shown only when awaiting_payment) -->
-      <div id="upiPaymentBox" class="card hidden" style="background:#f8fafc;border:2px solid #3b82f6;">
-        <h3 style="font-size:1rem;margin-bottom:8px;">Complete Online UPI Payment</h3>
-        <p style="font-size:0.88rem;color:var(--muted);margin-bottom:10px;">
-          Gateway Order ID: <code id="lblGatewayOrder"></code> | Amount: <strong>₹<span id="lblPayAmount"></span></strong>
+      <div id="upiPaymentBox" class="card hidden" style="background:#f0fdf4;border:2px solid #22c55e;">
+        <h3 style="font-size:1.05rem;margin-bottom:8px;color:#166534;">⚡ Complete Instant UPI Payment</h3>
+        <p style="font-size:0.88rem;color:var(--muted);margin-bottom:12px;">
+          Amount to Pay: <strong style="font-size:1.15rem;color:#0f172a;">₹<span id="lblPayAmount"></span></strong> | Reference: <code id="lblGatewayOrder"></code>
         </p>
-        <div style="display:flex;gap:10px;flex-wrap:wrap;">
-          <button class="btn btn-success" onclick="simulateVerifiedUpiWebhook()">
-            Simulate Verified UPI Payment Webhook (Local Pilot Test)
+        <div style="display:flex;gap:10px;flex-wrap:wrap;align-items:center;">
+          <button id="btnPayRazorpay" class="btn" style="background:#2563eb;color:#fff;font-weight:700;padding:12px 22px;font-size:1rem;" onclick="launchRazorpayCheckout()">
+            💳 Pay via Razorpay (GPay, PhonePe, Paytm, QR)
+          </button>
+          <button class="btn btn-secondary" style="font-size:0.82rem;padding:8px 14px;" onclick="simulateVerifiedUpiWebhook()">
+            Demo Simulation (Test Mode)
           </button>
         </div>
-        <p style="font-size:0.78rem;color:var(--muted);margin-top:8px;">
-          Note: Sends an HMAC-SHA256 signed webhook event to <code>POST /api/payments/webhook</code>. Per PRD §1A, payment moves the order to <code>paid_awaiting_approval</code> and never auto-prints without admin approval.
+        <p style="font-size:0.78rem;color:var(--muted);margin-top:10px;">
+          ✓ 100% automated digital verification. Your order immediately moves to <code>paid_awaiting_approval</code> upon successful payment.
         </p>
       </div>
 
@@ -1012,9 +1016,68 @@
         await refreshCurrentOrder();
         if (pollTimer) clearInterval(pollTimer);
         pollTimer = setInterval(refreshCurrentOrder, 2500);
+
+        // Auto-launch Razorpay Checkout modal if active
+        if (data.razorpayOrderId && data.razorpayKeyId && typeof Razorpay !== 'undefined') {
+          setTimeout(launchRazorpayCheckout, 350);
+        }
       } catch (e) {
         showError('Order error: ' + e.message);
       }
+    }
+
+    function launchRazorpayCheckout() {
+      if (!currentOrder || !currentOrder.razorpayOrderId || !currentOrder.razorpayKeyId) {
+        showError('Razorpay order details not ready.');
+        return;
+      }
+      if (typeof Razorpay === 'undefined') {
+        showError('Razorpay library could not be loaded. Please check your internet connection.');
+        return;
+      }
+      const custName = document.getElementById('custName') ? document.getElementById('custName').value : 'Walk-in Customer';
+      const custPhone = document.getElementById('custPhone') ? document.getElementById('custPhone').value : '';
+      const options = {
+        key: currentOrder.razorpayKeyId,
+        amount: currentOrder.amountPaise,
+        currency: 'INR',
+        name: 'PrintAway',
+        description: 'Print Order ' + currentOrder.orderCode,
+        order_id: currentOrder.razorpayOrderId,
+        prefill: {
+          name: custName,
+          contact: custPhone
+        },
+        theme: {
+          color: '#1d4ed8'
+        },
+        handler: async function (response) {
+          try {
+            document.getElementById('trkStateDesc').innerHTML = '<strong>Verifying payment with bank...</strong>';
+            const vRes = await fetch(apiUrl('/api/payments/verify-razorpay'), {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                orderId: currentOrder.orderId,
+                razorpayOrderId: response.razorpay_order_id,
+                razorpayPaymentId: response.razorpay_payment_id,
+                razorpaySignature: response.razorpay_signature
+              })
+            });
+            const vData = await vRes.json();
+            if (vRes.ok && vData.status === 'success') {
+              await refreshCurrentOrder();
+            } else {
+              showError('Payment verification note: ' + (vData.message || 'Check with counter'));
+            }
+          } catch (err) {
+            console.error('Verification error:', err);
+            await refreshCurrentOrder();
+          }
+        }
+      };
+      const rzp = new Razorpay(options);
+      rzp.open();
     }
 
     async function simulateVerifiedUpiWebhook() {
