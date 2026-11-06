@@ -64,7 +64,13 @@ if (-not $serverRunning) {
     }
     Write-Host "  Starting PrintAway.exe ($argList)..." -ForegroundColor Yellow
     Start-Process -FilePath $serverExe -ArgumentList $argList -WindowStyle Minimized
-    Start-Sleep -Seconds 2
+    for ($w = 0; $w -lt 15; $w++) {
+        Start-Sleep -Seconds 1
+        try {
+            $res = Invoke-RestMethod -Uri $localApiUrl -TimeoutSec 2 -ErrorAction Stop
+            if ($res.shopName) { $serverRunning = $true; break }
+        } catch { }
+    }
     try {
         $res = Invoke-RestMethod -Uri $localApiUrl -TimeoutSec 5 -ErrorAction Stop
         Write-Host "  [OK] Local server started. Active Printer Queue: $($res.activeQueueName)" -ForegroundColor Green
@@ -155,6 +161,7 @@ foreach ($webFile in @("web\index.html", "web\admin.html")) {
 
 if ($autoPushGit) {
     try {
+        $ErrorActionPreference = "Continue"
         git add web/index.html web/admin.html 2>$null
         $diff = git status --porcelain web/index.html web/admin.html 2>$null
         if ($diff) {
