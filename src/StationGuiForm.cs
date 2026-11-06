@@ -593,8 +593,18 @@ namespace PrintAway.Gui
             catch { }
         }
 
+        protected override void OnHandleCreated(EventArgs e)
+        {
+            base.OnHandleCreated(e);
+            if (_supabaseSync != null && _supabaseSync.CurrentQuota != null)
+            {
+                OnQuotaChanged(_supabaseSync.CurrentQuota);
+            }
+        }
+
         private void OnQuotaChanged(QuotaStatus quota)
         {
+            if (!this.IsHandleCreated) return;
             if (this.InvokeRequired)
             {
                 this.BeginInvoke(new Action<QuotaStatus>(OnQuotaChanged), quota);
@@ -631,6 +641,7 @@ namespace PrintAway.Gui
 
         private void OnTunnelCaptured(string url)
         {
+            if (!this.IsHandleCreated) return;
             if (this.InvokeRequired)
             {
                 this.BeginInvoke(new Action<string>(OnTunnelCaptured), url);
