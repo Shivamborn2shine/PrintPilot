@@ -29,17 +29,21 @@ $sources = @(
     Join-Path $repoRoot "src\DatabaseSchemaAndRepo.cs"
     Join-Path $repoRoot "src\PrintWorker.cs"
     Join-Path $repoRoot "src\HttpServerAndRoutes.cs"
+    Join-Path $repoRoot "src\TunnelManager.cs"
+    Join-Path $repoRoot "src\AutoUpdater.cs"
+    Join-Path $repoRoot "src\StationGuiForm.cs"
     Join-Path $repoRoot "src\SelfTestSuite.cs"
     Join-Path $repoRoot "src\Program.cs"
 )
 
-Write-Host "=== Compiling PrintAway.exe (64-bit Native Windows Host Application) ===" -ForegroundColor Cyan
-& $csc /nologo /target:exe /platform:x64 /optimize+ /out:$outExe `
+Write-Host "=== Compiling PrintAway.exe (64-bit Native Windows GUI & Host Engine) ===" -ForegroundColor Cyan
+& $csc /nologo /target:winexe /platform:x64 /optimize+ /out:$outExe `
     /r:System.dll `
     /r:System.Core.dll `
     /r:System.Drawing.dll `
     /r:System.Management.dll `
     /r:System.Web.Extensions.dll `
+    /r:System.Windows.Forms.dll `
     $sources
 
 if ($LASTEXITCODE -ne 0) {
@@ -49,7 +53,7 @@ Write-Host "Compiled successfully -> $outExe" -ForegroundColor Green
 
 if (-not $SkipTests) {
     Write-Host "`n=== Running Automated PRD §14 Integration & Critical Test Matrix ===" -ForegroundColor Cyan
-    & $outExe --self-test
+    & $outExe --self-test | Out-Host
     if ($LASTEXITCODE -ne 0) {
         throw "Self-test suite failed with exit code $LASTEXITCODE"
     }

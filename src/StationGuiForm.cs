@@ -1,0 +1,701 @@
+using System;
+using System.Collections.Generic;
+using System.Diagnostics;
+using System.Drawing;
+using System.Globalization;
+using System.IO;
+using System.Text.RegularExpressions;
+using System.Windows.Forms;
+using PrintAway.Engine;
+using PrintAway.Storage;
+using PrintAway.Tunnel;
+using PrintAway.Updater;
+using PrintAway.Web;
+using PrintAway.Worker;
+
+namespace PrintAway.Gui
+{
+    public sealed class StationGuiForm : Form
+    {
+        private readonly PrintAwayRepository _repo;
+        private readonly LocalPrintWorker _worker;
+        private readonly PrintAwayHttpServer _server;
+        private readonly TunnelManager _tunnel;
+        private readonly string _repoRoot;
+        private readonly int _port;
+
+        // UI Controls
+        private Label _lblStatusBadge;
+        private Label _lblShopTitle;
+        private Label _lblCustomerLink;
+        private Label _lblTunnelUrl;
+        private ComboBox _cmbPrinters;
+        private RadioButton _rbPhysical;
+        private RadioButton _rbSimulation;
+        private Button _btnPauseResume;
+        private Label _lblMetricOrders;
+        private Label _lblMetricSides;
+        private Label _lblMetricRevenue;
+        private CheckBox _chkAutoStart;
+        private CheckBox _chkMinimizeToTray;
+        private NotifyIcon _trayIcon;
+        private ContextMenuStrip _trayMenu;
+        private System.Windows.Forms.Timer _metricsTimer;
+        private bool _reallyExit;
+
+        public StationGuiForm(PrintAwayRepository repo, LocalPrintWorker worker, PrintAwayHttpServer server, TunnelManager tunnel, string repoRoot, int port)
+        {
+            _repo = repo;
+            _worker = worker;
+            _server = server;
+            _tunnel = tunnel;
+            _repoRoot = repoRoot;
+            _port = port;
+
+            InitializeGui();
+            LoadInitialData();
+
+            if (_tunnel != null)
+            {
+                _tunnel.OnTunnelUrlCaptured += OnTunnelCaptured;
+            }
+        }
+
+        private void InitializeGui()
+        {
+            this.Text = "PrintAway Station v" + AutoUpdater.CurrentVersion;
+            this.Size = new Size(680, 680);
+            this.StartPosition = FormStartPosition.CenterScreen;
+            this.FormBorderStyle = FormBorderStyle.FixedSingle;
+            this.MaximizeBox = false;
+            this.BackColor = Color.FromArgb(248, 250, 252);
+            this.Font = new Font("Segoe UI", 9f, FontStyle.Regular);
+
+            // 1. Top Header Bar
+            var pnlHeader = new Panel
+            {
+                Dock = DockStyle.Top,
+                Height = 65,
+                BackColor = Color.FromArgb(15, 23, 42)
+            };
+
+            var lblHeaderTitle = new Label
+            {
+                Text = "PrintAway Station",
+                ForeColor = Color.White,
+                Font = new Font("Segoe UI", 13f, FontStyle.Bold),
+                Location = new Point(18, 12),
+                AutoSize = true
+            };
+
+            var lblHeaderSub = new Label
+            {
+                Text = "Automated Hardware Printing & Secure Tunnel Hub",
+                ForeColor = Color.FromArgb(148, 163, 184),
+                Font = new Font("Segoe UI", 8.5f, FontStyle.Regular),
+                Location = new Point(20, 38),
+                AutoSize = true
+            };
+
+            _lblStatusBadge = new Label
+            {
+                Text = "● ONLINE",
+                BackColor = Color.FromArgb(21, 128, 61),
+                ForeColor = Color.White,
+                Font = new Font("Segoe UI", 8.5f, FontStyle.Bold),
+                TextAlign = ContentAlignment.MiddleCenter,
+                Size = new Size(95, 26),
+                Location = new Point(550, 18)
+            };
+
+            pnlHeader.Controls.Add(lblHeaderTitle);
+            pnlHeader.Controls.Add(lblHeaderSub);
+            pnlHeader.Controls.Add(_lblStatusBadge);
+            this.Controls.Add(pnlHeader);
+
+            // Container Panel
+            var pnlBody = new Panel
+            {
+                Dock = DockStyle.Fill,
+                Padding = new Padding(18),
+                AutoScroll = true
+            };
+            this.Controls.Add(pnlBody);
+
+            int y = 75;
+
+            // 2. Card: Shop Identity & Live Customer QR Link
+            var grpShop = CreateCardPanel("🏪 Shop Identity & Live Customer QR", 18, y, 626, 120);
+            y += 130;
+
+            _lblShopTitle = new Label
+            {
+                Text = "Shop: Loading...",
+                Font = new Font("Segoe UI", 9.5f, FontStyle.Bold),
+                ForeColor = Color.FromArgb(30, 41, 59),
+                Location = new Point(14, 25),
+                Size = new Size(590, 20)
+            };
+
+            _lblCustomerLink = new Label
+            {
+                Text = "Customer QR: https://printitaway.netlify.app/?shop=pilot",
+                Font = new Font("Segoe UI", 8.5f, FontStyle.Regular),
+                ForeColor = Color.FromArgb(29, 78, 216),
+                Location = new Point(14, 48),
+                Size = new Size(460, 20)
+            };
+
+            var btnCopyLink = new Button
+            {
+                Text = "📋 Copy Link",
+                Size = new Size(95, 26),
+                Location = new Point(510, 44),
+                BackColor = Color.White,
+                FlatStyle = FlatStyle.System
+            };
+            btnCopyLink.Click += (s, e) =>
+            {
+                try
+                {
+                    Clipboard.SetText(_lblCustomerLink.Text.Replace("Customer QR: ", "").Trim());
+                    MessageBox.Show("Customer QR link copied to clipboard!", "PrintAway", MessageBoxButtons.OK, MessageBoxIcon.Information);
+                }
+                catch { }
+            };
+
+            _lblTunnelUrl = new Label
+            {
+                Text = "Cloudflare Tunnel: Initializing secure HTTP/2 tunnel...",
+                Font = new Font("Segoe UI", 8f, FontStyle.Regular),
+                ForeColor = Color.FromArgb(71, 85, 105),
+                Location = new Point(14, 75),
+                Size = new Size(590, 35)
+            };
+
+            grpShop.Controls.Add(_lblShopTitle);
+            grpShop.Controls.Add(_lblCustomerLink);
+            grpShop.Controls.Add(btnCopyLink);
+            grpShop.Controls.Add(_lblTunnelUrl);
+            this.Controls.Add(grpShop);
+
+            // 3. Card: Printer Fleet & Dispatch Control
+            var grpPrinter = CreateCardPanel("🖨️ Hardware Printer & Dispatch Mode", 18, y, 626, 130);
+            y += 140;
+
+            var lblSelP = new Label
+            {
+                Text = "Active Physical Printer:",
+                Font = new Font("Segoe UI", 8.5f, FontStyle.Bold),
+                Location = new Point(14, 25),
+                AutoSize = true
+            };
+
+            _cmbPrinters = new ComboBox
+            {
+                DropDownStyle = ComboBoxStyle.DropDownList,
+                Location = new Point(160, 22),
+                Size = new Size(330, 26)
+            };
+            _cmbPrinters.SelectedIndexChanged += OnPrinterSelectionChanged;
+
+            _btnPauseResume = new Button
+            {
+                Text = "⏸ Pause Intake",
+                Size = new Size(115, 28),
+                Location = new Point(498, 21),
+                BackColor = Color.FromArgb(241, 245, 249),
+                FlatStyle = FlatStyle.System
+            };
+            _btnPauseResume.Click += OnPauseResumeClicked;
+
+            _rbPhysical = new RadioButton
+            {
+                Text = "● Live Physical Printing",
+                Checked = true,
+                Font = new Font("Segoe UI", 8.5f, FontStyle.Bold),
+                ForeColor = Color.FromArgb(21, 128, 61),
+                Location = new Point(16, 60),
+                AutoSize = true
+            };
+            _rbPhysical.CheckedChanged += OnDispatchModeChanged;
+
+            _rbSimulation = new RadioButton
+            {
+                Text = "○ Safe Spooler Simulation (Dry-Run)",
+                Checked = false,
+                Font = new Font("Segoe UI", 8.5f, FontStyle.Regular),
+                ForeColor = Color.FromArgb(180, 83, 9),
+                Location = new Point(220, 60),
+                AutoSize = true
+            };
+
+            var lblPaperNote = new Label
+            {
+                Text = "Prints via standard Windows GDI+ / PCL6 rasterizer. Color vs B&W routing enabled.",
+                Font = new Font("Segoe UI", 8f, FontStyle.Regular),
+                ForeColor = Color.FromArgb(100, 116, 139),
+                Location = new Point(16, 92),
+                AutoSize = true
+            };
+
+            grpPrinter.Controls.Add(lblSelP);
+            grpPrinter.Controls.Add(_cmbPrinters);
+            grpPrinter.Controls.Add(_btnPauseResume);
+            grpPrinter.Controls.Add(_rbPhysical);
+            grpPrinter.Controls.Add(_rbSimulation);
+            grpPrinter.Controls.Add(lblPaperNote);
+            this.Controls.Add(grpPrinter);
+
+            // 4. Card: Real-Time Counter Metrics
+            var grpMetrics = CreateCardPanel("📊 Today's Counter Performance (Real-Time)", 18, y, 626, 90);
+            y += 100;
+
+            _lblMetricOrders = CreateMetricBox("ORDERS TODAY", "0", 18, 22, 180, grpMetrics);
+            _lblMetricSides = CreateMetricBox("PAGES PRINTED", "0", 218, 22, 180, grpMetrics);
+            _lblMetricRevenue = CreateMetricBox("TOTAL REVENUE", "₹0.00", 418, 22, 180, grpMetrics);
+            this.Controls.Add(grpMetrics);
+
+            // 5. Quick Action Launchers
+            var btnOpenAdmin = new Button
+            {
+                Text = "⚙️ Open Counter Admin Dashboard (/admin)",
+                BackColor = Color.FromArgb(37, 99, 235),
+                ForeColor = Color.White,
+                Font = new Font("Segoe UI", 9.5f, FontStyle.Bold),
+                FlatStyle = FlatStyle.Flat,
+                Size = new Size(310, 42),
+                Location = new Point(18, y)
+            };
+            btnOpenAdmin.FlatAppearance.BorderSize = 0;
+            btnOpenAdmin.Click += (s, e) => LaunchBrowser("http://127.0.0.1:" + _port + "/admin");
+
+            var btnOpenQr = new Button
+            {
+                Text = "🌐 Open Customer Storefront (QR Link)",
+                BackColor = Color.FromArgb(15, 23, 42),
+                ForeColor = Color.White,
+                Font = new Font("Segoe UI", 9.5f, FontStyle.Bold),
+                FlatStyle = FlatStyle.Flat,
+                Size = new Size(305, 42),
+                Location = new Point(338, y)
+            };
+            btnOpenQr.FlatAppearance.BorderSize = 0;
+            btnOpenQr.Click += (s, e) => LaunchBrowser("https://printitaway.netlify.app/?shop=" + GetCurrentShopId());
+
+            this.Controls.Add(btnOpenAdmin);
+            this.Controls.Add(btnOpenQr);
+            y += 52;
+
+            // 6. Preferences & Boot Settings
+            _chkAutoStart = new CheckBox
+            {
+                Text = "Start station automatically when Windows boots",
+                Location = new Point(22, y),
+                AutoSize = true,
+                Font = new Font("Segoe UI", 8.5f, FontStyle.Regular)
+            };
+            _chkAutoStart.CheckedChanged += OnAutoStartToggled;
+
+            _chkMinimizeToTray = new CheckBox
+            {
+                Text = "Minimize to System Tray (near clock) when closed",
+                Checked = true,
+                Location = new Point(340, y),
+                AutoSize = true,
+                Font = new Font("Segoe UI", 8.5f, FontStyle.Regular)
+            };
+
+            var btnCheckUpdates = new Button
+            {
+                Text = "🔄 Check for Updates",
+                Size = new Size(140, 26),
+                Location = new Point(504, y + 25),
+                BackColor = Color.White,
+                FlatStyle = FlatStyle.System
+            };
+            btnCheckUpdates.Click += OnCheckUpdatesClicked;
+
+            this.Controls.Add(_chkAutoStart);
+            this.Controls.Add(_chkMinimizeToTray);
+            this.Controls.Add(btnCheckUpdates);
+
+            // 7. System Tray Icon Setup
+            SetupSystemTray();
+
+            // 8. Form Close Handler
+            this.FormClosing += (s, e) =>
+            {
+                if (!_reallyExit && _chkMinimizeToTray.Checked)
+                {
+                    e.Cancel = true;
+                    this.Hide();
+                    _trayIcon.ShowBalloonTip(1500, "PrintAway Station",
+                        "Station is running quietly in the system tray. Double-click to open.", ToolTipIcon.Info);
+                }
+                else
+                {
+                    ShutdownStation();
+                }
+            };
+
+            // 9. Metrics Auto-Refresh Timer (every 3 seconds)
+            _metricsTimer = new System.Windows.Forms.Timer { Interval = 3000 };
+            _metricsTimer.Tick += (s, e) => RefreshDashboardMetrics();
+            _metricsTimer.Start();
+        }
+
+        private Panel CreateCardPanel(string title, int x, int y, int w, int h)
+        {
+            var pnl = new Panel
+            {
+                Location = new Point(x, y),
+                Size = new Size(w, h),
+                BackColor = Color.White,
+                BorderStyle = BorderStyle.FixedSingle
+            };
+            var lblTitle = new Label
+            {
+                Text = title,
+                Font = new Font("Segoe UI", 8.5f, FontStyle.Bold),
+                ForeColor = Color.FromArgb(71, 85, 105),
+                Location = new Point(10, 4),
+                AutoSize = true
+            };
+            pnl.Controls.Add(lblTitle);
+            return pnl;
+        }
+
+        private Label CreateMetricBox(string label, string initValue, int x, int y, int w, Panel parent)
+        {
+            var pnl = new Panel
+            {
+                Location = new Point(x, y),
+                Size = new Size(w, 55),
+                BackColor = Color.FromArgb(248, 250, 252),
+                BorderStyle = BorderStyle.FixedSingle
+            };
+
+            var lblT = new Label
+            {
+                Text = label,
+                Font = new Font("Segoe UI", 7.5f, FontStyle.Bold),
+                ForeColor = Color.FromArgb(100, 116, 139),
+                Location = new Point(6, 4),
+                AutoSize = true
+            };
+
+            var lblV = new Label
+            {
+                Text = initValue,
+                Font = new Font("Segoe UI", 12f, FontStyle.Bold),
+                ForeColor = Color.FromArgb(15, 23, 42),
+                Location = new Point(6, 22),
+                AutoSize = true
+            };
+
+            pnl.Controls.Add(lblT);
+            pnl.Controls.Add(lblV);
+            parent.Controls.Add(pnl);
+            return lblV;
+        }
+
+        private void SetupSystemTray()
+        {
+            _trayMenu = new ContextMenuStrip();
+            _trayMenu.Items.Add("Open Counter Admin Dashboard", null, (s, e) => LaunchBrowser("http://127.0.0.1:" + _port + "/admin"));
+            _trayMenu.Items.Add("Open Customer Storefront", null, (s, e) => LaunchBrowser("https://printitaway.netlify.app/?shop=" + GetCurrentShopId()));
+            _trayMenu.Items.Add("Pause / Resume Order Intake", null, OnPauseResumeClicked);
+            _trayMenu.Items.Add(new ToolStripSeparator());
+            _trayMenu.Items.Add("Show Station Window", null, (s, e) => RestoreWindow());
+            _trayMenu.Items.Add("Check for Updates...", null, OnCheckUpdatesClicked);
+            _trayMenu.Items.Add(new ToolStripSeparator());
+            _trayMenu.Items.Add("Exit PrintAway", null, (s, e) =>
+            {
+                _reallyExit = true;
+                this.Close();
+            });
+
+            _trayIcon = new NotifyIcon
+            {
+                Text = "PrintAway Station - Online",
+                Icon = SystemIcons.Application,
+                ContextMenuStrip = _trayMenu,
+                Visible = true
+            };
+            _trayIcon.DoubleClick += (s, e) => RestoreWindow();
+        }
+
+        private void RestoreWindow()
+        {
+            this.Show();
+            this.WindowState = FormWindowState.Normal;
+            this.BringToFront();
+            this.Activate();
+        }
+
+        private void LoadInitialData()
+        {
+            try
+            {
+                var status = _repo.GetShopAndAvailabilityStatus();
+                string shopId = status.ContainsKey("shopId") && status["shopId"] != null ? Convert.ToString(status["shopId"]) : "pilot";
+                string shopName = status.ContainsKey("shopName") && status["shopName"] != null ? Convert.ToString(status["shopName"]) : "PrintAway Pilot Shop";
+                string activeQueue = Convert.ToString(status["activeQueueName"]);
+                bool accepting = (bool)status["acceptingOrders"];
+
+                _lblShopTitle.Text = string.Format(CultureInfo.InvariantCulture, "{0} (ID: {1})", shopName, shopId);
+                _lblCustomerLink.Text = "Customer QR: https://printitaway.netlify.app/?shop=" + shopId;
+
+                UpdateIntakeButtonState(accepting);
+
+                // Populate printer queues
+                var queues = PdfAndPrinterEngine.DiscoverWindowsQueues();
+                _cmbPrinters.Items.Clear();
+                int selectIdx = 0;
+                for (int i = 0; i < queues.Count; i++)
+                {
+                    var q = queues[i];
+                    string prefix = q.IsVirtualExcluded ? "[VIRTUAL] " : "[PHYSICAL] ";
+                    _cmbPrinters.Items.Add(prefix + q.QueueName);
+                    if (string.Equals(q.QueueName, activeQueue, StringComparison.OrdinalIgnoreCase))
+                    {
+                        selectIdx = i;
+                    }
+                }
+                if (_cmbPrinters.Items.Count > 0)
+                {
+                    _cmbPrinters.SelectedIndex = selectIdx;
+                }
+
+                // Auto-start check
+                string startupShortcut = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.Startup), "PrintAwayStation.lnk");
+                _chkAutoStart.Checked = File.Exists(startupShortcut);
+
+                string dispatchMode = _repo.GetDispatchMode();
+                bool isPhysical = !string.Equals(dispatchMode, "simulation", StringComparison.OrdinalIgnoreCase);
+                _rbPhysical.Checked = isPhysical;
+                _rbSimulation.Checked = !isPhysical;
+
+                RefreshDashboardMetrics();
+            }
+            catch (Exception ex)
+            {
+                MessageBox.Show("Error loading station state: " + ex.Message, "PrintAway", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+            }
+        }
+
+        private void RefreshDashboardMetrics()
+        {
+            try
+            {
+                var status = _repo.GetShopAndAvailabilityStatus();
+                bool isAccepting = (bool)status["acceptingOrders"];
+                UpdateIntakeButtonState(isAccepting);
+
+                var dash = _repo.GetAdminDashboardSummary("all", "");
+                if (dash != null && dash.ContainsKey("metrics") && dash["metrics"] is Dictionary<string, object>)
+                {
+                    var dbMetrics = (Dictionary<string, object>)dash["metrics"];
+                    _lblMetricOrders.Text = Convert.ToString(dbMetrics["paidAwaitingApproval"]) + " pending / " + Convert.ToString(dbMetrics["collectedOrders"]) + " done";
+                    _lblMetricSides.Text = Convert.ToString(dbMetrics["totalPrintedSides"]) + " sides";
+                    _lblMetricRevenue.Text = string.Format(CultureInfo.InvariantCulture, "₹{0:0.00}", Convert.ToDouble(dbMetrics["verifiedRevenueInr"]));
+                }
+            }
+            catch { }
+        }
+
+        private void OnTunnelCaptured(string url)
+        {
+            if (this.InvokeRequired)
+            {
+                this.BeginInvoke(new Action<string>(OnTunnelCaptured), url);
+                return;
+            }
+            _lblTunnelUrl.Text = "Cloudflare Tunnel (Active): " + url;
+            _lblTunnelUrl.ForeColor = Color.FromArgb(21, 128, 61);
+        }
+
+        private void OnPrinterSelectionChanged(object sender, EventArgs e)
+        {
+            if (_cmbPrinters.SelectedItem == null) return;
+            string selectedText = _cmbPrinters.SelectedItem.ToString();
+            string cleanQueue = selectedText.Replace("[PHYSICAL] ", "").Replace("[VIRTUAL] ", "").Trim();
+
+            try
+            {
+                _repo.UpdateShopAndPrinterControls(null, null, null, null, "gui-selector", null, null, null, null, cleanQueue);
+                UpdateStationJson("activePrinterQueue", cleanQueue);
+            }
+            catch (Exception ex)
+            {
+                MessageBox.Show("Could not switch printer: " + ex.Message, "PrintAway", MessageBoxButtons.OK, MessageBoxIcon.Error);
+            }
+        }
+
+        private void OnDispatchModeChanged(object sender, EventArgs e)
+        {
+            bool isPhysical = _rbPhysical.Checked;
+            try
+            {
+                _repo.SetDispatchMode(isPhysical ? "physical" : "simulation", "gui-toggle");
+            }
+            catch { }
+        }
+
+        private void OnPauseResumeClicked(object sender, EventArgs e)
+        {
+            try
+            {
+                var status = _repo.GetShopAndAvailabilityStatus();
+                bool currentlyAccepting = (bool)status["acceptingOrders"];
+                bool newAccepting = !currentlyAccepting;
+                _repo.UpdateShopAndPrinterControls(newAccepting, newAccepting ? "" : "Paused by Counter Staff", null, null, "gui-pause-btn");
+                UpdateIntakeButtonState(newAccepting);
+            }
+            catch (Exception ex)
+            {
+                MessageBox.Show("Could not toggle intake: " + ex.Message, "PrintAway", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+            }
+        }
+
+        private void UpdateIntakeButtonState(bool accepting)
+        {
+            if (accepting)
+            {
+                _lblStatusBadge.Text = "● ONLINE";
+                _lblStatusBadge.BackColor = Color.FromArgb(21, 128, 61);
+                _btnPauseResume.Text = "⏸ Pause Intake";
+                _trayIcon.Text = "PrintAway Station - Online";
+            }
+            else
+            {
+                _lblStatusBadge.Text = "⏸ PAUSED";
+                _lblStatusBadge.BackColor = Color.FromArgb(180, 83, 9);
+                _btnPauseResume.Text = "▶ Resume Intake";
+                _trayIcon.Text = "PrintAway Station - Paused";
+            }
+        }
+
+        private void OnAutoStartToggled(object sender, EventArgs e)
+        {
+            string startupDir = Environment.GetFolderPath(Environment.SpecialFolder.Startup);
+            string shortcutPath = Path.Combine(startupDir, "PrintAwayStation.lnk");
+            string currentExe = Process.GetCurrentProcess().MainModule.FileName;
+
+            try
+            {
+                if (_chkAutoStart.Checked)
+                {
+                    CreateWindowsShortcut(shortcutPath, currentExe);
+                }
+                else
+                {
+                    if (File.Exists(shortcutPath)) File.Delete(shortcutPath);
+                }
+            }
+            catch (Exception ex)
+            {
+                MessageBox.Show("Could not update Windows startup shortcut: " + ex.Message, "PrintAway", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+            }
+        }
+
+        private void CreateWindowsShortcut(string shortcutPath, string targetExe)
+        {
+            string vbsScript = "Set oWS = WScript.CreateObject(\"WScript.Shell\")\r\n" +
+                               "sLinkFile = \"" + shortcutPath.Replace("\\", "\\\\") + "\"\r\n" +
+                               "Set oLink = oWS.CreateShortcut(sLinkFile)\r\n" +
+                               "oLink.TargetPath = \"" + targetExe.Replace("\\", "\\\\") + "\"\r\n" +
+                               "oLink.WorkingDirectory = \"" + Path.GetDirectoryName(targetExe).Replace("\\", "\\\\") + "\"\r\n" +
+                               "oLink.WindowStyle = 1\r\n" +
+                               "oLink.Description = \"PrintAway Hardware Station\"\r\n" +
+                               "oLink.Save\r\n";
+            string tempVbs = Path.Combine(Path.GetTempPath(), "create_shortcut.vbs");
+            File.WriteAllText(tempVbs, vbsScript);
+            Process.Start("cscript.exe", "//nologo \"" + tempVbs + "\"").WaitForExit();
+            File.Delete(tempVbs);
+        }
+
+        private void OnCheckUpdatesClicked(object sender, EventArgs e)
+        {
+            string latestVer, dlUrl, notes;
+            bool updateAvailable = AutoUpdater.CheckForUpdate(out latestVer, out dlUrl, out notes);
+            if (updateAvailable)
+            {
+                var dr = MessageBox.Show(
+                    string.Format(CultureInfo.InvariantCulture,
+                        "A new version of PrintAway Station is available!\n\nCurrent Version: v{0}\nLatest Version: v{1}\n\nNotes: {2}\n\nDo you want to update automatically now?",
+                        AutoUpdater.CurrentVersion, latestVer, notes ?? "Performance and stability updates."),
+                    "PrintAway Update Available",
+                    MessageBoxButtons.YesNo,
+                    MessageBoxIcon.Information);
+
+                if (dr == DialogResult.Yes)
+                {
+                    string err;
+                    bool ok = AutoUpdater.ApplyUpdate(dlUrl, out err);
+                    if (!ok)
+                    {
+                        MessageBox.Show("Update failed: " + err, "PrintAway", MessageBoxButtons.OK, MessageBoxIcon.Error);
+                    }
+                }
+            }
+            else
+            {
+                MessageBox.Show("Your PrintAway Station is up to date! (v" + AutoUpdater.CurrentVersion + ")", "PrintAway", MessageBoxButtons.OK, MessageBoxIcon.Information);
+            }
+        }
+
+        private void LaunchBrowser(string url)
+        {
+            try
+            {
+                Process.Start(url);
+            }
+            catch
+            {
+                Process.Start("cmd.exe", "/c start " + url);
+            }
+        }
+
+        private string GetCurrentShopId()
+        {
+            try
+            {
+                var status = _repo.GetShopAndAvailabilityStatus();
+                if (status != null && status.ContainsKey("shopId") && status["shopId"] != null)
+                {
+                    return Convert.ToString(status["shopId"]);
+                }
+            }
+            catch { }
+            return "pilot";
+        }
+
+        private void UpdateStationJson(string key, object val)
+        {
+            try
+            {
+                string cfgPath = Path.Combine(_repoRoot, "config", "station.json");
+                if (File.Exists(cfgPath))
+                {
+                    string text = File.ReadAllText(cfgPath);
+                    string pattern = "\"" + key + "\"\\s*:\\s*\"[^\"]*\"";
+                    string replacement = "\"" + key + "\": \"" + val + "\"";
+                    text = Regex.Replace(text, pattern, replacement);
+                    File.WriteAllText(cfgPath, text);
+                }
+            }
+            catch { }
+        }
+
+        private void ShutdownStation()
+        {
+            if (_metricsTimer != null) { _metricsTimer.Stop(); _metricsTimer.Dispose(); }
+            if (_trayIcon != null) { _trayIcon.Visible = false; _trayIcon.Dispose(); }
+            if (_tunnel != null) { _tunnel.Dispose(); }
+            if (_worker != null) { _worker.Stop(); }
+            if (_server != null) { _server.Dispose(); }
+        }
+    }
+}

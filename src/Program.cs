@@ -2,10 +2,14 @@ using System;
 using System.Collections.Generic;
 using System.Globalization;
 using System.IO;
+using System.Runtime.InteropServices;
 using System.Threading;
 using System.Web.Script.Serialization;
+using System.Windows.Forms;
 using PrintAway.Engine;
+using PrintAway.Gui;
 using PrintAway.Storage;
+using PrintAway.Tunnel;
 using PrintAway.Web;
 using PrintAway.Worker;
 
@@ -13,6 +17,12 @@ namespace PrintAway
 {
     public static class Program
     {
+        [DllImport("kernel32.dll", SetLastError = true)]
+        private static extern bool AttachConsole(int dwProcessId);
+
+        private const int ATTACH_PARENT_PROCESS = -1;
+
+        [STAThread]
         public static int Main(string[] args)
         {
             string baseDir = AppDomain.CurrentDomain.BaseDirectory;
@@ -27,6 +37,7 @@ namespace PrintAway
 
             bool runSelfTest = false;
             bool forceSimulation = false;
+            bool cliMode = false;
             int port = 8080;
             string cliPrinterQueue = null;
             string configPrinterQueue = null;
@@ -85,7 +96,16 @@ namespace PrintAway
                     {
                         cliPrinterQueue = args[++i];
                     }
+                    else if (string.Equals(a, "--cli", StringComparison.OrdinalIgnoreCase) || string.Equals(a, "--headless", StringComparison.OrdinalIgnoreCase))
+                    {
+                        cliMode = true;
+                    }
                 }
+            }
+
+            if (runSelfTest || cliMode)
+            {
+                AttachConsole(ATTACH_PARENT_PROCESS);
             }
 
             if (runSelfTest)
@@ -169,29 +189,45 @@ namespace PrintAway
                 using (var server = new PrintAwayHttpServer(port, repo, worker, webRoot))
                 {
                     server.Start();
-                    Console.ForegroundColor = ConsoleColor.Cyan;
-                    Console.WriteLine("======================================================================");
-                    Console.WriteLine("  PrintAway Local Host Server & Print Worker Active");
-                    Console.WriteLine("======================================================================");
-                    Console.ResetColor();
-                    Console.WriteLine("  Customer Portal (QR / Web):  http://127.0.0.1:" + port + "/");
-                    Console.WriteLine("  Staff Admin Dashboard:       http://127.0.0.1:" + port + "/admin");
-                    Console.WriteLine("  Default Admin Login:         admin / PrintAway@Admin2026");
-                    Console.WriteLine("  Active Verified Queue:       " + activeQueueDisplay);
-                    Console.WriteLine("  Worker Dispatch Mode:        " + (forceSimulation ? "SAFE SPOOLER SIMULATION (--simulation)" : "LIVE PHYSICAL PRINT (" + activeQueueDisplay + ")"));
-                    Console.WriteLine("  Station Config File:         " + configPath);
-                    Console.WriteLine("  SQLite WAL Database:         " + dbPath);
-                    Console.WriteLine("  Private PDF Vault:           " + vaultDir);
-                    Console.WriteLine("======================================================================");
-                    Console.WriteLine("Press Ctrl+C to stop.");
 
-                    var exitEvent = new ManualResetEvent(false);
-                    Console.CancelKeyPress += (s, e) =>
+                    string registryTopic = "printaway_station_registry_" + (configShopId ?? "pilot") + "_9f8a7b6c5d4e";
+                    var tunnel = new TunnelManager(repoRoot, port, registryTopic);
+                    tunnel.Start();
+
+                    if (!cliMode)
                     {
-                        e.Cancel = true;
-                        exitEvent.Set();
-                    };
-                    exitEvent.WaitOne();
+                        Application.EnableVisualStyles();
+                        Application.SetCompatibleTextRenderingDefault(false);
+                        Application.Run(new StationGuiForm(repo, worker, server, tunnel, repoRoot, port));
+                    }
+                    else
+                    {
+                        Console.ForegroundColor = ConsoleColor.Cyan;
+                        Console.WriteLine("======================================================================");
+                        Console.WriteLine("  PrintAway Local Host Server & Print Worker Active (CLI Mode)");
+                        Console.WriteLine("======================================================================");
+                        Console.ResetColor();
+                        Console.WriteLine("  Customer Portal (QR / Web):  http://127.0.0.1:" + port + "/");
+                        Console.WriteLine("  Staff Admin Dashboard:       http://127.0.0.1:" + port + "/admin");
+                        Console.WriteLine("  Default Admin Login:         admin / PrintAway@Admin2026");
+                        Console.WriteLine("  Active Verified Queue:       " + activeQueueDisplay);
+                        Console.WriteLine("  Worker Dispatch Mode:        " + (forceSimulation ? "SAFE SPOOLER SIMULATION (--simulation)" : "LIVE PHYSICAL PRINT (" + activeQueueDisplay + ")"));
+                        Console.WriteLine("  Station Config File:         " + configPath);
+                        Console.WriteLine("  SQLite WAL Database:         " + dbPath);
+                        Console.WriteLine("  Private PDF Vault:           " + vaultDir);
+                        Console.WriteLine("======================================================================");
+                        Console.WriteLine("Press Ctrl+C to stop.");
+
+                        var exitEvent = new ManualResetEvent(false);
+                        Console.CancelKeyPress += (s, e) =>
+                        {
+                            e.Cancel = true;
+                            exitEvent.Set();
+                        };
+                        exitEvent.WaitOne();
+                    }
+
+                    tunnel.Stop();
                     worker.Stop();
                 }
             }

@@ -19,3 +19,9 @@ secrets/
 
 # Tunnel binary
 bin/cloudflared.exe
+
+# Distribution packaging & updater temporary files
+dist/
+*.update
+*.pending
+apply-update.bat
