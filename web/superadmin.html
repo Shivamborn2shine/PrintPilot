@@ -1,0 +1,700 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>PrintAway Super-Admin Hub | Founder Fleet Control Plane</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+  <style>
+    @import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600&display=swap');
+    body { font-family: 'Plus Jakarta Sans', sans-serif; background-color: #0b0f19; color: #f1f5f9; }
+    .mono { font-family: 'JetBrains Mono', monospace; }
+    .glass { background: rgba(17, 24, 39, 0.75); backdrop-filter: blur(12px); border: 1px solid rgba(255, 255, 255, 0.08); }
+    .glow-indigo { box-shadow: 0 0 25px rgba(99, 102, 241, 0.25); }
+    .glow-emerald { box-shadow: 0 0 25px rgba(16, 185, 129, 0.25); }
+  </style>
+</head>
+<body class="min-h-screen flex flex-col selection:bg-indigo-500 selection:text-white">
+
+  <!-- TOP FOUNDER HEADER -->
+  <header class="border-b border-gray-800 bg-gray-950/80 sticky top-0 z-40 backdrop-blur-md">
+    <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between">
+      <div class="flex items-center space-x-3">
+        <div class="w-9 h-9 rounded-xl bg-gradient-to-tr from-indigo-600 to-violet-500 flex items-center justify-center text-white font-bold text-lg shadow-lg shadow-indigo-500/30">
+          <i class="fa-solid fa-satellite-dish text-sm"></i>
+        </div>
+        <div>
+          <span class="text-lg font-extrabold tracking-tight bg-gradient-to-r from-white via-slate-200 to-indigo-300 bg-clip-text text-transparent">PrintAway</span>
+          <span class="text-xs font-semibold px-2 py-0.5 ml-2 rounded-full bg-indigo-500/10 text-indigo-400 border border-indigo-500/20">SUPER-ADMIN</span>
+        </div>
+      </div>
+
+      <div class="flex items-center space-x-3">
+        <button id="btnRefresh" onclick="loadDashboardData()" class="px-3 py-1.5 rounded-lg bg-gray-800 hover:bg-gray-700 text-gray-300 text-xs font-medium transition flex items-center space-x-1.5 border border-gray-700">
+          <i class="fa-solid fa-arrows-rotate text-xs"></i>
+          <span>Sync Fleet</span>
+        </button>
+        <button onclick="openNewShopModal()" class="px-3.5 py-1.5 rounded-lg bg-gradient-to-r from-indigo-600 to-violet-600 hover:from-indigo-500 hover:to-violet-500 text-white text-xs font-bold transition flex items-center space-x-1.5 shadow-md shadow-indigo-600/30">
+          <i class="fa-solid fa-plus text-xs"></i>
+          <span>New Franchise Shop</span>
+        </button>
+        <button onclick="logoutFounder()" title="Settings / Key" class="p-2 text-gray-400 hover:text-white transition">
+          <i class="fa-solid fa-key"></i>
+        </button>
+      </div>
+    </div>
+  </header>
+
+  <!-- MAIN CONTAINER -->
+  <main class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 flex-1 w-full space-y-8">
+
+    <!-- DATABASE SETUP ALERT (Shows only if SQL schema not created yet) -->
+    <div id="schemaAlert" class="hidden rounded-2xl bg-amber-500/10 border border-amber-500/30 p-6 flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
+      <div class="flex items-start space-x-4">
+        <div class="p-3 bg-amber-500/20 text-amber-400 rounded-xl text-xl mt-0.5">
+          <i class="fa-solid fa-triangle-exclamation"></i>
+        </div>
+        <div>
+          <h3 class="text-base font-bold text-amber-300">Supabase Database Tables Not Initialized</h3>
+          <p class="text-xs text-amber-200/80 mt-1 max-w-2xl leading-relaxed">
+            Your Supabase project is connected, but the <code class="bg-amber-950/60 px-1 py-0.5 rounded text-amber-300 font-mono">public.shops</code> and <code class="bg-amber-950/60 px-1 py-0.5 rounded text-amber-300 font-mono">public.daily_telemetry</code> tables haven't been created yet. Run the 1-click SQL script in your Supabase SQL Editor to activate live fleet telemetry.
+          </p>
+        </div>
+      </div>
+      <div class="flex items-center space-x-3 w-full md:w-auto">
+        <button onclick="copySqlScript()" class="flex-1 md:flex-none px-4 py-2 bg-amber-500 text-gray-950 hover:bg-amber-400 font-bold text-xs rounded-xl transition flex items-center justify-center space-x-1.5 shadow-lg shadow-amber-500/20">
+          <i class="fa-solid fa-copy"></i>
+          <span>Copy SQL Script</span>
+        </button>
+        <a href="https://supabase.com/dashboard/project/zduoifzakiojfqbtxqqm/sql" target="_blank" class="px-4 py-2 bg-gray-800 hover:bg-gray-700 text-amber-300 border border-amber-500/30 text-xs font-semibold rounded-xl transition flex items-center space-x-1.5">
+          <span>Open SQL Editor</span>
+          <i class="fa-solid fa-arrow-up-right-from-square text-[10px]"></i>
+        </a>
+      </div>
+    </div>
+
+    <!-- KPI SUMMARY CARDS -->
+    <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-5">
+      <!-- Active Stations -->
+      <div class="glass p-5 rounded-2xl relative overflow-hidden group hover:border-indigo-500/40 transition">
+        <div class="flex items-center justify-between text-gray-400 text-xs font-bold uppercase tracking-wider">
+          <span>Fleet Active</span>
+          <span class="w-2.5 h-2.5 rounded-full bg-emerald-500 animate-pulse"></span>
+        </div>
+        <div class="mt-3 flex items-baseline space-x-2">
+          <span id="kpiActiveShops" class="text-3xl font-extrabold text-white">0</span>
+          <span id="kpiTotalShops" class="text-xs text-gray-500 font-semibold">/ 0 Total Stations</span>
+        </div>
+        <div class="mt-2 text-[11px] text-gray-400 flex items-center space-x-1">
+          <i class="fa-solid fa-signal text-emerald-400"></i>
+          <span id="kpiHeartbeatText">Heartbeat within 30 mins</span>
+        </div>
+      </div>
+
+      <!-- Network Pages Today -->
+      <div class="glass p-5 rounded-2xl relative overflow-hidden group hover:border-indigo-500/40 transition">
+        <div class="flex items-center justify-between text-gray-400 text-xs font-bold uppercase tracking-wider">
+          <span>Pages Printed Today</span>
+          <i class="fa-solid fa-print text-indigo-400"></i>
+        </div>
+        <div class="mt-3 flex items-baseline space-x-2">
+          <span id="kpiPagesToday" class="text-3xl font-extrabold text-white">0</span>
+          <span class="text-xs text-indigo-400 font-semibold">pages</span>
+        </div>
+        <div class="mt-2 text-[11px] text-gray-400">
+          Across all active franchise shops
+        </div>
+      </div>
+
+      <!-- Monthly Recurring Revenue (MRR) -->
+      <div class="glass p-5 rounded-2xl relative overflow-hidden group hover:border-indigo-500/40 transition">
+        <div class="flex items-center justify-between text-gray-400 text-xs font-bold uppercase tracking-wider">
+          <span>Monthly SaaS MRR</span>
+          <i class="fa-solid fa-sack-dollar text-emerald-400"></i>
+        </div>
+        <div class="mt-3 flex items-baseline space-x-2">
+          <span id="kpiMrr" class="text-3xl font-extrabold text-emerald-400">₹0</span>
+          <span class="text-xs text-gray-500 font-semibold">/ month</span>
+        </div>
+        <div class="mt-2 text-[11px] text-gray-400" id="kpiMrrBreakdown">
+          0 Annual (₹149) + 0 Monthly (₹249)
+        </div>
+      </div>
+
+      <!-- Pricing Plans Supported -->
+      <div class="glass p-5 rounded-2xl relative overflow-hidden group hover:border-indigo-500/40 transition">
+        <div class="flex items-center justify-between text-gray-400 text-xs font-bold uppercase tracking-wider">
+          <span>Active Pricing Tier</span>
+          <i class="fa-solid fa-tag text-violet-400"></i>
+        </div>
+        <div class="mt-3 text-sm font-bold text-slate-200">
+          Free: 10 pgs/day • Pro: ₹149/mo
+        </div>
+        <div class="mt-2 text-[11px] text-gray-400">
+          Soft grace buffer: 3 pages/station
+        </div>
+      </div>
+    </div>
+
+    <!-- FRANCHISE FLEET DIRECTORY -->
+    <div class="glass rounded-2xl p-6 border border-gray-800">
+      <div class="flex flex-col md:flex-row md:items-center justify-between gap-4 pb-6 border-b border-gray-800/80">
+        <div>
+          <h2 class="text-lg font-bold text-white flex items-center space-x-2">
+            <span>Franchise Stations Fleet</span>
+            <span id="badgeShopCount" class="px-2 py-0.5 rounded-full text-[11px] bg-gray-800 text-gray-300 font-mono">0</span>
+          </h2>
+          <p class="text-xs text-gray-400 mt-0.5">Real-time status, live Cloudflare tunnels, daily page quotas, and remote founder controls.</p>
+        </div>
+
+        <div class="flex items-center space-x-3">
+          <div class="relative">
+            <i class="fa-solid fa-magnifying-glass absolute left-3 top-2.5 text-gray-500 text-xs"></i>
+            <input type="text" id="searchInput" oninput="filterShops()" placeholder="Search Shop ID, Name, Phone..." class="pl-8 pr-4 py-1.5 rounded-xl bg-gray-900 border border-gray-700 text-xs text-white placeholder-gray-500 focus:outline-none focus:border-indigo-500 w-64 transition">
+          </div>
+          <select id="filterTier" onchange="filterShops()" class="px-3 py-1.5 rounded-xl bg-gray-900 border border-gray-700 text-xs text-gray-300 focus:outline-none focus:border-indigo-500 transition">
+            <option value="all">All Tiers</option>
+            <option value="free">Free Tier (10 pgs/day)</option>
+            <option value="pro_annual">Pro Annual (₹149/mo)</option>
+            <option value="pro_monthly">Pro Monthly (₹249/mo)</option>
+          </select>
+        </div>
+      </div>
+
+      <!-- SHOPS TABLE -->
+      <div class="overflow-x-auto mt-4">
+        <table class="w-full text-left text-xs">
+          <thead>
+            <tr class="text-gray-400 font-semibold border-b border-gray-800/60 pb-3 uppercase tracking-wider text-[10px]">
+              <th class="py-3 px-3">Status</th>
+              <th class="py-3 px-3">Shop Identity</th>
+              <th class="py-3 px-3">Live Hardware & Tunnel</th>
+              <th class="py-3 px-3">Daily Quota / Plan</th>
+              <th class="py-3 px-3 text-right">Founder Actions</th>
+            </tr>
+          </thead>
+          <tbody id="shopsTableBody" class="divide-y divide-gray-800/40">
+            <tr>
+              <td colspan="5" class="py-12 text-center text-gray-500">
+                <i class="fa-solid fa-circle-notch fa-spin text-2xl text-indigo-500 mb-2"></i>
+                <div>Loading fleet data from Supabase...</div>
+              </td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+  </main>
+
+  <!-- MODAL: ADD NEW FRANCHISE SHOP -->
+  <div id="newShopModal" class="fixed inset-0 bg-black/80 backdrop-blur-sm z-50 flex items-center justify-center p-4 hidden">
+    <div class="glass max-w-lg w-full rounded-2xl border border-gray-800 p-6 space-y-5 shadow-2xl relative">
+      <div class="flex items-center justify-between border-b border-gray-800 pb-4">
+        <div class="flex items-center space-x-2.5">
+          <div class="w-8 h-8 rounded-lg bg-indigo-600/20 text-indigo-400 flex items-center justify-center text-sm">
+            <i class="fa-solid fa-store"></i>
+          </div>
+          <div>
+            <h3 class="text-base font-bold text-white">Register New Franchise Shop</h3>
+            <p class="text-[11px] text-gray-400">Onboard a new station in 15 seconds. Generates instant station config.</p>
+          </div>
+        </div>
+        <button onclick="closeNewShopModal()" class="text-gray-400 hover:text-white text-lg">
+          <i class="fa-solid fa-xmark"></i>
+        </button>
+      </div>
+
+      <form id="newShopForm" onsubmit="handleCreateShop(event)" class="space-y-4">
+        <div class="grid grid-cols-2 gap-3">
+          <div>
+            <label class="block text-[11px] font-semibold text-gray-300 mb-1">Shop ID (Slug)</label>
+            <input type="text" id="inputShopId" required placeholder="e.g. campus-01" class="w-full px-3 py-2 rounded-xl bg-gray-900 border border-gray-700 text-xs text-white focus:outline-none focus:border-indigo-500 font-mono">
+            <p class="text-[10px] text-gray-500 mt-0.5">Used in QR link: ?shop=campus-01</p>
+          </div>
+          <div>
+            <label class="block text-[11px] font-semibold text-gray-300 mb-1">Shop Name</label>
+            <input type="text" id="inputShopName" required placeholder="e.g. Campus Xerox Hub" class="w-full px-3 py-2 rounded-xl bg-gray-900 border border-gray-700 text-xs text-white focus:outline-none focus:border-indigo-500">
+          </div>
+        </div>
+
+        <div class="grid grid-cols-2 gap-3">
+          <div>
+            <label class="block text-[11px] font-semibold text-gray-300 mb-1">Owner Name</label>
+            <input type="text" id="inputOwnerName" required placeholder="e.g. Rajesh Kumar" class="w-full px-3 py-2 rounded-xl bg-gray-900 border border-gray-700 text-xs text-white focus:outline-none focus:border-indigo-500">
+          </div>
+          <div>
+            <label class="block text-[11px] font-semibold text-gray-300 mb-1">Owner Phone (WhatsApp)</label>
+            <input type="text" id="inputOwnerPhone" required placeholder="e.g. 9876543210" class="w-full px-3 py-2 rounded-xl bg-gray-900 border border-gray-700 text-xs text-white focus:outline-none focus:border-indigo-500">
+          </div>
+        </div>
+
+        <div>
+          <label class="block text-[11px] font-semibold text-gray-300 mb-1">Shopkeeper Customer Payment UPI VPA</label>
+          <input type="text" id="inputUpiVpa" required placeholder="e.g. rajesh@okaxis or 9876543210@paytm" class="w-full px-3 py-2 rounded-xl bg-gray-900 border border-gray-700 text-xs text-white focus:outline-none focus:border-indigo-500 font-mono">
+          <p class="text-[10px] text-gray-500 mt-0.5">Customer printing payments go directly to this VPA (0% commission).</p>
+        </div>
+
+        <div>
+          <label class="block text-[11px] font-semibold text-gray-300 mb-1">Initial Subscription Tier</label>
+          <select id="inputTier" class="w-full px-3 py-2 rounded-xl bg-gray-900 border border-gray-700 text-xs text-white focus:outline-none focus:border-indigo-500">
+            <option value="free">Free Tier (10 Pages/Day Free)</option>
+            <option value="pro_annual">Pro Annual (₹149/mo - ₹1,788/yr) - Unlimited</option>
+            <option value="pro_monthly">Pro Monthly (₹249/mo) - Unlimited</option>
+          </select>
+        </div>
+
+        <div class="pt-3 border-t border-gray-800 flex items-center justify-end space-x-3">
+          <button type="button" onclick="closeNewShopModal()" class="px-4 py-2 rounded-xl bg-gray-800 hover:bg-gray-700 text-gray-300 text-xs font-medium transition">Cancel</button>
+          <button type="submit" id="btnSubmitShop" class="px-5 py-2 rounded-xl bg-gradient-to-r from-indigo-600 to-violet-600 hover:from-indigo-500 hover:to-violet-500 text-white text-xs font-bold transition shadow-lg shadow-indigo-600/30 flex items-center space-x-1.5">
+            <i class="fa-solid fa-check"></i>
+            <span>Register & Generate Config</span>
+          </button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <script>
+    // Configuration constants
+    const SUPABASE_URL = "https://zduoifzakiojfqbtxqqm.supabase.co";
+    let MASTER_KEY = localStorage.getItem("pa_founder_secret_key") || "";
+
+    let allShops = [];
+    let telemetryMap = {};
+
+    document.addEventListener("DOMContentLoaded", () => {
+      loadDashboardData();
+    });
+
+    async function loadDashboardData() {
+      const btn = document.getElementById("btnRefresh");
+      if (btn) btn.innerHTML = '<i class="fa-solid fa-circle-notch fa-spin text-xs"></i> <span>Syncing...</span>';
+
+      if (!MASTER_KEY) {
+        const entered = prompt("Enter your Supabase Founder Secret Key (sb_secret_...):");
+        if (entered && entered.trim()) {
+          MASTER_KEY = entered.trim();
+          localStorage.setItem("pa_founder_secret_key", MASTER_KEY);
+        } else {
+          renderEmptyState("Founder authentication required. Click the key icon on the top right to enter your secret key.");
+          if (btn) btn.innerHTML = '<i class="fa-solid fa-arrows-rotate text-xs"></i> <span>Sync Fleet</span>';
+          return;
+        }
+      }
+
+      try {
+        const headers = {
+          "apikey": MASTER_KEY,
+          "User-Agent": "PrintAwaySuperAdmin/1.0"
+        };
+
+        // 1. Fetch shops
+        const shopsRes = await fetch(`${SUPABASE_URL}/rest/v1/shops?select=*`, { headers });
+        if (!shopsRes.ok) {
+          const errData = await shopsRes.json().catch(() => ({}));
+          if (errData && errData.code === "PGRST205") {
+            // Table doesn't exist yet
+            document.getElementById("schemaAlert").classList.remove("hidden");
+            renderEmptyState("Database schema not yet deployed in Supabase.");
+            return;
+          }
+          throw new Error(`HTTP ${shopsRes.status}: ${JSON.stringify(errData)}`);
+        }
+
+        allShops = await shopsRes.json();
+        document.getElementById("schemaAlert").classList.add("hidden");
+
+        // 2. Fetch today's telemetry
+        const todayStr = new Date().toISOString().split("T")[0];
+        const telemRes = await fetch(`${SUPABASE_URL}/rest/v1/daily_telemetry?date=eq.${todayStr}&select=*`, { headers }).catch(() => null);
+        telemetryMap = {};
+        if (telemRes && telemRes.ok) {
+          const telemList = await telemRes.json();
+          telemList.forEach(t => { telemetryMap[t.shop_id] = t; });
+        }
+
+        renderDashboard();
+      } catch (err) {
+        console.error("Dashboard sync error:", err);
+        renderEmptyState(`Sync error: ${err.message}. Check your Supabase Secret Key.`);
+      } finally {
+        if (btn) btn.innerHTML = '<i class="fa-solid fa-arrows-rotate text-xs"></i> <span>Sync Fleet</span>';
+      }
+    }
+
+    function renderDashboard() {
+      // Calculate KPIs
+      const now = new Date().getTime();
+      let activeCount = 0;
+      let totalPagesToday = 0;
+      let mrrTotal = 0;
+      let proAnnualCount = 0;
+      let proMonthlyCount = 0;
+
+      allShops.forEach(shop => {
+        // Heartbeat within 30 min (1800000 ms)
+        const lastHb = shop.last_heartbeat_utc ? new Date(shop.last_heartbeat_utc).getTime() : 0;
+        const isOnline = (now - lastHb) < 30 * 60 * 1000;
+        if (isOnline) activeCount++;
+
+        // Pages today
+        const t = telemetryMap[shop.shop_id];
+        if (t && t.pages_count) totalPagesToday += t.pages_count;
+
+        // MRR
+        if (shop.subscription_tier === "pro_annual") {
+          mrrTotal += 149;
+          proAnnualCount++;
+        } else if (shop.subscription_tier === "pro_monthly") {
+          mrrTotal += 249;
+          proMonthlyCount++;
+        }
+      });
+
+      document.getElementById("kpiActiveShops").innerText = activeCount;
+      document.getElementById("kpiTotalShops").innerText = `/ ${allShops.length} Total Stations`;
+      document.getElementById("kpiPagesToday").innerText = totalPagesToday;
+      document.getElementById("kpiMrr").innerText = `₹${mrrTotal.toLocaleString("en-IN")}`;
+      document.getElementById("kpiMrrBreakdown").innerText = `${proAnnualCount} Annual (₹149/mo) + ${proMonthlyCount} Monthly (₹249/mo)`;
+      document.getElementById("badgeShopCount").innerText = allShops.length;
+
+      filterShops();
+    }
+
+    function filterShops() {
+      const query = (document.getElementById("searchInput").value || "").toLowerCase().trim();
+      const tierFilter = document.getElementById("filterTier").value;
+
+      const filtered = allShops.filter(s => {
+        const matchesQuery = !query || 
+          (s.shop_id && s.shop_id.toLowerCase().includes(query)) ||
+          (s.shop_name && s.shop_name.toLowerCase().includes(query)) ||
+          (s.owner_phone && s.owner_phone.includes(query));
+        const matchesTier = tierFilter === "all" || s.subscription_tier === tierFilter;
+        return matchesQuery && matchesTier;
+      });
+
+      renderShopsTable(filtered);
+    }
+
+    function renderShopsTable(shops) {
+      const tbody = document.getElementById("shopsTableBody");
+      if (!shops || shops.length === 0) {
+        tbody.innerHTML = `
+          <tr>
+            <td colspan="5" class="py-12 text-center text-gray-500">
+              <i class="fa-solid fa-store-slash text-3xl mb-2 text-gray-600"></i>
+              <div>No franchise shops found matching your criteria.</div>
+            </td>
+          </tr>
+        `;
+        return;
+      }
+
+      const now = new Date().getTime();
+
+      tbody.innerHTML = shops.map(shop => {
+        const lastHb = shop.last_heartbeat_utc ? new Date(shop.last_heartbeat_utc).getTime() : 0;
+        const diffMins = Math.floor((now - lastHb) / (60 * 1000));
+        const isOnline = diffMins < 30;
+
+        const isPro = shop.subscription_tier && shop.subscription_tier.startsWith("pro");
+        const telem = telemetryMap[shop.shop_id] || { pages_count: 0, orders_count: 0 };
+        const pagesToday = telem.pages_count || 0;
+        const quota = isPro ? 999999 : (shop.daily_page_quota || 10);
+        const quotaPct = Math.min(100, Math.round((pagesToday / quota) * 100));
+
+        let statusBadge = isOnline 
+          ? `<span class="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-500/10 text-emerald-400 border border-emerald-500/20"><span class="w-1.5 h-1.5 rounded-full bg-emerald-400 mr-1.5 animate-pulse"></span>Online (${diffMins}m ago)</span>`
+          : `<span class="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-bold bg-rose-500/10 text-rose-400 border border-rose-500/20"><span class="w-1.5 h-1.5 rounded-full bg-rose-400 mr-1.5"></span>Offline</span>`;
+
+        if (shop.emergency_remote_pause) {
+          statusBadge = `<span class="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-bold bg-amber-500/10 text-amber-400 border border-amber-500/20"><i class="fa-solid fa-pause text-[9px] mr-1"></i>Remotely Paused</span>`;
+        }
+
+        let planBadge = isPro
+          ? (shop.subscription_tier === "pro_annual" 
+              ? `<span class="px-2 py-0.5 rounded-full bg-indigo-500/15 text-indigo-300 font-bold text-[10px] border border-indigo-500/30">✨ Pro Annual (₹149/mo)</span>`
+              : `<span class="px-2 py-0.5 rounded-full bg-violet-500/15 text-violet-300 font-bold text-[10px] border border-violet-500/30">⚡ Pro Monthly (₹249/mo)</span>`)
+          : `<span class="px-2 py-0.5 rounded-full bg-gray-800 text-gray-300 font-bold text-[10px] border border-gray-700">Free Tier (10 pgs/day)</span>`;
+
+        const tunnelLink = shop.live_tunnel_url 
+          ? `<a href="${shop.live_tunnel_url}" target="_blank" class="text-indigo-400 hover:text-indigo-300 underline font-mono text-[11px] flex items-center space-x-1"><span>${shop.live_tunnel_url.replace("https://", "")}</span><i class="fa-solid fa-arrow-up-right-from-square text-[9px]"></i></a>`
+          : `<span class="text-gray-500 text-[11px]">Tunnel not published</span>`;
+
+        return `
+          <tr class="hover:bg-gray-800/20 transition group">
+            <td class="py-3.5 px-3 whitespace-nowrap">
+              ${statusBadge}
+              <div class="text-[10px] text-gray-500 mt-1 mono">v${shop.client_version || '2.2.0'}</div>
+            </td>
+
+            <td class="py-3.5 px-3">
+              <div class="font-bold text-white text-sm flex items-center space-x-2">
+                <span>${escapeHtml(shop.shop_name)}</span>
+                <span class="text-[10px] px-1.5 py-0.5 rounded bg-gray-800 text-indigo-400 font-mono">${escapeHtml(shop.shop_id)}</span>
+              </div>
+              <div class="text-[11px] text-gray-400 mt-0.5">
+                ${escapeHtml(shop.owner_name)} • <a href="https://wa.me/91${shop.owner_phone}" target="_blank" class="text-emerald-400 hover:underline"><i class="fa-brands fa-whatsapp"></i> ${escapeHtml(shop.owner_phone)}</a>
+              </div>
+              <div class="text-[10px] text-gray-500 mono mt-0.5">UPI: ${escapeHtml(shop.upi_vpa)}</div>
+            </td>
+
+            <td class="py-3.5 px-3">
+              <div class="text-slate-200 font-medium text-[11px] flex items-center space-x-1">
+                <i class="fa-solid fa-print text-gray-400 text-xs"></i>
+                <span>${escapeHtml(shop.active_printer_model || 'Xerox B1025 Multifunction Printer')}</span>
+              </div>
+              <div class="mt-1">${tunnelLink}</div>
+              <div class="mt-0.5">
+                <a href="https://printitaway.netlify.app/?shop=${shop.shop_id}" target="_blank" class="text-[10px] text-violet-400 hover:underline flex items-center space-x-1">
+                  <span>Storefront: ?shop=${shop.shop_id}</span>
+                </a>
+              </div>
+            </td>
+
+            <td class="py-3.5 px-3">
+              <div class="mb-1">${planBadge}</div>
+              <div class="flex items-center justify-between text-[10px] text-gray-400 font-semibold mb-1">
+                <span>Today: ${pagesToday} pgs</span>
+                <span>${isPro ? 'Unlimited' : `${quota} limit`}</span>
+              </div>
+              <div class="w-full bg-gray-800 rounded-full h-1.5 overflow-hidden">
+                <div class="h-1.5 rounded-full ${pagesToday >= quota && !isPro ? 'bg-rose-500' : 'bg-indigo-500'}" style="width: ${isPro ? 25 : quotaPct}%"></div>
+              </div>
+            </td>
+
+            <td class="py-3.5 px-3 text-right space-x-1.5 whitespace-nowrap">
+              ${isPro 
+                ? `<button onclick="setShopTier('${shop.shop_id}', 'free')" class="px-2.5 py-1 bg-gray-800 hover:bg-gray-700 text-gray-300 rounded-lg text-[10px] font-semibold border border-gray-700 transition" title="Downgrade to Free 10 pgs/day">Downgrade Free</button>`
+                : `<button onclick="setShopTier('${shop.shop_id}', 'pro_annual')" class="px-2.5 py-1 bg-gradient-to-r from-indigo-600 to-violet-600 hover:from-indigo-500 text-white rounded-lg text-[10px] font-bold shadow transition" title="Upgrade Pro ₹149/mo (Annual)">⚡ Pro (₹149/mo)</button>
+                   <button onclick="setShopTier('${shop.shop_id}', 'pro_monthly')" class="px-2.5 py-1 bg-gray-800 hover:bg-gray-700 text-indigo-300 rounded-lg text-[10px] font-semibold border border-indigo-500/30 transition" title="Upgrade Pro ₹249/mo (Monthly)">Pro (₹249/mo)</button>`
+              }
+
+              <button onclick="toggleRemotePause('${shop.shop_id}', ${!shop.emergency_remote_pause})" class="p-1.5 rounded-lg ${shop.emergency_remote_pause ? 'bg-emerald-500/20 text-emerald-400 hover:bg-emerald-500/30' : 'bg-amber-500/20 text-amber-400 hover:bg-amber-500/30'} text-[11px] transition" title="${shop.emergency_remote_pause ? 'Resume Station' : 'Emergency Remote Pause'}">
+                <i class="fa-solid ${shop.emergency_remote_pause ? 'fa-play' : 'fa-pause'}"></i>
+              </button>
+
+              <button onclick="downloadStationConfig('${shop.shop_id}')" class="p-1.5 rounded-lg bg-gray-800 hover:bg-gray-700 text-gray-300 text-[11px] border border-gray-700 transition" title="Download station.json">
+                <i class="fa-solid fa-download"></i>
+              </button>
+            </td>
+          </tr>
+        `;
+      }).join("");
+    }
+
+    async function setShopTier(shopId, newTier) {
+      if (!confirm(`Are you sure you want to change shop '${shopId}' to tier '${newTier}'?`)) return;
+
+      try {
+        const headers = {
+          "apikey": MASTER_KEY,
+          "Content-Type": "application/json",
+          "User-Agent": "PrintAwaySuperAdmin/1.0"
+        };
+        const payload = { subscription_tier: newTier };
+        if (newTier === "free") payload.daily_page_quota = 10;
+        else payload.daily_page_quota = 99999;
+
+        const res = await fetch(`${SUPABASE_URL}/rest/v1/shops?shop_id=eq.${encodeURIComponent(shopId)}`, {
+          method: "PATCH",
+          headers,
+          body: JSON.stringify(payload)
+        });
+
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+        loadDashboardData();
+      } catch (err) {
+        alert("Failed to update tier: " + err.message);
+      }
+    }
+
+    async function toggleRemotePause(shopId, willPause) {
+      const action = willPause ? "EMERGENCY PAUSE" : "RESUME";
+      if (!confirm(`Are you sure you want to ${action} station '${shopId}' remotely?`)) return;
+
+      try {
+        const headers = {
+          "apikey": MASTER_KEY,
+          "Content-Type": "application/json",
+          "User-Agent": "PrintAwaySuperAdmin/1.0"
+        };
+        const res = await fetch(`${SUPABASE_URL}/rest/v1/shops?shop_id=eq.${encodeURIComponent(shopId)}`, {
+          method: "PATCH",
+          headers,
+          body: JSON.stringify({ emergency_remote_pause: willPause })
+        });
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+        loadDashboardData();
+      } catch (err) {
+        alert("Failed to toggle remote pause: " + err.message);
+      }
+    }
+
+    async function handleCreateShop(e) {
+      e.preventDefault();
+      const shopId = document.getElementById("inputShopId").value.trim();
+      const shopName = document.getElementById("inputShopName").value.trim();
+      const ownerName = document.getElementById("inputOwnerName").value.trim();
+      const ownerPhone = document.getElementById("inputOwnerPhone").value.trim();
+      const upiVpa = document.getElementById("inputUpiVpa").value.trim();
+      const tier = document.getElementById("inputTier").value;
+
+      try {
+        const headers = {
+          "apikey": MASTER_KEY,
+          "Content-Type": "application/json",
+          "Prefer": "return=representation",
+          "User-Agent": "PrintAwaySuperAdmin/1.0"
+        };
+
+        const payload = {
+          shop_id: shopId,
+          shop_name: shopName,
+          owner_name: ownerName,
+          owner_phone: ownerPhone,
+          upi_vpa: upiVpa,
+          subscription_tier: tier,
+          daily_page_quota: tier === "free" ? 10 : 99999
+        };
+
+        const res = await fetch(`${SUPABASE_URL}/rest/v1/shops`, {
+          method: "POST",
+          headers,
+          body: JSON.stringify(payload)
+        });
+
+        if (!res.ok) {
+          const err = await res.json().catch(() => ({}));
+          throw new Error(err.message || `HTTP ${res.status}`);
+        }
+
+        closeNewShopModal();
+        downloadStationConfigObj(shopId, shopName, upiVpa);
+        loadDashboardData();
+      } catch (err) {
+        alert("Error registering shop: " + err.message);
+      }
+    }
+
+    function downloadStationConfig(shopId) {
+      const shop = allShops.find(s => s.shop_id === shopId);
+      if (!shop) return;
+      downloadStationConfigObj(shop.shop_id, shop.shop_name, shop.upi_vpa);
+    }
+
+    function downloadStationConfigObj(shopId, shopName, upiVpa) {
+      const cfg = {
+        shopId: shopId,
+        shopName: shopName,
+        upiVpa: upiVpa,
+        port: 8080,
+        activePrinterQueue: "auto",
+        autoFallbackToPhysicalPrinter: true
+      };
+
+      const blob = new Blob([JSON.stringify(cfg, null, 2)], { type: "application/json" });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `station-${shopId}.json`;
+      a.click();
+      URL.revokeObjectURL(url);
+    }
+
+    function openNewShopModal() {
+      document.getElementById("newShopModal").classList.remove("hidden");
+    }
+
+    function closeNewShopModal() {
+      document.getElementById("newShopModal").classList.add("hidden");
+    }
+
+    function renderEmptyState(msg) {
+      document.getElementById("shopsTableBody").innerHTML = `
+        <tr>
+          <td colspan="5" class="py-12 text-center text-gray-500">
+            <i class="fa-solid fa-database text-3xl mb-2 text-amber-500"></i>
+            <div class="text-slate-300 font-semibold">${msg}</div>
+          </td>
+        </tr>
+      `;
+    }
+
+    function copySqlScript() {
+      const sql = `-- PrintAway SaaS Control Plane Schema (v2.2)
+CREATE TABLE IF NOT EXISTS public.shops (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    shop_id TEXT UNIQUE NOT NULL,
+    shop_name TEXT NOT NULL,
+    owner_name TEXT NOT NULL,
+    owner_phone TEXT NOT NULL,
+    owner_email TEXT,
+    upi_vpa TEXT NOT NULL,
+    subscription_tier TEXT NOT NULL DEFAULT 'free',
+    subscription_status TEXT NOT NULL DEFAULT 'active',
+    daily_page_quota INT NOT NULL DEFAULT 10,
+    valid_until TIMESTAMPTZ,
+    last_heartbeat_utc TIMESTAMPTZ,
+    live_tunnel_url TEXT,
+    active_printer_model TEXT,
+    client_version TEXT DEFAULT '2.2.0',
+    emergency_remote_pause BOOLEAN NOT NULL DEFAULT FALSE,
+    created_at TIMESTAMPTZ DEFAULT NOW(),
+    updated_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+CREATE TABLE IF NOT EXISTS public.daily_telemetry (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    shop_id TEXT REFERENCES public.shops(shop_id) ON DELETE CASCADE,
+    date DATE NOT NULL DEFAULT CURRENT_DATE,
+    pages_count INT NOT NULL DEFAULT 0,
+    sheets_count INT NOT NULL DEFAULT 0,
+    orders_count INT NOT NULL DEFAULT 0,
+    bw_pages INT NOT NULL DEFAULT 0,
+    color_pages INT NOT NULL DEFAULT 0,
+    revenue_inr NUMERIC(10,2) NOT NULL DEFAULT 0.00,
+    last_updated TIMESTAMPTZ DEFAULT NOW(),
+    UNIQUE(shop_id, date)
+);
+
+CREATE TABLE IF NOT EXISTS public.saas_subscriptions (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    shop_id TEXT REFERENCES public.shops(shop_id) ON DELETE CASCADE,
+    tier TEXT NOT NULL,
+    amount_inr NUMERIC(10,2) NOT NULL,
+    payment_reference TEXT NOT NULL,
+    status TEXT NOT NULL DEFAULT 'active',
+    valid_from TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    valid_until TIMESTAMPTZ NOT NULL,
+    created_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+INSERT INTO public.shops (shop_id, shop_name, owner_name, owner_phone, upi_vpa, subscription_tier, daily_page_quota)
+VALUES ('pilot', 'PrintAway Pilot Shop', 'Shivam', '9999999999', 'shivam@upi', 'pro_annual', 99999)
+ON CONFLICT (shop_id) DO NOTHING;`;
+
+      navigator.clipboard.writeText(sql).then(() => {
+        alert("SQL Schema copied to clipboard! Paste it into the Supabase SQL Editor and hit Run.");
+      });
+    }
+
+    function logoutFounder() {
+      const key = prompt("Enter Supabase Founder Secret Key (or leave empty to reset):", MASTER_KEY);
+      if (key !== null) {
+        MASTER_KEY = key.trim();
+        localStorage.setItem("pa_founder_secret_key", MASTER_KEY);
+        loadDashboardData();
+      }
+    }
+
+    function escapeHtml(text) {
+      if (!text) return "";
+      return text.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+    }
+  </script>
+</body>
+</html>

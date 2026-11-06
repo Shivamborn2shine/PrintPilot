@@ -8,6 +8,7 @@ using System.Runtime.InteropServices;
 using System.Text.RegularExpressions;
 using System.Windows.Forms;
 using PrintAway.Engine;
+using PrintAway.SaaS;
 using PrintAway.Storage;
 using PrintAway.Tunnel;
 using PrintAway.Updater;
@@ -36,12 +37,14 @@ namespace PrintAway.Gui
         private readonly TunnelManager _tunnel;
         private readonly string _repoRoot;
         private readonly int _port;
+        private readonly SupabaseSyncClient _supabaseSync;
 
         // UI Controls
         private Label _lblStatusBadge;
         private Label _lblShopTitle;
         private Label _lblCustomerLink;
         private Label _lblTunnelUrl;
+        private Label _lblQuotaBadge;
         private ComboBox _cmbPrinters;
         private RadioButton _rbPhysical;
         private RadioButton _rbSimulation;
@@ -58,6 +61,11 @@ namespace PrintAway.Gui
         private bool _isInitializing = true;
 
         public StationGuiForm(PrintAwayRepository repo, LocalPrintWorker worker, PrintAwayHttpServer server, TunnelManager tunnel, string repoRoot, int port)
+            : this(repo, worker, server, tunnel, repoRoot, port, null)
+        {
+        }
+
+        public StationGuiForm(PrintAwayRepository repo, LocalPrintWorker worker, PrintAwayHttpServer server, TunnelManager tunnel, string repoRoot, int port, SupabaseSyncClient supabaseSync)
         {
             _repo = repo;
             _worker = worker;
@@ -65,6 +73,7 @@ namespace PrintAway.Gui
             _tunnel = tunnel;
             _repoRoot = repoRoot;
             _port = port;
+            _supabaseSync = supabaseSync;
 
             InitializeGui();
             LoadInitialData();
@@ -72,6 +81,11 @@ namespace PrintAway.Gui
             if (_tunnel != null)
             {
                 _tunnel.OnTunnelUrlCaptured += OnTunnelCaptured;
+            }
+
+            if (_supabaseSync != null)
+            {
+                _supabaseSync.OnQuotaStatusChanged += OnQuotaChanged;
             }
         }
 
@@ -150,8 +164,8 @@ namespace PrintAway.Gui
             int y = 14;
 
             // 3. Card: Shop Identity & Live Customer QR Link
-            var grpShop = CreateCardPanel("🏪 Shop Identity & Live Customer QR", 18, y, 620, 120);
-            y += 132;
+            var grpShop = CreateCardPanel("🏪 Shop Identity & Live Customer QR", 18, y, 620, 142);
+            y += 154;
 
             _lblShopTitle = new Label
             {
@@ -194,14 +208,40 @@ namespace PrintAway.Gui
                 Text = "Cloudflare Tunnel: Initializing secure HTTP/2 tunnel...",
                 Font = new Font("Segoe UI", 8f, FontStyle.Regular),
                 ForeColor = Color.FromArgb(71, 85, 105),
-                Location = new Point(14, 74),
-                Size = new Size(585, 38)
+                Location = new Point(14, 72),
+                Size = new Size(585, 36)
             };
+
+            _lblQuotaBadge = new Label
+            {
+                Text = "📊 Daily Quota: 0 / 10 Free Pages • Pro: ₹149/mo (Unlimited)",
+                Font = new Font("Segoe UI", 8f, FontStyle.Bold),
+                ForeColor = Color.FromArgb(79, 70, 229),
+                Location = new Point(14, 112),
+                Size = new Size(475, 20),
+                Cursor = Cursors.Hand
+            };
+            _lblQuotaBadge.Click += (s, e) => LaunchBrowser("http://127.0.0.1:" + _port + "/admin#pro-upgrade");
+
+            var btnUpgradePro = new Button
+            {
+                Text = "⚡ Pro Upgrade",
+                Size = new Size(95, 24),
+                Location = new Point(505, 108),
+                BackColor = Color.FromArgb(238, 242, 255),
+                ForeColor = Color.FromArgb(67, 56, 202),
+                Font = new Font("Segoe UI", 8f, FontStyle.Bold),
+                FlatStyle = FlatStyle.System,
+                Cursor = Cursors.Hand
+            };
+            btnUpgradePro.Click += (s, e) => LaunchBrowser("http://127.0.0.1:" + _port + "/admin#pro-upgrade");
 
             grpShop.Controls.Add(_lblShopTitle);
             grpShop.Controls.Add(_lblCustomerLink);
             grpShop.Controls.Add(btnCopyLink);
             grpShop.Controls.Add(_lblTunnelUrl);
+            grpShop.Controls.Add(_lblQuotaBadge);
+            grpShop.Controls.Add(btnUpgradePro);
             pnlBody.Controls.Add(grpShop);
 
             // 4. Card: Printer Fleet & Dispatch Control
@@ -544,8 +584,49 @@ namespace PrintAway.Gui
                     _lblMetricSides.Text = Convert.ToString(dbMetrics["totalPrintedSides"]) + " sides";
                     _lblMetricRevenue.Text = string.Format(CultureInfo.InvariantCulture, "₹{0:0.00}", Convert.ToDouble(dbMetrics["verifiedRevenueInr"]));
                 }
+
+                if (_supabaseSync != null && _supabaseSync.CurrentQuota != null)
+                {
+                    OnQuotaChanged(_supabaseSync.CurrentQuota);
+                }
             }
             catch { }
+        }
+
+        private void OnQuotaChanged(QuotaStatus quota)
+        {
+            if (this.InvokeRequired)
+            {
+                this.BeginInvoke(new Action<QuotaStatus>(OnQuotaChanged), quota);
+                return;
+            }
+
+            if (_lblQuotaBadge == null || quota == null) return;
+
+            bool isPro = !string.IsNullOrEmpty(quota.Tier) && quota.Tier.StartsWith("pro", StringComparison.OrdinalIgnoreCase);
+            if (isPro)
+            {
+                _lblQuotaBadge.Text = string.Format(CultureInfo.InvariantCulture, "✨ Pro Tier Active ({0}) • Unlimited Daily Printing", quota.Tier == "pro_annual" ? "₹149/mo Annual" : "₹249/mo Monthly");
+                _lblQuotaBadge.ForeColor = Color.FromArgb(21, 128, 61);
+            }
+            else
+            {
+                if (quota.IsHardBlocked)
+                {
+                    _lblQuotaBadge.Text = string.Format(CultureInfo.InvariantCulture, "🚫 Daily Quota Exceeded ({0}/10)! Printing Blocked • Upgrade to Pro", quota.PagesPrintedToday);
+                    _lblQuotaBadge.ForeColor = Color.FromArgb(220, 38, 38);
+                }
+                else if (quota.IsQuotaExceeded)
+                {
+                    _lblQuotaBadge.Text = string.Format(CultureInfo.InvariantCulture, "⚠️ Daily Quota Reached ({0}/10)! Grace Buffer Active • Upgrade Pro", quota.PagesPrintedToday);
+                    _lblQuotaBadge.ForeColor = Color.FromArgb(180, 83, 9);
+                }
+                else
+                {
+                    _lblQuotaBadge.Text = string.Format(CultureInfo.InvariantCulture, "📊 Daily Quota: {0} / 10 Free Pages Used • Pro: ₹149/mo (Unlimited)", quota.PagesPrintedToday);
+                    _lblQuotaBadge.ForeColor = Color.FromArgb(79, 70, 229);
+                }
+            }
         }
 
         private void OnTunnelCaptured(string url)

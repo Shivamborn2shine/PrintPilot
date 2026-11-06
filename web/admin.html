@@ -163,6 +163,29 @@
 
     <!-- Authenticated Dashboard Content -->
     <div id="dashboardContent" class="hidden">
+      <!-- SaaS Freemium Daily Quota Banner -->
+      <div id="saasQuotaBanner" style="background:#f8fafc;border:1px solid #e2e8f0;border-radius:10px;padding:12px 16px;margin-bottom:14px;display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:10px;">
+        <div style="display:flex;align-items:center;gap:12px;">
+          <div style="width:36px;height:36px;border-radius:8px;background:#e0e7ff;color:#4f46e5;display:flex;align-items:center;justify-content:center;font-weight:bold;font-size:1.1rem;">
+            📊
+          </div>
+          <div>
+            <div style="font-weight:700;font-size:0.92rem;display:flex;align-items:center;gap:8px;">
+              <span id="saasPlanTitle">Daily Printing Quota: 0 / 10 Pages (Free Tier)</span>
+              <span id="saasTierBadge" style="font-size:0.7rem;padding:2px 8px;border-radius:999px;background:#e0e7ff;color:#4338ca;font-weight:700;">FREE</span>
+            </div>
+            <div style="font-size:0.78rem;color:var(--muted);margin-top:2px;" id="saasQuotaSub">
+              Resets every midnight at 00:00 IST. Soft grace buffer active.
+            </div>
+          </div>
+        </div>
+        <div style="display:flex;align-items:center;gap:8px;">
+          <button class="btn" style="background:linear-gradient(135deg,#4f46e5,#7c3aed);color:#fff;font-size:0.8rem;padding:6px 14px;border:none;border-radius:6px;cursor:pointer;font-weight:700;" onclick="openProUpgradeModal()">
+            ⚡ Upgrade to Pro (₹149/mo)
+          </button>
+        </div>
+      </div>
+
       <!-- KPI Row -->
       <div class="kpi-grid">
         <div class="kpi-box" style="border-left:4px solid #f59e0b;">
@@ -641,6 +664,34 @@
         if (document.getElementById('selBwQueueSwitch') && shop.bwQueueName !== undefined) document.getElementById('selBwQueueSwitch').value = shop.bwQueueName || '';
         if (document.getElementById('selColorQueueSwitch') && shop.colorQueueName !== undefined) document.getElementById('selColorQueueSwitch').value = shop.colorQueueName || '';
 
+        // Fetch SaaS Daily Quota telemetry
+        try {
+          const qRes = await fetch(apiUrl('/api/saas/quota'));
+          if (qRes.ok) {
+            const q = await qRes.json();
+            const isPro = q.tier && q.tier.startsWith('pro');
+            if (isPro) {
+              document.getElementById('saasPlanTitle').textContent = `PrintAway Pro Active (${q.tier === 'pro_annual' ? '₹149/mo Annual' : '₹249/mo Monthly'})`;
+              document.getElementById('saasTierBadge').textContent = 'PRO UNLIMITED';
+              document.getElementById('saasTierBadge').style.background = '#dcfce7';
+              document.getElementById('saasTierBadge').style.color = '#15803d';
+              document.getElementById('saasQuotaSub').textContent = 'Unlimited daily printing, Smart Color Routing & multi-printer balancing active.';
+            } else {
+              document.getElementById('saasPlanTitle').textContent = `Daily Printing Quota: ${q.pagesPrintedToday || 0} / 10 Pages (Free Tier)`;
+              document.getElementById('saasTierBadge').textContent = 'FREE';
+              document.getElementById('saasTierBadge').style.background = '#e0e7ff';
+              document.getElementById('saasTierBadge').style.color = '#4338ca';
+              if (q.isHardBlocked) {
+                document.getElementById('saasQuotaSub').innerHTML = '<span style="color:#dc2626;font-weight:bold;">🚫 Limit reached (10/10). Order creation blocked until tomorrow or upgrade to Pro.</span>';
+              } else if (q.isQuotaExceeded) {
+                document.getElementById('saasQuotaSub').innerHTML = '<span style="color:#d97706;font-weight:bold;">⚠️ Daily limit (10/10) reached. Grace buffer active. Upgrade to Pro for unlimited printing.</span>';
+              } else {
+                document.getElementById('saasQuotaSub').textContent = `Remaining today: ${q.remainingPagesToday || 0} pages. Resets at midnight IST.`;
+              }
+            }
+          }
+        } catch (e) { }
+
         if (shop.pricing) {
           document.getElementById('lblPriceVer').textContent = 'v' + shop.pricing.version;
           document.getElementById('inpSimplexRate').value = Number(shop.pricing.simplexPerSideInr).toFixed(2);
@@ -967,6 +1018,76 @@
         showNotice('Error: ' + e.message, true);
       }
     }
+
+    function openProUpgradeModal() {
+      const modal = document.getElementById('modalProUpgrade');
+      if (modal) modal.style.display = 'flex';
+    }
+
+    function closeProUpgradeModal() {
+      const modal = document.getElementById('modalProUpgrade');
+      if (modal) modal.style.display = 'none';
+    }
+
+    function submitProRequest() {
+      const plan = document.querySelector('input[name="proPlan"]:checked').value;
+      const utr = document.getElementById('inpProUtr').value.trim();
+      if (!utr) {
+        alert('Please enter the UPI transaction reference ID / UTR.');
+        return;
+      }
+      alert(`Thank you! Your ${plan === 'annual' ? 'Annual (₹149/mo)' : 'Monthly (₹249/mo)'} Pro activation request (UTR: ${utr}) has been submitted to the PrintAway founder. Your account will be upgraded shortly.`);
+      closeProUpgradeModal();
+    }
+  </script>
+
+  <!-- Pro Upgrade Modal -->
+  <div id="modalProUpgrade" style="display:none;position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,0.65);z-index:9999;align-items:center;justify-content:center;padding:16px;">
+    <div style="background:#fff;border-radius:14px;max-width:480px;width:100%;padding:24px;box-shadow:0 20px 25px -5px rgba(0,0,0,0.3);position:relative;">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px;">
+        <h3 style="margin:0;font-size:1.15rem;display:flex;align-items:center;gap:8px;">
+          <span>⚡ Upgrade to PrintAway Pro</span>
+        </h3>
+        <button onclick="closeProUpgradeModal()" style="background:none;border:none;font-size:1.3rem;cursor:pointer;color:#64748b;">&times;</button>
+      </div>
+
+      <p style="font-size:0.85rem;color:#475569;margin-bottom:16px;line-height:1.4;">
+        Unlock unlimited daily printing, automated Smart Color Routing, and multi-printer queue balancing.
+      </p>
+
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:18px;">
+        <label style="border:2px solid #4f46e5;border-radius:10px;padding:12px;cursor:pointer;background:#eef2ff;display:block;">
+          <input type="radio" name="proPlan" value="annual" checked style="margin-right:6px;" />
+          <strong style="font-size:0.9rem;color:#1e1b4b;">Annual Plan</strong>
+          <div style="font-size:1.15rem;font-weight:800;color:#4338ca;margin-top:4px;">₹149 <span style="font-size:0.75rem;font-weight:600;">/ mo</span></div>
+          <div style="font-size:0.72rem;color:#6366f1;font-weight:700;margin-top:2px;">Billed as ₹1,788/yr (Save 40%)</div>
+        </label>
+
+        <label style="border:1px solid #cbd5e1;border-radius:10px;padding:12px;cursor:pointer;display:block;">
+          <input type="radio" name="proPlan" value="monthly" style="margin-right:6px;" />
+          <strong style="font-size:0.9rem;color:#1e293b;">Monthly Plan</strong>
+          <div style="font-size:1.15rem;font-weight:800;color:#0f172a;margin-top:4px;">₹249 <span style="font-size:0.75rem;font-weight:600;">/ mo</span></div>
+          <div style="font-size:0.72rem;color:#64748b;margin-top:2px;">Billed monthly</div>
+        </label>
+      </div>
+
+      <div style="background:#f1f5f9;border-radius:10px;padding:12px;font-size:0.82rem;color:#334155;margin-bottom:16px;">
+        <div style="font-weight:700;margin-bottom:4px;">Founder Direct UPI Payment:</div>
+        <div>Pay via any UPI app (GPay / PhonePe / Paytm / BHIM) to:</div>
+        <div style="font-family:monospace;font-weight:bold;color:#4338ca;margin-top:4px;font-size:0.95rem;">shivam@upi</div>
+      </div>
+
+      <div style="margin-bottom:16px;">
+        <label style="display:block;font-size:0.82rem;font-weight:600;margin-bottom:4px;color:#1e293b;">UPI Transaction Reference (UTR / Txn ID)</label>
+        <input type="text" id="inpProUtr" placeholder="e.g. 334156789012" style="width:100%;padding:8px 10px;border:1px solid #cbd5e1;border-radius:8px;font-size:0.85rem;" />
+      </div>
+
+      <div style="display:flex;justify-content:flex-end;gap:8px;">
+        <button class="btn btn-secondary" onclick="closeProUpgradeModal()">Cancel</button>
+        <button class="btn" style="background:#4f46e5;color:#fff;border:none;padding:8px 16px;border-radius:8px;font-weight:700;" onclick="submitProRequest()">Submit Activation</button>
+      </div>
+    </div>
+  </div>
   </script>
 </body>
 </html>

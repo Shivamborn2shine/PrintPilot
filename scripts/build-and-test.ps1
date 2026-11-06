@@ -31,6 +31,7 @@ $sources = @(
     Join-Path $repoRoot "src\HttpServerAndRoutes.cs"
     Join-Path $repoRoot "src\TunnelManager.cs"
     Join-Path $repoRoot "src\AutoUpdater.cs"
+    Join-Path $repoRoot "src\SupabaseSyncClient.cs"
     Join-Path $repoRoot "src\StationGuiForm.cs"
     Join-Path $repoRoot "src\SelfTestSuite.cs"
     Join-Path $repoRoot "src\Program.cs"

@@ -8,6 +8,7 @@ using System.Text;
 using System.Threading;
 using System.Web.Script.Serialization;
 using PrintAway.Engine;
+using PrintAway.SaaS;
 using PrintAway.Storage;
 using PrintAway.Worker;
 
@@ -20,17 +21,24 @@ namespace PrintAway.Web
         private readonly LocalPrintWorker _worker;
         private readonly string _webRoot;
         private readonly int _port;
+        private readonly SupabaseSyncClient _supabaseSync;
         private readonly JavaScriptSerializer _json;
         private readonly ConcurrentDictionary<string, List<long>> _rateLimitBuckets;
         private volatile bool _running;
         private Thread _acceptThread;
 
         public PrintAwayHttpServer(int port, PrintAwayRepository repo, LocalPrintWorker worker, string webRoot)
+            : this(port, repo, worker, webRoot, null)
+        {
+        }
+
+        public PrintAwayHttpServer(int port, PrintAwayRepository repo, LocalPrintWorker worker, string webRoot, SupabaseSyncClient supabaseSync)
         {
             _port = port;
             _repo = repo;
             _worker = worker;
             _webRoot = webRoot;
+            _supabaseSync = supabaseSync;
             _json = new JavaScriptSerializer { MaxJsonLength = 30 * 1024 * 1024 };
             _rateLimitBuckets = new ConcurrentDictionary<string, List<long>>();
 
@@ -137,6 +145,47 @@ namespace PrintAway.Web
                 if (method == "GET" && (path == "/admin" || path == "/admin.html"))
                 {
                     ServeStaticHtml(res, "admin.html");
+                    return;
+                }
+                if (method == "GET" && (path == "/superadmin" || path == "/superadmin.html"))
+                {
+                    ServeStaticHtml(res, "superadmin.html");
+                    return;
+                }
+
+                // SaaS Quota Telemetry Status
+                if (method == "GET" && path == "/api/saas/quota")
+                {
+                    if (_supabaseSync != null)
+                    {
+                        var q = _supabaseSync.CurrentQuota;
+                        WriteJson(res, 200, new Dictionary<string, object>
+                        {
+                            { "shopId", q.ShopId },
+                            { "tier", q.Tier },
+                            { "status", q.Status },
+                            { "dailyQuota", q.DailyQuota },
+                            { "pagesPrintedToday", q.PagesPrintedToday },
+                            { "remainingPagesToday", q.RemainingPagesToday },
+                            { "isQuotaExceeded", q.IsQuotaExceeded },
+                            { "isHardBlocked", q.IsHardBlocked },
+                            { "remotePaused", q.RemotePaused },
+                            { "lastSyncUtc", q.LastSyncUtc }
+                        });
+                    }
+                    else
+                    {
+                        WriteJson(res, 200, new Dictionary<string, object>
+                        {
+                            { "tier", "free" },
+                            { "status", "active" },
+                            { "dailyQuota", 10 },
+                            { "pagesPrintedToday", 0 },
+                            { "remainingPagesToday", 10 },
+                            { "isQuotaExceeded", false },
+                            { "isHardBlocked", false }
+                        });
+                    }
                     return;
                 }
 
@@ -256,6 +305,12 @@ namespace PrintAway.Web
                 // Create Order + UPI Payment Intent (POST /api/orders or POST /api/payments/create)
                 if (method == "POST" && (path == "/api/orders" || path == "/api/payments/create"))
                 {
+                    if (_supabaseSync != null && _supabaseSync.CurrentQuota != null && _supabaseSync.CurrentQuota.IsHardBlocked)
+                    {
+                        WriteError(res, 403, "DAILY_QUOTA_EXCEEDED", "This station has reached its Free tier daily limit of 10 pages. Please upgrade to PrintAway Pro for unlimited printing or check back tomorrow.");
+                        return;
+                    }
+
                     var body = ReadJsonBody(req);
                     string quoteToken = GetString(body, "quoteToken", "");
                     string customerName = GetString(body, "customerName", "Walk-in Customer");

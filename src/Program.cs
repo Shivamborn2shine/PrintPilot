@@ -8,6 +8,7 @@ using System.Web.Script.Serialization;
 using System.Windows.Forms;
 using PrintAway.Engine;
 using PrintAway.Gui;
+using PrintAway.SaaS;
 using PrintAway.Storage;
 using PrintAway.Tunnel;
 using PrintAway.Web;
@@ -218,19 +219,32 @@ namespace PrintAway
                     var worker = new LocalPrintWorker(repo, simulateSpoolerOnly: forceSimulation);
                     worker.StartBackground(1500);
 
-                    using (var server = new PrintAwayHttpServer(port, repo, worker, webRoot))
+                    string registryTopic = "printaway_station_registry_" + (configShopId ?? "pilot") + "_9f8a7b6c5d4e";
+                    var tunnel = new TunnelManager(repoRoot, port, registryTopic);
+                    tunnel.Start();
+
+                    string sbUrl = Environment.GetEnvironmentVariable("SUPABASE_URL");
+                    string sbKey = Environment.GetEnvironmentVariable("SUPABASE_SERVICE_ROLE_KEY");
+                    if (string.IsNullOrWhiteSpace(sbKey)) sbKey = Environment.GetEnvironmentVariable("SUPABASE_KEY");
+
+                    SupabaseSyncClient supabaseSync = null;
+                    if (!string.IsNullOrWhiteSpace(sbUrl) && !string.IsNullOrWhiteSpace(sbKey))
+                    {
+                        supabaseSync = new SupabaseSyncClient(sbUrl, sbKey, configShopId ?? "pilot", repo, tunnel);
+                        Console.ForegroundColor = ConsoleColor.Green;
+                        Console.WriteLine("[SaaS Control Plane] Supabase Heartbeat Active -> " + sbUrl);
+                        Console.ResetColor();
+                    }
+
+                    using (var server = new PrintAwayHttpServer(port, repo, worker, webRoot, supabaseSync))
                     {
                         server.Start();
-
-                        string registryTopic = "printaway_station_registry_" + (configShopId ?? "pilot") + "_9f8a7b6c5d4e";
-                        var tunnel = new TunnelManager(repoRoot, port, registryTopic);
-                        tunnel.Start();
 
                         if (!cliMode)
                         {
                             Application.EnableVisualStyles();
                             Application.SetCompatibleTextRenderingDefault(false);
-                            Application.Run(new StationGuiForm(repo, worker, server, tunnel, repoRoot, port));
+                            Application.Run(new StationGuiForm(repo, worker, server, tunnel, repoRoot, port, supabaseSync));
                         }
                         else
                         {
@@ -261,6 +275,7 @@ namespace PrintAway
 
                         tunnel.Stop();
                         worker.Stop();
+                        if (supabaseSync != null) { supabaseSync.Dispose(); }
                     }
                 }
             }
