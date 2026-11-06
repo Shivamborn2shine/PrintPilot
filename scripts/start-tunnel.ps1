@@ -187,20 +187,73 @@ for ($attempt = 1; $attempt -le $maxRetries; $attempt++) {
 }
 
 if (-not $tunnelUrl) {
-    Write-Host "[NOTICE] Cloudflare Quick Tunnel rate-limited by trycloudflare.com (HTTP 429)." -ForegroundColor DarkYellow
+    Write-Host "[!] Cloudflare Quick Tunnel returned HTTP 429 (Rate-limited by trycloudflare.com)." -ForegroundColor DarkYellow
+    Write-Host "Activating resilient built-in OpenSSH Tunnel fallback (localhost.run)..." -ForegroundColor Yellow
+
+    $sshExe = "C:\Windows\System32\OpenSSH\ssh.exe"
+    if (-not (Test-Path $sshExe)) {
+        $sshExe = "ssh.exe"
+    }
+
+    $sshInfo = New-Object System.Diagnostics.ProcessStartInfo
+    $sshInfo.FileName = $sshExe
+    $sshInfo.Arguments = "-o StrictHostKeyChecking=no -o ServerAliveInterval=30 -R 80:127.0.0.1:$LocalPort nokey@localhost.run"
+    $sshInfo.RedirectStandardOutput = $true
+    $sshInfo.RedirectStandardError = $true
+    $sshInfo.UseShellExecute = $false
+    $sshInfo.CreateNoWindow = $true
+
+    $tunnelProcess = New-Object System.Diagnostics.Process
+    $tunnelProcess.StartInfo = $sshInfo
+    $null = $tunnelProcess.Start()
+
+    $deadline = (Get-Date).AddSeconds(15)
+    $logWriter = [System.IO.File]::AppendText($tunnelLog)
+    try {
+        while ((Get-Date) -lt $deadline -and -not $tunnelUrl -and -not $tunnelProcess.HasExited) {
+            $line = $tunnelProcess.StandardOutput.ReadLine()
+            if ($line) {
+                $logWriter.WriteLine($line)
+                $logWriter.Flush()
+                if ($line -match "https://([a-zA-Z0-9-]+\.lhr\.life)") {
+                    $tunnelUrl = "https://" + $matches[1]
+                    Write-Host "  [OK] Resilient OpenSSH Fallback Tunnel Live: $tunnelUrl" -ForegroundColor Green
+                    break
+                }
+            }
+            Start-Sleep -Milliseconds 100
+        }
+    } finally {
+        $logWriter.Close()
+    }
+}
+
+if (-not $tunnelUrl) {
+    Write-Host "[NOTICE] Tunnel could not be established immediately." -ForegroundColor DarkYellow
     Write-Host "Your station is running locally at http://127.0.0.1:$LocalPort/admin" -ForegroundColor White
-    Write-Host "Cloudflare rate-limits reset every few minutes. PrintAway.exe will automatically reconnect." -ForegroundColor DarkYellow
+    Write-Host "PrintAway.exe GUI has automatic retry & manual restart controls." -ForegroundColor DarkYellow
     Write-Host "Check log at: $tunnelLog" -ForegroundColor Gray
 }
 
-# 4. Publish live tunnel URL to Shop's Isolated Cloud Registry Topic (Zero Git / Zero Rebuild required!)
-Write-Host "[4/4] Broadcasting live tunnel URL for Shop [$activeShopId] to Cloud Registry ($registryTopic)..." -ForegroundColor Yellow
-[Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12
-try {
-    $null = Invoke-RestMethod -Uri "https://ntfy.sh/$registryTopic" -Method Post -Body $tunnelUrl -TimeoutSec 10
-    Write-Host "  [OK] Instant Cloud Registry updated for Shop [$activeShopId]!" -ForegroundColor Green
-} catch {
-    Write-Host "  [!] Warning: Cloud Registry broadcast failed: $_" -ForegroundColor DarkYellow
+# 4. Publish live tunnel URL to Shop's Isolated Cloud Registry Topic & Supabase Control Plane
+if ($tunnelUrl) {
+    Write-Host "[4/4] Broadcasting live tunnel URL for Shop [$activeShopId] to Cloud Registry..." -ForegroundColor Yellow
+    [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12
+    try {
+        $null = Invoke-RestMethod -Uri "https://ntfy.sh/$registryTopic" -Method Post -Body $tunnelUrl -TimeoutSec 10
+        Write-Host "  [OK] Instant Cloud Registry updated for Shop [$activeShopId]!" -ForegroundColor Green
+    } catch {
+        Write-Host "  [!] Warning: Cloud Registry broadcast failed: $_" -ForegroundColor DarkYellow
+    }
+
+    try {
+        $sbUrl = "https://zduoifzakiojfqbtxqqm.supabase.co/rest/v1/shops?shop_id=eq.$activeShopId"
+        $sbKey = "sb_publishable_rhmUZZbKhXiJxrChcPTbsg_gFIH9FdO"
+        $body = @{ live_tunnel_url = $tunnelUrl; last_heartbeat_utc = (Get-Date).ToUniversalTime().ToString("o") } | ConvertTo-Json
+        $sbHeaders = @{ "apikey" = $sbKey; "Authorization" = "Bearer $sbKey"; "Content-Type" = "application/json" }
+        $null = Invoke-RestMethod -Uri $sbUrl -Method Patch -Headers $sbHeaders -Body $body -TimeoutSec 5
+        Write-Host "  [OK] Supabase Control Plane updated with live tunnel URL!" -ForegroundColor Green
+    } catch { }
 }
 
 $cleanNetlify = $NetlifyUrl.TrimEnd('/')
@@ -224,9 +277,19 @@ Write-Host ""
 $lastHeartbeat = Get-Date
 try {
     while (-not $tunnelProcess.HasExited) {
-        $l = $tunnelProcess.StandardError.ReadLine()
+        $l = $null
+        try {
+            if (-not $tunnelProcess.StandardError.EndOfStream) {
+                $l = $tunnelProcess.StandardError.ReadLine()
+            } elseif (-not $tunnelProcess.StandardOutput.EndOfStream) {
+                $l = $tunnelProcess.StandardOutput.ReadLine()
+            } else {
+                Start-Sleep -Seconds 1
+            }
+        } catch { Start-Sleep -Seconds 1 }
+
         if ($l) {
-            [System.IO.File]::AppendAllText($tunnelLog, $l + [Environment]::NewLine)
+            try { [System.IO.File]::AppendAllText($tunnelLog, $l + [Environment]::NewLine) } catch { }
         }
         if (((Get-Date) - $lastHeartbeat).TotalMinutes -ge 30) {
             try {

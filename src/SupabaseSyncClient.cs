@@ -66,6 +66,14 @@ namespace PrintAway.SaaS
 
             if (IsConfigured)
             {
+                if (_tunnel != null)
+                {
+                    _tunnel.OnTunnelUrlCaptured += url =>
+                    {
+                        TriggerSyncNow();
+                    };
+                }
+
                 // Run initial sync after 3 seconds, then every 15 minutes
                 _syncTimer = new Timer(state => PerformSync(), null, TimeSpan.FromSeconds(3), TimeSpan.FromMinutes(15));
             }
