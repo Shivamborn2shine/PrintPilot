@@ -1,5 +1,6 @@
 <!DOCTYPE html>
 <html lang="en">
+
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
@@ -9,7 +10,9 @@
   <script src="https://checkout.razorpay.com/v1/checkout.js"></script>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=JetBrains+Mono:wght@500;700&display=swap" rel="stylesheet">
+  <link
+    href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=JetBrains+Mono:wght@500;700&display=swap"
+    rel="stylesheet">
   <style>
     :root {
       --bg: #f8fafc;
@@ -29,13 +32,18 @@
       --danger: #ef4444;
       --danger-light: #fef2f2;
       --radius: 14px;
-      --shadow-sm: 0 1px 3px rgba(0,0,0,0.05), 0 1px 2px rgba(0,0,0,0.03);
-      --shadow-md: 0 4px 16px -2px rgba(15,23,42,0.06), 0 2px 6px -1px rgba(15,23,42,0.03);
-      --shadow-lg: 0 10px 30px -4px rgba(15,23,42,0.08), 0 4px 12px -2px rgba(15,23,42,0.04);
+      --shadow-sm: 0 1px 3px rgba(0, 0, 0, 0.05), 0 1px 2px rgba(0, 0, 0, 0.03);
+      --shadow-md: 0 4px 16px -2px rgba(15, 23, 42, 0.06), 0 2px 6px -1px rgba(15, 23, 42, 0.03);
+      --shadow-lg: 0 10px 30px -4px rgba(15, 23, 42, 0.08), 0 4px 12px -2px rgba(15, 23, 42, 0.04);
       --font-mono: 'JetBrains Mono', monospace;
     }
 
-    * { box-sizing: border-box; margin: 0; padding: 0; }
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
+
     body {
       font-family: 'Plus Jakarta Sans', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
       background: var(--bg);
@@ -57,8 +65,9 @@
       top: 0;
       z-index: 50;
       backdrop-filter: blur(12px);
-      box-shadow: 0 4px 20px rgba(0,0,0,0.25);
+      box-shadow: 0 4px 20px rgba(0, 0, 0, 0.25);
     }
+
     .header-inner {
       max-width: 860px;
       margin: 0 auto;
@@ -68,6 +77,7 @@
       flex-wrap: wrap;
       gap: 12px;
     }
+
     .brand-wrap {
       display: flex;
       align-items: center;
@@ -76,6 +86,7 @@
       color: inherit;
       cursor: pointer;
     }
+
     .brand-avatar {
       width: 44px;
       height: 44px;
@@ -88,15 +99,18 @@
       justify-content: center;
       transition: transform 0.3s cubic-bezier(0.34, 1.56, 0.64, 1);
     }
+
     .brand-avatar:hover {
       transform: scale(1.08) rotate(-4deg);
     }
+
     .brand-avatar img {
       width: 100%;
       height: 100%;
       border-radius: 50%;
       object-fit: cover;
     }
+
     .brand-title {
       font-size: 1.35rem;
       font-weight: 800;
@@ -106,11 +120,13 @@
       align-items: center;
       gap: 6px;
     }
+
     .brand-title span {
       background: linear-gradient(135deg, #38bdf8, #60a5fa);
       -webkit-background-clip: text;
       -webkit-text-fill-color: transparent;
     }
+
     .brand-tag {
       font-size: 0.65rem;
       font-weight: 800;
@@ -122,17 +138,20 @@
       letter-spacing: 0.05em;
       text-transform: uppercase;
     }
+
     .brand-sub {
       font-size: 0.8rem;
       color: #94a3b8;
       font-weight: 500;
     }
+
     .nav-links {
       display: flex;
       align-items: center;
       gap: 8px;
       flex-wrap: wrap;
     }
+
     .nav-links a {
       color: #cbd5e1;
       text-decoration: none;
@@ -147,16 +166,19 @@
       align-items: center;
       gap: 6px;
     }
+
     .nav-links a:hover {
       color: #fff;
       background: rgba(255, 255, 255, 0.09);
       border-color: rgba(255, 255, 255, 0.2);
     }
+
     .pill-shop {
       border-color: rgba(16, 185, 129, 0.35) !important;
       color: #34d399 !important;
       background: rgba(16, 185, 129, 0.08) !important;
     }
+
     .pill-station {
       border-color: rgba(56, 189, 248, 0.35) !important;
       color: #38bdf8 !important;
@@ -185,6 +207,7 @@
       overflow-x: auto;
       gap: 10px;
     }
+
     .step-item {
       display: flex;
       align-items: center;
@@ -195,13 +218,16 @@
       white-space: nowrap;
       transition: all 0.2s;
     }
+
     .step-item.active {
       color: var(--primary);
       font-weight: 700;
     }
+
     .step-item.completed {
       color: var(--success);
     }
+
     .step-num {
       width: 24px;
       height: 24px;
@@ -214,15 +240,18 @@
       font-size: 0.75rem;
       font-weight: 700;
     }
+
     .step-item.active .step-num {
       background: var(--primary);
       color: #fff;
       box-shadow: 0 0 10px rgba(37, 99, 235, 0.4);
     }
+
     .step-item.completed .step-num {
       background: var(--success);
       color: #fff;
     }
+
     .step-sep {
       color: #cbd5e1;
       font-size: 0.8rem;
@@ -240,9 +269,11 @@
       box-shadow: var(--shadow-sm);
       transition: border-color 0.2s, box-shadow 0.2s;
     }
+
     .card:hover {
       border-color: var(--border-hover);
     }
+
     h2 {
       font-size: 1.15rem;
       font-weight: 700;
@@ -252,6 +283,7 @@
       gap: 10px;
       letter-spacing: -0.01em;
     }
+
     .step-badge {
       background: var(--primary);
       color: #fff;
@@ -281,16 +313,19 @@
       font-weight: 600;
       box-shadow: var(--shadow-sm);
     }
+
     .status-open {
       background: linear-gradient(135deg, #ecfdf5, #d1fae5);
       color: #065f46;
       border: 1px solid #a7f3d0;
     }
+
     .status-closed {
       background: linear-gradient(135deg, #fef2f2, #fee2e2);
       color: #991b1b;
       border: 1px solid #fecaca;
     }
+
     .live-dot {
       display: inline-block;
       width: 9px;
@@ -301,10 +336,22 @@
       box-shadow: 0 0 0 rgba(16, 185, 129, 0.4);
       animation: pulseDot 2s infinite;
     }
+
     @keyframes pulseDot {
-      0% { transform: scale(0.95); box-shadow: 0 0 0 0 rgba(16, 185, 129, 0.7); }
-      70% { transform: scale(1); box-shadow: 0 0 0 8px rgba(16, 185, 129, 0); }
-      100% { transform: scale(0.95); box-shadow: 0 0 0 0 rgba(16, 185, 129, 0); }
+      0% {
+        transform: scale(0.95);
+        box-shadow: 0 0 0 0 rgba(16, 185, 129, 0.7);
+      }
+
+      70% {
+        transform: scale(1);
+        box-shadow: 0 0 0 8px rgba(16, 185, 129, 0);
+      }
+
+      100% {
+        transform: scale(0.95);
+        box-shadow: 0 0 0 0 rgba(16, 185, 129, 0);
+      }
     }
 
     /* ==========================================================================
@@ -317,22 +364,106 @@
       animation: skeletonShimmer 1.5s infinite linear;
       border-radius: 6px;
     }
+
     @keyframes skeletonShimmer {
-      0% { background-position: 200% 0; }
-      100% { background-position: -200% 0; }
+      0% {
+        background-position: 200% 0;
+      }
+
+      100% {
+        background-position: -200% 0;
+      }
     }
-    .skeleton-avatar { width: 44px; height: 44px; border-radius: 50%; }
-    .skeleton-title { height: 18px; width: 55%; margin-bottom: 8px; }
-    .skeleton-text { height: 14px; width: 85%; margin-bottom: 6px; }
-    .skeleton-badge { height: 26px; width: 120px; border-radius: 999px; }
-    .skeleton-box { height: 110px; width: 100%; border-radius: 12px; }
+
+    .skeleton-avatar {
+      width: 44px;
+      height: 44px;
+      border-radius: 50%;
+    }
+
+    .skeleton-title {
+      height: 18px;
+      width: 55%;
+      margin-bottom: 8px;
+    }
+
+    .skeleton-text {
+      height: 14px;
+      width: 85%;
+      margin-bottom: 6px;
+    }
+
+    .skeleton-badge {
+      height: 26px;
+      width: 120px;
+      border-radius: 999px;
+    }
+
+    .skeleton-box {
+      height: 110px;
+      width: 100%;
+      border-radius: 12px;
+    }
+
+    /* ==========================================================================
+       STATIONERY / SHOP PICKER STYLES
+       ========================================================================== */
+    .shop-select-card {
+      background: #ffffff;
+      border: 1.5px solid #e2e8f0;
+      border-radius: 14px;
+      padding: 14px 16px;
+      cursor: pointer;
+      transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      gap: 12px;
+      text-align: left;
+    }
+    .shop-select-card:hover {
+      border-color: #2563eb;
+      background: #f8faff;
+      transform: translateY(-2px);
+      box-shadow: 0 8px 20px -4px rgba(37, 99, 235, 0.16);
+    }
+    .shop-select-card.active-shop {
+      border-color: #2563eb;
+      background: #eff6ff;
+      box-shadow: inset 0 0 0 1px #2563eb;
+    }
+    .shop-badge-online {
+      background: #dcfce7;
+      color: #15803d;
+      font-weight: 700;
+      font-size: 0.72rem;
+      padding: 3px 8px;
+      border-radius: 9999px;
+      display: inline-flex;
+      align-items: center;
+      gap: 4px;
+    }
+    .shop-badge-ready {
+      background: #fef3c7;
+      color: #92400e;
+      font-weight: 700;
+      font-size: 0.72rem;
+      padding: 3px 8px;
+      border-radius: 9999px;
+      display: inline-flex;
+      align-items: center;
+      gap: 4px;
+    }
 
     /* ==========================================================================
        ANIMATED MASCOT LOADER OVERLAY
        ========================================================================== */
     .mascot-modal-overlay {
       position: fixed;
-      top: 0; left: 0; right: 0; bottom: 0;
+      top: 0;
+      left: 0;
+      right: 0;
+      bottom: 0;
       background: rgba(15, 23, 42, 0.6);
       backdrop-filter: blur(8px);
       display: flex;
@@ -343,10 +474,12 @@
       pointer-events: none;
       transition: opacity 0.25s ease;
     }
+
     .mascot-modal-overlay.active {
       opacity: 1;
       pointer-events: auto;
     }
+
     .mascot-loader-card {
       background: #ffffff;
       padding: 32px 36px;
@@ -359,54 +492,107 @@
       position: relative;
       animation: modalPop 0.3s cubic-bezier(0.34, 1.56, 0.64, 1);
     }
+
     @keyframes modalPop {
-      0% { transform: scale(0.9) translateY(10px); }
-      100% { transform: scale(1) translateY(0); }
+      0% {
+        transform: scale(0.9) translateY(10px);
+      }
+
+      100% {
+        transform: scale(1) translateY(0);
+      }
     }
+
     .mascot-svg-wrap {
       width: 120px;
       height: 120px;
       margin: 0 auto 16px;
       position: relative;
     }
+
     /* Animated Printer Paper Movement */
     .anim-printer-bob {
       animation: printerBob 2s ease-in-out infinite;
       transform-origin: center bottom;
     }
+
     @keyframes printerBob {
-      0%, 100% { transform: translateY(0); }
-      50% { transform: translateY(-5px); }
+
+      0%,
+      100% {
+        transform: translateY(0);
+      }
+
+      50% {
+        transform: translateY(-5px);
+      }
     }
+
     .anim-paper-feed-in {
       animation: paperFeedIn 2s ease-in-out infinite;
     }
+
     @keyframes paperFeedIn {
-      0% { transform: translateY(-16px); opacity: 0.2; }
-      40% { transform: translateY(0); opacity: 1; }
-      75% { transform: translateY(12px); opacity: 0; }
-      100% { transform: translateY(-16px); opacity: 0; }
+      0% {
+        transform: translateY(-16px);
+        opacity: 0.2;
+      }
+
+      40% {
+        transform: translateY(0);
+        opacity: 1;
+      }
+
+      75% {
+        transform: translateY(12px);
+        opacity: 0;
+      }
+
+      100% {
+        transform: translateY(-16px);
+        opacity: 0;
+      }
     }
+
     .anim-paper-feed-out {
       animation: paperFeedOut 2s ease-in-out infinite;
     }
+
     @keyframes paperFeedOut {
-      0% { transform: translateY(-10px); opacity: 0; }
-      45% { transform: translateY(0); opacity: 0.4; }
-      70% { transform: translateY(14px); opacity: 1; }
-      100% { transform: translateY(22px); opacity: 0; }
+      0% {
+        transform: translateY(-10px);
+        opacity: 0;
+      }
+
+      45% {
+        transform: translateY(0);
+        opacity: 0.4;
+      }
+
+      70% {
+        transform: translateY(14px);
+        opacity: 1;
+      }
+
+      100% {
+        transform: translateY(22px);
+        opacity: 0;
+      }
     }
+
     .mascot-loader-title {
       font-size: 1.15rem;
       font-weight: 800;
       color: #0f172a;
       margin-bottom: 6px;
     }
+
     .mascot-loader-sub {
       font-size: 0.85rem;
       color: #64748b;
       margin-bottom: 18px;
     }
+
     .progress-track {
       width: 100%;
       height: 6px;
@@ -415,17 +601,31 @@
       overflow: hidden;
       position: relative;
     }
+
     .progress-bar-sweep {
       position: absolute;
-      top: 0; bottom: 0;
+      top: 0;
+      bottom: 0;
       border-radius: 999px;
       background: linear-gradient(90deg, #38bdf8, #2563eb, #f59e0b);
       animation: progressSweep 1.8s ease-in-out infinite;
     }
+
     @keyframes progressSweep {
-      0% { left: -35%; width: 35%; }
-      50% { left: 30%; width: 50%; }
-      100% { left: 100%; width: 35%; }
+      0% {
+        left: -35%;
+        width: 35%;
+      }
+
+      50% {
+        left: 30%;
+        width: 50%;
+      }
+
+      100% {
+        left: 100%;
+        width: 35%;
+      }
     }
 
     /* ==========================================================================
@@ -442,12 +642,15 @@
       position: relative;
       overflow: hidden;
     }
-    .upload-zone:hover, .upload-zone.dragover {
+
+    .upload-zone:hover,
+    .upload-zone.dragover {
       border-color: var(--primary);
       background: #eff6ff;
       transform: translateY(-2px);
       box-shadow: 0 10px 25px -5px rgba(37, 99, 235, 0.12);
     }
+
     .upload-icon-circle {
       width: 64px;
       height: 64px;
@@ -461,6 +664,7 @@
       font-size: 1.8rem;
       transition: transform 0.2s;
     }
+
     .upload-zone:hover .upload-icon-circle {
       transform: scale(1.1) rotate(5deg);
       background: #bfdbfe;
@@ -479,11 +683,13 @@
       border: 1px solid #86efac;
       margin-top: 14px;
     }
+
     .file-preview-left {
       display: flex;
       align-items: center;
       gap: 12px;
     }
+
     .pdf-badge {
       background: #ef4444;
       color: #fff;
@@ -502,9 +708,13 @@
       grid-template-columns: 1fr 1fr;
       gap: 12px;
     }
+
     @media (max-width: 600px) {
-      .mode-card-group { grid-template-columns: 1fr; }
+      .mode-card-group {
+        grid-template-columns: 1fr;
+      }
     }
+
     .mode-option {
       border: 2px solid #e2e8f0;
       border-radius: 12px;
@@ -514,24 +724,41 @@
       transition: all 0.2s ease;
       position: relative;
     }
+
     .mode-option:hover {
       border-color: #cbd5e1;
     }
+
     .mode-option.active {
       border-color: var(--primary);
       background: #eff6ff;
       box-shadow: 0 0 0 1px var(--primary);
     }
+
     .mode-option.disabled {
       opacity: 0.5;
       cursor: not-allowed;
       background: #f8fafc;
     }
 
-    .grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
-    .grid-3 { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 12px; }
+    .grid-2 {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 14px;
+    }
+
+    .grid-3 {
+      display: grid;
+      grid-template-columns: 1fr 1fr 1fr;
+      gap: 12px;
+    }
+
     @media (max-width: 640px) {
-      .grid-2, .grid-3 { grid-template-columns: 1fr; }
+
+      .grid-2,
+      .grid-3 {
+        grid-template-columns: 1fr;
+      }
     }
 
     label {
@@ -541,7 +768,10 @@
       color: var(--muted);
       margin-bottom: 6px;
     }
-    input[type="text"], input[type="number"], select {
+
+    input[type="text"],
+    input[type="number"],
+    select {
       width: 100%;
       padding: 10px 14px;
       border: 1px solid #cbd5e1;
@@ -551,7 +781,9 @@
       background: #fff;
       transition: border-color 0.15s, box-shadow 0.15s;
     }
-    input:focus, select:focus {
+
+    input:focus,
+    select:focus {
       outline: none;
       border-color: var(--primary);
       box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.15);
@@ -575,9 +807,11 @@
       user-select: none;
       transition: all 0.15s ease;
     }
+
     .page-chip:hover {
       border-color: #94a3b8;
     }
+
     .page-chip.selected {
       border-color: var(--primary);
       background: #dbeafe;
@@ -598,6 +832,7 @@
       box-shadow: var(--shadow-sm);
       overflow: hidden;
     }
+
     .receipt-header {
       display: flex;
       justify-content: space-between;
@@ -606,6 +841,7 @@
       border-bottom: 2px dashed #e2e8f0;
       margin-bottom: 14px;
     }
+
     .receipt-title {
       font-size: 0.8rem;
       font-weight: 800;
@@ -614,12 +850,14 @@
       color: var(--muted);
       font-family: var(--font-mono);
     }
+
     .quote-row {
       display: flex;
       justify-content: space-between;
       font-size: 0.9rem;
       margin-bottom: 8px;
     }
+
     .quote-total {
       display: flex;
       justify-content: space-between;
@@ -653,38 +891,46 @@
       box-shadow: 0 2px 4px rgba(37, 99, 235, 0.2);
       transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
     }
+
     .btn:hover {
       background: var(--primary-hover);
       transform: translateY(-1px);
       box-shadow: 0 4px 12px rgba(37, 99, 235, 0.3);
     }
+
     .btn:active {
       transform: translateY(0);
     }
+
     .btn:disabled {
       opacity: 0.5;
       cursor: not-allowed;
       transform: none !important;
       box-shadow: none !important;
     }
+
     .btn-secondary {
       background: #f1f5f9;
       color: #1e293b;
       box-shadow: none;
       border: 1px solid #cbd5e1;
     }
+
     .btn-secondary:hover {
       background: #e2e8f0;
-      box-shadow: 0 2px 6px rgba(0,0,0,0.06);
+      box-shadow: 0 2px 6px rgba(0, 0, 0, 0.06);
     }
+
     .btn-success {
       background: var(--success);
       color: #fff;
       box-shadow: 0 2px 4px rgba(16, 185, 129, 0.2);
     }
+
     .btn-success:hover {
       background: #059669;
     }
+
     .meta-pill {
       display: inline-flex;
       align-items: center;
@@ -698,6 +944,7 @@
       margin-right: 6px;
       margin-top: 4px;
     }
+
     .alert {
       padding: 14px 16px;
       border-radius: 10px;
@@ -705,9 +952,24 @@
       margin: 12px 0;
       font-weight: 500;
     }
-    .alert-error { background: #fee2e2; color: #991b1b; border: 1px solid #fca5a5; }
-    .alert-info { background: #eff6ff; color: #1e40af; border: 1px solid #bfdbfe; }
-    .alert-warn { background: #fffbeb; color: #92400e; border: 1px solid #fde68a; }
+
+    .alert-error {
+      background: #fee2e2;
+      color: #991b1b;
+      border: 1px solid #fca5a5;
+    }
+
+    .alert-info {
+      background: #eff6ff;
+      color: #1e40af;
+      border: 1px solid #bfdbfe;
+    }
+
+    .alert-warn {
+      background: #fffbeb;
+      color: #92400e;
+      border: 1px solid #fde68a;
+    }
 
     /* ==========================================================================
        PICKUP BADGE & CONFETTI
@@ -722,6 +984,7 @@
       box-shadow: var(--shadow-md);
       position: relative;
     }
+
     .pickup-badge {
       font-size: 2.2rem;
       font-weight: 900;
@@ -741,17 +1004,24 @@
       margin: 16px 0;
       padding-top: 16px;
     }
-    .hidden { display: none !important; }
+
+    .hidden {
+      display: none !important;
+    }
 
     /* Confetti Canvas */
     #confettiCanvas {
       position: fixed;
-      top: 0; left: 0; width: 100%; height: 100%;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
       pointer-events: none;
       z-index: 10000;
     }
   </style>
 </head>
+
 <body>
 
   <!-- Fullscreen Animated Mascot Loader Modal -->
@@ -781,7 +1051,8 @@
 
           <!-- Top Paper (Feeds into printer) -->
           <g class="anim-paper-feed-in">
-            <path d="M 72 48 L 120 48 L 132 60 L 132 98 L 72 98 Z" fill="#FFFFFF" stroke="#0F172A" stroke-width="5" stroke-linejoin="round" />
+            <path d="M 72 48 L 120 48 L 132 60 L 132 98 L 72 98 Z" fill="#FFFFFF" stroke="#0F172A" stroke-width="5"
+              stroke-linejoin="round" />
             <path d="M 120 48 L 120 60 L 132 60 Z" fill="#38BDF8" stroke="#0F172A" stroke-width="4" />
             <line x1="84" y1="68" x2="110" y2="68" stroke="#38BDF8" stroke-width="5" stroke-linecap="round" />
             <line x1="84" y1="80" x2="118" y2="80" stroke="#38BDF8" stroke-width="5" stroke-linecap="round" />
@@ -799,9 +1070,11 @@
             <rect x="48" y="90" width="104" height="48" rx="16" fill="url(#mBlue)" stroke="#0F172A" stroke-width="6" />
             <!-- Smiling Happy Eyes -->
             <path d="M 78 111 Q 84 104 90 111" fill="none" stroke="#0F172A" stroke-width="5" stroke-linecap="round" />
-            <path d="M 110 111 Q 116 104 122 111" fill="none" stroke="#0F172A" stroke-width="5" stroke-linecap="round" />
+            <path d="M 110 111 Q 116 104 122 111" fill="none" stroke="#0F172A" stroke-width="5"
+              stroke-linecap="round" />
             <!-- Smile -->
-            <path d="M 94 117 Q 100 126 106 117" fill="none" stroke="#0F172A" stroke-width="4.5" stroke-linecap="round" />
+            <path d="M 94 117 Q 100 126 106 117" fill="none" stroke="#0F172A" stroke-width="4.5"
+              stroke-linecap="round" />
             <!-- Cheeks -->
             <circle cx="73" cy="115" r="4" fill="#F472B6" />
             <circle cx="127" cy="115" r="4" fill="#F472B6" />
@@ -812,6 +1085,38 @@
       <div id="loaderModalSub" class="mascot-loader-sub">Counting pages &amp; checking printer queue</div>
       <div class="progress-track">
         <div class="progress-bar-sweep"></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- WELCOME & CHOOSE STATIONERY MODAL -->
+  <div id="modalSelectShop" class="mascot-modal-overlay">
+    <div class="mascot-loader-card" style="max-width:540px;text-align:left;padding:26px 28px;">
+      <div style="display:flex;align-items:center;gap:12px;margin-bottom:14px;">
+        <div style="width:48px;height:48px;border-radius:14px;background:#fef08a;display:flex;align-items:center;justify-content:center;font-size:1.6rem;flex-shrink:0;box-shadow:0 4px 12px rgba(234,179,8,0.25);">
+          🖨️
+        </div>
+        <div>
+          <h3 style="margin:0;font-size:1.22rem;color:#0f172a;font-weight:900;">Welcome to PrintAway! 👋</h3>
+          <p style="margin:2px 0 0;font-size:0.84rem;color:#64748b;">Please select your stationery / print store to start printing:</p>
+        </div>
+      </div>
+
+      <div style="margin-bottom:12px;">
+        <input type="text" id="inpSearchShop" placeholder="🔍 Search store by name or owner..." style="width:100%;padding:10px 14px;border:1.5px solid #cbd5e1;border-radius:10px;font-size:0.88rem;" oninput="filterShopCards(this.value)" />
+      </div>
+
+      <!-- Dynamic Store List Grid -->
+      <div id="shopCardsList" style="max-height:360px;overflow-y:auto;display:flex;flex-direction:column;gap:10px;padding-right:2px;">
+        <div style="text-align:center;padding:24px;color:#64748b;">
+          <div class="skeleton skeleton-title" style="margin:0 auto 10px;"></div>
+          <div class="skeleton skeleton-box" style="height:70px;"></div>
+        </div>
+      </div>
+
+      <div style="margin-top:14px;display:flex;justify-content:space-between;align-items:center;padding-top:10px;border-top:1px solid #e2e8f0;">
+        <span style="font-size:0.75rem;color:#94a3b8;">Scanning counter QR code automatically selects store</span>
+        <button type="button" class="btn btn-secondary" style="font-size:0.8rem;padding:6px 14px;" onclick="closeShopSelectorIfSelected()">Close</button>
       </div>
     </div>
   </div>
@@ -835,8 +1140,8 @@
       </a>
       <div class="nav-links">
         <a href="/" onclick="resetToNewOrder(); return false;">➕ New Print</a>
-        <a href="#" onclick="switchShopPrompt(); return false;" id="btnShopSwitch" class="pill-shop">
-          🏪 <span id="lblActiveShopBadge">midtownstationary</span>
+        <a href="#" onclick="openShopSelector(); return false;" id="btnShopSwitch" class="pill-shop" title="Click to choose or switch stationery store">
+          🏪 <span id="lblActiveShopBadge">Select Stationery</span> <span style="font-size:0.74rem;opacity:0.8;margin-left:2px;">▾ Change</span>
         </a>
         <a href="#" onclick="configureStationUrl(); return false;" id="btnStationConfig" class="pill-station">
           ⚙️ Tunnel
@@ -895,7 +1200,8 @@
         <span style="font-size:0.88rem;font-weight:700;color:var(--text);display:flex;align-items:center;gap:6px;">
           🔎 Already ordered?
         </span>
-        <input type="text" id="trackTokenInput" placeholder="Paste tracking token (pub_...)" style="flex:1;min-width:180px;" />
+        <input type="text" id="trackTokenInput" placeholder="Paste tracking token (pub_...)"
+          style="flex:1;min-width:180px;" />
         <button class="btn btn-secondary" onclick="lookupTrackedOrder()">Track Status</button>
       </div>
     </div>
@@ -907,7 +1213,8 @@
       <div class="card">
         <h2><span class="step-badge">1</span> Select Document to Print (PDF Only)</h2>
         <div class="upload-zone" id="uploadDropZone" onclick="document.getElementById('pdfInput').click()">
-          <input type="file" id="pdfInput" accept=".pdf,application/pdf" class="hidden" onchange="handleFileSelected(this)" />
+          <input type="file" id="pdfInput" accept=".pdf,application/pdf" class="hidden"
+            onchange="handleFileSelected(this)" />
           <div class="upload-icon-circle">
             📄
           </div>
@@ -925,7 +1232,9 @@
         </div>
 
         <div style="margin-top:14px;display:flex;justify-content:center;align-items:center;">
-          <button type="button" class="btn btn-secondary" style="font-size:0.82rem;padding:7px 16px;display:inline-flex;align-items:center;gap:6px;border-radius:10px;" onclick="printBlankPagePdf()">
+          <button type="button" class="btn btn-secondary"
+            style="font-size:0.82rem;padding:7px 16px;display:inline-flex;align-items:center;gap:6px;border-radius:10px;"
+            onclick="printBlankPagePdf()">
             <span>📄</span>
             <span>Print 1 Blank Page PDF</span>
           </button>
@@ -940,12 +1249,14 @@
               <div style="margin-top:4px;">
                 <span class="meta-pill">📄 <strong id="lblPageCount">0</strong> pages</span>
                 <span class="meta-pill">💾 <span id="lblFileSize">0</span> KB</span>
-                <span class="meta-pill">🔒 SHA-256: <code id="lblSha" style="font-family:var(--font-mono);"></code></span>
+                <span class="meta-pill">🔒 SHA-256: <code id="lblSha"
+                    style="font-family:var(--font-mono);"></code></span>
               </div>
             </div>
           </div>
           <div>
-            <button type="button" class="btn btn-secondary" style="font-size:0.8rem;padding:6px 12px;" onclick="document.getElementById('pdfInput').click()">
+            <button type="button" class="btn btn-secondary" style="font-size:0.8rem;padding:6px 12px;"
+              onclick="document.getElementById('pdfInput').click()">
               Change File
             </button>
           </div>
@@ -982,7 +1293,8 @@
 
         <!-- 2B: Granular Page Selection -->
         <div class="section-divider">
-          <label for="pageSelectionMode">Which Pages Do You Want to Print? (Document has <span id="lblInlineTotalPages">1</span> pages)</label>
+          <label for="pageSelectionMode">Which Pages Do You Want to Print? (Document has <span
+              id="lblInlineTotalPages">1</span> pages)</label>
           <div class="grid-2" style="align-items:start;">
             <div>
               <select id="pageSelectionMode" onchange="onPageModeChanged()">
@@ -998,7 +1310,8 @@
             <div id="subPageFirstN" class="hidden">
               <div style="display:flex;align-items:center;gap:8px;">
                 <span style="font-size:0.86rem;font-weight:600;white-space:nowrap;">Print First</span>
-                <input type="number" id="inpFirstN" min="1" value="1" onchange="syncPageRangeAndQuote()" onkeyup="syncPageRangeAndQuote()" />
+                <input type="number" id="inpFirstN" min="1" value="1" onchange="syncPageRangeAndQuote()"
+                  onkeyup="syncPageRangeAndQuote()" />
                 <span style="font-size:0.86rem;font-weight:600;white-space:nowrap;">page(s)</span>
               </div>
             </div>
@@ -1013,19 +1326,27 @@
             </div>
 
             <div id="subPageCustomText" class="hidden">
-              <input type="text" id="pageRangeInput" value="all" placeholder="e.g. 1-3, 5, 8-10" onchange="onCustomRangeTextEdited()" onkeyup="if(event.key==='Enter') onCustomRangeTextEdited()" />
+              <input type="text" id="pageRangeInput" value="all" placeholder="e.g. 1-3, 5, 8-10"
+                onchange="onCustomRangeTextEdited()" onkeyup="if(event.key==='Enter') onCustomRangeTextEdited()" />
             </div>
           </div>
 
           <!-- Interactive Page Chips -->
-          <div id="visualPagePickerWrap" style="margin-top:12px;background:#f8fafc;border:1px solid #e2e8f0;border-radius:12px;padding:12px;">
-            <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:6px;margin-bottom:8px;">
-              <span style="font-size:0.78rem;font-weight:700;color:var(--muted);text-transform:uppercase;">Interactive Page Selector (Click page to toggle):</span>
+          <div id="visualPagePickerWrap"
+            style="margin-top:12px;background:#f8fafc;border:1px solid #e2e8f0;border-radius:12px;padding:12px;">
+            <div
+              style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:6px;margin-bottom:8px;">
+              <span style="font-size:0.78rem;font-weight:700;color:var(--muted);text-transform:uppercase;">Interactive
+                Page Selector (Click page to toggle):</span>
               <div style="display:flex;gap:6px;">
-                <button type="button" class="btn btn-secondary" style="padding:4px 9px;font-size:0.75rem;" onclick="quickSelectPages('all')">Select All</button>
-                <button type="button" class="btn btn-secondary" style="padding:4px 9px;font-size:0.75rem;" onclick="quickSelectPages('first1')">Only Page 1</button>
-                <button type="button" class="btn btn-secondary" style="padding:4px 9px;font-size:0.75rem;" onclick="quickSelectPages('odd')">Odd</button>
-                <button type="button" class="btn btn-secondary" style="padding:4px 9px;font-size:0.75rem;" onclick="quickSelectPages('even')">Even</button>
+                <button type="button" class="btn btn-secondary" style="padding:4px 9px;font-size:0.75rem;"
+                  onclick="quickSelectPages('all')">Select All</button>
+                <button type="button" class="btn btn-secondary" style="padding:4px 9px;font-size:0.75rem;"
+                  onclick="quickSelectPages('first1')">Only Page 1</button>
+                <button type="button" class="btn btn-secondary" style="padding:4px 9px;font-size:0.75rem;"
+                  onclick="quickSelectPages('odd')">Odd</button>
+                <button type="button" class="btn btn-secondary" style="padding:4px 9px;font-size:0.75rem;"
+                  onclick="quickSelectPages('even')">Even</button>
               </div>
             </div>
             <div id="pageChipsContainer"></div>
@@ -1071,7 +1392,8 @@
             </select>
           </div>
           <div style="display:flex;flex-direction:column;justify-content:end;">
-            <label style="display:flex;align-items:center;gap:8px;cursor:pointer;padding:10px 12px;border:1px solid #cbd5e1;border-radius:8px;background:#fff;color:var(--text);margin-bottom:0;">
+            <label
+              style="display:flex;align-items:center;gap:8px;cursor:pointer;padding:10px 12px;border:1px solid #cbd5e1;border-radius:8px;background:#fff;color:var(--text);margin-bottom:0;">
               <input type="checkbox" id="collateCheck" checked onchange="requestServerQuote()" />
               <span style="font-size:0.86rem;font-weight:600;">Collate Copies</span>
             </label>
@@ -1090,7 +1412,8 @@
           </div>
           <div class="quote-row">
             <span style="color:var(--muted);">Selected Pages per Copy:</span>
-            <strong><span id="qSelectedPages">0</span> of <span id="qDocPages">0</span> pages (<span id="qRange">all</span>)</strong>
+            <strong><span id="qSelectedPages">0</span> of <span id="qDocPages">0</span> pages (<span
+                id="qRange">all</span>)</strong>
           </div>
           <div class="quote-row">
             <span style="color:var(--muted);">Layout &amp; Copies:</span>
@@ -1126,30 +1449,42 @@
         </div>
 
         <div class="alert alert-warn" style="font-size:0.86rem;line-height:1.6;">
-          <strong>Counter Pickup Process:</strong><br/>
-          • Once paid, your print job appears instantly on the staff counter screen.<br/>
-          • Collect your fresh printouts using your secret <strong>6-character Pickup Code</strong>.<br/>
-          • Your document is encrypted and automatically deleted after counter pickup.
+          <strong>Counter Approval &amp; Privacy Guarantee:</strong><br />
+          • Your print job appears instantly on the shopkeeper's counter screen.<br />
+          • Pay online via UPI/Cards OR pay cash directly at the counter — printing starts as soon as the store admin
+          approves your order.<br />
+          • Your document is encrypted and automatically deleted from the station after handover.
         </div>
 
-        <label style="display:flex;align-items:center;gap:10px;cursor:pointer;margin:14px 0 18px;color:var(--text);font-size:0.88rem;">
+        <label
+          style="display:flex;align-items:center;gap:10px;cursor:pointer;margin:14px 0 18px;color:var(--text);font-size:0.88rem;">
           <input type="checkbox" id="consentCheck" checked style="width:18px;height:18px;" />
-          <span>I agree to the document retention policy and counter pickup verification.</span>
+          <span>I agree to the document retention policy and counter pickup terms.</span>
         </label>
 
-        <button id="btnCreateOrder" class="btn" style="width:100%;padding:14px;font-size:1.05rem;" onclick="createOrderAndStartUpi()">
-          ⚡ Proceed to Secure Checkout (₹<span id="btnAmountSpan">0.00</span>)
-        </button>
+        <div style="display:grid;grid-template-columns:repeat(auto-fit, minmax(230px, 1fr));gap:12px;">
+          <button id="btnCreateOrder" class="btn" style="width:100%;padding:14px;font-size:1.02rem;"
+            onclick="createOrderAndStartUpi('online')">
+            💳 Pay Online — UPI / Cards (₹<span id="btnAmountSpan">0.00</span>)
+          </button>
+          <button id="btnCreateOrderCash" class="btn"
+            style="width:100%;padding:14px;font-size:1.02rem;background:linear-gradient(135deg,#059669,#047857);color:#fff;box-shadow:0 4px 14px rgba(5,150,105,0.28);"
+            onclick="createOrderAndStartUpi('cash')">
+            💵 Pay Cash at Counter
+          </button>
+        </div>
       </div>
     </div>
 
-    <!-- STEP 4: Live Order Status & Pickup Token Card -->
+    <!-- STEP 4: Live Order Status & Counter Tracker Card -->
     <div id="trackingCard" class="card hidden">
-      <h2>Order Status &amp; Counter Pickup Tracker</h2>
-      <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px;margin-bottom:14px;">
+      <h2>Order Status &amp; Counter Tracker</h2>
+      <div
+        style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px;margin-bottom:14px;">
         <div>
-          <div style="font-size:0.82rem;color:var(--muted);font-weight:600;">ORDER REFERENCE</div>
-          <div style="font-size:1.35rem;font-weight:900;font-family:var(--font-mono);" id="trkOrderCode">PA-XXXX</div>
+          <div style="font-size:0.82rem;color:var(--muted);font-weight:600;">ORDER REFERENCE (SHOW AT COUNTER)</div>
+          <div style="font-size:1.55rem;font-weight:900;font-family:var(--font-mono);color:var(--primary);"
+            id="trkOrderCode">PA-XXXX</div>
         </div>
         <div>
           <span class="meta-pill" id="trkStateBadge" style="font-size:0.92rem;padding:6px 14px;">state</span>
@@ -1164,41 +1499,54 @@
           ⚡ Complete Payment to Start Printing
         </h3>
         <p style="font-size:0.9rem;color:var(--muted);margin-bottom:14px;">
-          Amount to Pay: <strong style="font-size:1.25rem;color:#0f172a;font-family:var(--font-mono);">₹<span id="lblPayAmount"></span></strong> | Gateway ID: <code id="lblGatewayOrder" style="font-family:var(--font-mono);"></code>
+          Amount to Pay: <strong style="font-size:1.25rem;color:#0f172a;font-family:var(--font-mono);">₹<span
+              id="lblPayAmount"></span></strong> | Gateway ID: <code id="lblGatewayOrder"
+            style="font-family:var(--font-mono);"></code>
         </p>
         <div style="display:flex;gap:12px;flex-wrap:wrap;align-items:center;">
-          <button id="btnPayRazorpay" class="btn" style="background:#2563eb;color:#fff;font-weight:800;padding:13px 24px;font-size:1.02rem;" onclick="launchRazorpayCheckout()">
-            💳 Pay via Razorpay (GPay, PhonePe, Paytm, Cards)
+          <button id="btnPayRazorpay" class="btn"
+            style="background:#2563eb;color:#fff;font-weight:800;padding:13px 24px;font-size:1.02rem;"
+            onclick="launchRazorpayCheckout()">
+            💳 Pay Online via Razorpay (UPI / GPay / PhonePe / Cards)
+          </button>
+          <button id="btnSwitchCash" class="btn"
+            style="background:#059669;color:#fff;font-weight:800;padding:13px 20px;font-size:0.96rem;"
+            onclick="selectCashAtCounter()">
+            💵 Pay Cash at Counter Instead
           </button>
         </div>
         <p style="font-size:0.8rem;color:var(--muted);margin-top:12px;">
-          ✓ Fully automated instant verification. Your order immediately moves to <code>paid_awaiting_approval</code> upon payment.
+          ✓ Online payments verify automatically, or choose Cash at Counter to pay the shopkeeper directly before print
+          approval.
         </p>
       </div>
 
-      <!-- COUNTER PICKUP CODE BOX -->
-      <div class="pickup-box">
-        <div style="font-size:0.84rem;font-weight:700;letter-spacing:0.08em;color:#94a3b8;text-transform:uppercase;">
-          YOUR SECRET COUNTER PICKUP CODE
-        </div>
-        <div class="pickup-badge" id="trkPickupCode">------</div>
-        <div style="margin-top:6px;">
-          <button type="button" class="btn btn-secondary" style="font-size:0.78rem;padding:5px 12px;background:rgba(255,255,255,0.1);color:#fff;border-color:rgba(255,255,255,0.2);" onclick="copyPickupCode()">
-            📋 Copy Code
-          </button>
-        </div>
-        <div style="font-size:0.82rem;color:#94a3b8;margin-top:10px;">
-          Show this code to the counter staff at <strong><span id="trkShopNameBadge">Midtown Stationary</span></strong> to collect your physical pages.
-        </div>
+      <!-- Cash at Counter Notice Box (When paymentStatus === 'cash_at_counter') -->
+      <div id="cashCounterBox" class="card hidden" style="background:#fffbeb;border:2px solid #f59e0b;padding:18px;">
+        <h3 style="font-size:1.08rem;margin-bottom:6px;color:#92400e;display:flex;align-items:center;gap:8px;">
+          💵 Cash at Counter Selected — Pay ₹<span id="lblCashAmount">0.00</span> at Counter
+        </h3>
+        <p style="font-size:0.88rem;color:#78350f;margin:0;line-height:1.5;">
+          Please tell the shopkeeper your Order Reference (<strong id="lblCashOrderCode"
+            style="font-family:var(--font-mono);">PA-XXXX</strong>) and hand over <strong>₹<span
+              id="lblCashAmount2">0.00</span></strong>. As soon as the store admin clicks <em>Approve &amp; Print</em>,
+          your document will print immediately!
+        </p>
       </div>
 
       <div class="receipt-ticket">
-        <div class="quote-row"><span style="color:var(--muted);">Document:</span><strong id="trkFileName"></strong></div>
-        <div class="quote-row"><span style="color:var(--muted);">Configuration:</span><strong id="trkConfig"></strong></div>
-        <div class="quote-row"><span style="color:var(--muted);">Sides / Sheets:</span><strong id="trkSidesSheets"></strong></div>
-        <div class="quote-row"><span style="color:var(--muted);">Total Amount:</span><strong>₹<span id="trkTotal"></span> (<span id="trkPayStatus"></span>)</strong></div>
-        <div class="quote-row"><span style="color:var(--muted);">Last Updated (IST):</span><strong id="trkUpdatedIst"></strong></div>
-        <div class="quote-row"><span style="color:var(--muted);">Tracking Token:</span><code id="trkPubToken" style="font-size:0.78rem;font-family:var(--font-mono);"></code></div>
+        <div class="quote-row"><span style="color:var(--muted);">Document:</span><strong id="trkFileName"></strong>
+        </div>
+        <div class="quote-row"><span style="color:var(--muted);">Configuration:</span><strong id="trkConfig"></strong>
+        </div>
+        <div class="quote-row"><span style="color:var(--muted);">Sides / Sheets:</span><strong
+            id="trkSidesSheets"></strong></div>
+        <div class="quote-row"><span style="color:var(--muted);">Total Amount:</span><strong>₹<span
+              id="trkTotal"></span> (<span id="trkPayStatus"></span>)</strong></div>
+        <div class="quote-row"><span style="color:var(--muted);">Last Updated (IST):</span><strong
+            id="trkUpdatedIst"></strong></div>
+        <div class="quote-row"><span style="color:var(--muted);">Tracking Token:</span><code id="trkPubToken"
+            style="font-size:0.78rem;font-family:var(--font-mono);"></code></div>
       </div>
 
       <div style="margin-top:16px;display:flex;gap:10px;flex-wrap:wrap;align-items:center;">
@@ -1209,7 +1557,32 @@
   </div>
 
   <script>
-    const DEFAULT_STATION_URL = 'https://anybody-vpn-slim-suited.trycloudflare.com';
+    const DEFAULT_STATION_URL = 'https://mpeg-replace-animal-cruises.trycloudflare.com';
+
+    /* ==========================================================================
+       ROBUST NETWORK LAYER (AUTO-RETRY & TUNNEL RE-DISCOVERY)
+       ========================================================================== */
+    async function apiFetch(path, options = {}) {
+      let targetUrl = apiUrl(path);
+      try {
+        const res = await fetch(targetUrl, options);
+        return res;
+      } catch (err) {
+        console.warn(`[PrintAway Network] Fetch failed for ${targetUrl} (${err.message}). Attempting automatic tunnel discovery...`);
+        try {
+          const freshTunnel = await autoDiscoverLiveStation(true);
+          if (freshTunnel) {
+            targetUrl = apiUrl(path);
+            console.log(`[PrintAway Network] Retrying fetch with live station: ${targetUrl}`);
+            const retryRes = await fetch(targetUrl, options);
+            return retryRes;
+          }
+        } catch (retryErr) {
+          console.error('[PrintAway Network] Retry failed:', retryErr);
+        }
+        throw new Error(`Station connection paused (${err.message}). The cloud tunnel is refreshing. Please retry in a few seconds.`);
+      }
+    }
 
     /* ==========================================================================
        MASCOT LOADER & CONFETTI HELPERS
@@ -1271,18 +1644,140 @@
       draw();
     }
 
-    function copyPickupCode() {
-      const code = document.getElementById('trkPickupCode').textContent;
-      if (code && code !== '------') {
-        navigator.clipboard.writeText(code).then(() => {
-          alert('Pickup Code copied to clipboard: ' + code);
-        }).catch(() => {});
-      }
+    /* ==========================================================================
+       SHOP & TUNNEL DISCOVERY & DYNAMIC MULTI-STATIONERY PICKER
+       ========================================================================== */
+    let allDiscoveredShops = [];
+
+    function openShopSelector() {
+      const modal = document.getElementById('modalSelectShop');
+      if (modal) modal.classList.add('active');
+      loadAllStationeryShops();
     }
 
-    /* ==========================================================================
-       SHOP & TUNNEL DISCOVERY
-       ========================================================================== */
+    function closeShopSelectorIfSelected() {
+      const modal = document.getElementById('modalSelectShop');
+      if (modal) modal.classList.remove('active');
+    }
+
+    async function loadAllStationeryShops() {
+      const container = document.getElementById('shopCardsList');
+      if (!container) return;
+
+      try {
+        const res = await fetch('https://zduoifzakiojfqbtxqqm.supabase.co/rest/v1/shops?select=*', {
+          headers: {
+            'apikey': 'sb_publishable_rhmUZZbKhXiJxrChcPTbsg_gFIH9FdO',
+            'Accept': 'application/json'
+          }
+        });
+        if (res.ok) {
+          allDiscoveredShops = await res.json();
+        }
+      } catch (err) {
+        console.warn('Could not load shops from Supabase:', err);
+      }
+
+      if (!allDiscoveredShops || allDiscoveredShops.length === 0) {
+        allDiscoveredShops = [
+          {
+            shop_id: 'midtownstationary',
+            shop_name: 'Midtown Stationary',
+            owner_name: 'Deepak',
+            owner_phone: '8937984398',
+            active_printer_model: 'Xerox B1025 Multifunction Printer',
+            live_tunnel_url: 'https://mpeg-replace-animal-cruises.trycloudflare.com'
+          },
+          {
+            shop_id: 'pilot',
+            shop_name: 'PrintAway Pilot Shop',
+            owner_name: 'Shivam',
+            owner_phone: '9999999999',
+            active_printer_model: 'Xerox B1025 Multifunction Printer',
+            live_tunnel_url: null
+          }
+        ];
+      }
+
+      renderShopCards(allDiscoveredShops);
+    }
+
+    function renderShopCards(shops) {
+      const container = document.getElementById('shopCardsList');
+      if (!container) return;
+      const currentShop = getActiveShopId();
+
+      if (!shops || shops.length === 0) {
+        container.innerHTML = '<div style="text-align:center;padding:20px;color:#64748b;font-size:0.88rem;">No stationery stores found.</div>';
+        return;
+      }
+
+      container.innerHTML = shops.map(s => {
+        const sid = s.shop_id || 'pilot';
+        const isSelected = (sid === currentShop);
+        const isOnline = !!(s.live_tunnel_url && s.live_tunnel_url.trim().startsWith('https://'));
+        const statusBadge = isOnline
+          ? '<span class="shop-badge-online">🟢 Live &amp; Accepting Orders</span>'
+          : '<span class="shop-badge-ready">🟡 Counter Ready</span>';
+        const ownerContact = s.owner_name ? `${s.owner_name}${s.owner_phone ? ' • ' + s.owner_phone : ''}` : '';
+
+        return `
+          <div class="shop-select-card ${isSelected ? 'active-shop' : ''}" onclick="selectStationeryShop('${sid}', '${(s.shop_name || sid).replace(/'/g, "\\'")}')">
+            <div>
+              <div style="display:flex;align-items:center;gap:8px;margin-bottom:3px;">
+                <strong style="font-size:0.98rem;color:#0f172a;">${s.shop_name || sid}</strong>
+                ${statusBadge}
+              </div>
+              <div style="font-size:0.78rem;color:#64748b;">
+                ${ownerContact ? ownerContact + ' • ' : ''}<code>${sid}</code>
+              </div>
+              <div style="font-size:0.74rem;color:#0284c7;margin-top:4px;">
+                🖨️ ${s.active_printer_model || 'Xerox B1025'} • B&amp;W &amp; Color • Duplex
+              </div>
+            </div>
+            <div>
+              <button type="button" class="btn ${isSelected ? 'btn-success' : 'btn-primary'}" style="font-size:0.82rem;padding:7px 14px;white-space:nowrap;pointer-events:none;">
+                ${isSelected ? '✓ Selected' : 'Print Here &rarr;'}
+              </button>
+            </div>
+          </div>
+        `;
+      }).join('');
+    }
+
+    function filterShopCards(query) {
+      const q = (query || '').toLowerCase().trim();
+      if (!q) {
+        renderShopCards(allDiscoveredShops);
+        return;
+      }
+      const filtered = allDiscoveredShops.filter(s => {
+        const name = (s.shop_name || '').toLowerCase();
+        const id = (s.shop_id || '').toLowerCase();
+        const owner = (s.owner_name || '').toLowerCase();
+        return name.includes(q) || id.includes(q) || owner.includes(q);
+      });
+      renderShopCards(filtered);
+    }
+
+    function selectStationeryShop(shopId, shopName) {
+      const clean = (shopId || 'midtownstationary').trim().toLowerCase().replace(/[^a-z0-9_-]/g, '');
+      localStorage.setItem('printaway_shop_id', clean);
+      localStorage.removeItem('printaway_api_base');
+
+      const url = new URL(window.location.href);
+      url.searchParams.set('shop', clean);
+      window.history.replaceState({}, '', url.toString());
+
+      const badgeEl = document.getElementById('lblActiveShopBadge');
+      if (badgeEl) badgeEl.textContent = shopName || clean;
+
+      const modal = document.getElementById('modalSelectShop');
+      if (modal) modal.classList.remove('active');
+
+      resetToNewOrder();
+    }
+
     function getActiveShopId() {
       const spShop = new URLSearchParams(window.location.search).get('shop');
       if (spShop && spShop.trim()) {
@@ -1290,7 +1785,7 @@
         localStorage.setItem('printaway_shop_id', clean);
         return clean;
       }
-      return localStorage.getItem('printaway_shop_id') || 'midtownstationary';
+      return '';
     }
 
     function getRegistryTopicForShop(shopId) {
@@ -1301,20 +1796,7 @@
       return 'printaway_station_registry_' + sid + '_9f8a7b';
     }
 
-    function switchShopPrompt() {
-      const cur = getActiveShopId();
-      const entered = prompt("Enter Shop ID to connect (e.g. 'midtownstationary', 'pilot', 'shop-02'):", cur);
-      if (entered !== null && entered.trim()) {
-        const clean = entered.trim().toLowerCase().replace(/[^a-z0-9_-]/g, '');
-        localStorage.setItem('printaway_shop_id', clean);
-        localStorage.removeItem('printaway_api_base');
-        const url = new URL(window.location.href);
-        url.searchParams.set('shop', clean);
-        window.location.href = url.toString();
-      }
-    }
-
-    async function autoDiscoverLiveStation() {
+    async function autoDiscoverLiveStation(force = false) {
       if (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1') {
         return '';
       }
@@ -1326,8 +1808,13 @@
       }
       try {
         const shopId = getActiveShopId();
+        if (!shopId) {
+          return '';
+        }
         const badgeEl = document.getElementById('lblActiveShopBadge');
-        if (badgeEl) badgeEl.textContent = shopId;
+        if (badgeEl && !badgeEl.textContent.includes('Change') && !badgeEl.textContent.includes('Select')) {
+          badgeEl.textContent = shopId;
+        }
 
         // Priority 1: Supabase Fleet Lookup
         try {
@@ -1335,7 +1822,8 @@
             headers: {
               'apikey': 'sb_publishable_rhmUZZbKhXiJxrChcPTbsg_gFIH9FdO',
               'Accept': 'application/json'
-            }
+            },
+            cache: force ? 'no-cache' : 'default'
           });
           if (sbRes.ok) {
             const list = await sbRes.json();
@@ -1422,9 +1910,24 @@
     }
 
     async function loadShopStatus() {
+      const activeShop = getActiveShopId();
+      if (!activeShop) {
+        const banner = document.getElementById('shopBanner');
+        const txt = document.getElementById('shopStatusText');
+        const turn = document.getElementById('shopTurnaround');
+        const dot = document.getElementById('liveDotIndicator');
+        if (banner) banner.className = 'status-banner status-open';
+        if (dot) dot.style.background = '#2563eb';
+        if (txt) txt.textContent = '👋 Welcome to PrintAway! Please choose your stationery store above to start printing.';
+        if (turn) turn.textContent = '⚡ Multi-Shop Kiosk Network';
+        const bEl = document.getElementById('lblActiveShopBadge');
+        if (bEl) bEl.textContent = 'Select Stationery';
+        return;
+      }
+
       try {
         await autoDiscoverLiveStation();
-        const res = await fetch(apiUrl('/api/shop/status'));
+        const res = await apiFetch('/api/shop/status');
         const data = await res.json();
         shopCapabilities = data;
         document.getElementById('shopTagline').textContent = data.tagline || 'Printing ke liye pareshan ho? Just PrintAway.';
@@ -1443,7 +1946,7 @@
           banner.className = 'status-banner status-open';
           if (dot) dot.style.background = '#10b981';
           const bEl = document.getElementById('lblActiveShopBadge');
-          if (bEl && data.shopId) bEl.textContent = data.shopId;
+          if (bEl && data.shopId) bEl.textContent = data.shopName || data.shopId;
           const trkShop = document.getElementById('trkShopNameBadge');
           if (trkShop) trkShop.textContent = data.shopName || 'Midtown Stationary';
           txt.textContent = '● ' + (data.shopName ? data.shopName + ' — ' : '') + data.statusReason + ' (' + capTags.join(' / ') + ')';
@@ -1515,12 +2018,17 @@
 
     async function handleFileSelected(input) {
       showError(null);
+      if (!getActiveShopId()) {
+        openShopSelector();
+        showError('Please choose your stationery store first to connect to their printer.');
+        return;
+      }
       if (!input.files || !input.files[0]) return;
       const file = input.files[0];
       showMascotLoader('Validating Document...', 'Analyzing pages and PDF security signatures');
       try {
         const buf = await file.arrayBuffer();
-        const res = await fetch(apiUrl('/api/uploads?filename=' + encodeURIComponent(file.name)), {
+        const res = await apiFetch('/api/uploads?filename=' + encodeURIComponent(file.name), {
           method: 'POST',
           headers: { 'Content-Type': 'application/pdf', 'X-File-Name': file.name },
           body: buf
@@ -1540,11 +2048,16 @@
 
     async function printBlankPagePdf() {
       showError(null);
+      if (!getActiveShopId()) {
+        openShopSelector();
+        showError('Please choose your stationery store first.');
+        return;
+      }
       showMascotLoader('Preparing 1 Blank Page PDF...', 'Generating 1 blank test page');
       try {
         let saved = null;
         try {
-          const res = await fetch(apiUrl('/api/uploads/sample'), {
+          const res = await apiFetch('/api/uploads/sample', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ pages: 1, title: 'Blank_Test_Page' })
@@ -1558,7 +2071,7 @@
           // Client fallback: Synthesize minimal valid 1-page PDF
           const rawPdf = `%PDF-1.4\n1 0 obj<</Type/Catalog/Pages 2 0 R>>endobj\n2 0 obj<</Type/Pages/Count 1/Kids[3 0 R]>>endobj\n3 0 obj<</Type/Page/MediaBox[0 0 595 842]/Parent 2 0 R/Resources<<>>>>endobj\nxref\n0 4\n0000000000 65535 f \n0000000009 00000 n \n0000000052 00000 n \n0000000101 00000 n \ntrailer<</Size 4/Root 1 0 R>>\nstartxref\n178\n%%EOF`;
           const blob = new Blob([rawPdf], { type: 'application/pdf' });
-          const uploadRes = await fetch(apiUrl('/api/uploads?filename=Blank_Test_Page.pdf'), {
+          const uploadRes = await apiFetch('/api/uploads?filename=Blank_Test_Page.pdf', {
             method: 'POST',
             headers: { 'X-File-Name': 'Blank_Test_Page.pdf' },
             body: blob
@@ -1750,7 +2263,7 @@
       const collate = document.getElementById('collateCheck').checked;
 
       try {
-        const res = await fetch(apiUrl('/api/orders/quote'), {
+        const res = await apiFetch('/api/orders/quote', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
@@ -1802,20 +2315,23 @@
       }
     }
 
-    async function createOrderAndStartUpi() {
+    async function createOrderAndStartUpi(paymentMethod = 'online') {
       showError(null);
       if (!currentQuoteToken) return;
       const consent = document.getElementById('consentCheck').checked;
       const customerName = document.getElementById('custName').value;
       const customerPhone = document.getElementById('custPhone').value;
 
-      showMascotLoader('Securing Order...', 'Reserving hardware printer queue & generating UPI order');
+      showMascotLoader(
+        paymentMethod === 'cash' ? 'Sending Order to Counter...' : 'Securing Order...',
+        paymentMethod === 'cash' ? 'Queueing order for shopkeeper cash approval' : 'Reserving hardware printer queue & generating UPI order'
+      );
 
       try {
-        const res = await fetch(apiUrl('/api/orders'), {
+        const res = await apiFetch('/api/orders', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ quoteToken: currentQuoteToken, customerName, customerPhone, consentAccepted: consent })
+          body: JSON.stringify({ quoteToken: currentQuoteToken, customerName, customerPhone, consentAccepted: consent, paymentMethod })
         });
         const data = await res.json();
         hideMascotLoader();
@@ -1834,13 +2350,40 @@
         if (pollTimer) clearInterval(pollTimer);
         pollTimer = setInterval(refreshCurrentOrder, 2500);
 
-        // Auto-launch Razorpay Checkout modal
-        if (data.razorpayOrderId && data.razorpayKeyId && typeof Razorpay !== 'undefined') {
+        // Auto-launch Razorpay Checkout modal only when paying online
+        if (paymentMethod !== 'cash' && data.razorpayOrderId && data.razorpayKeyId && typeof Razorpay !== 'undefined') {
           setTimeout(launchRazorpayCheckout, 350);
         }
       } catch (e) {
         hideMascotLoader();
         showError('Order error: ' + e.message);
+      }
+    }
+
+    async function selectCashAtCounter() {
+      if (!currentOrder) return;
+      showError(null);
+      showMascotLoader('Switching to Cash at Counter...', 'Notifying counter screen for cash collection');
+      try {
+        const res = await apiFetch('/api/payments/select-cash', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            orderId: currentOrder.orderId || 0,
+            publicToken: currentOrder.publicToken || ''
+          })
+        });
+        const data = await res.json();
+        hideMascotLoader();
+        if (!res.ok || data.error) {
+          showError(data.message || 'Could not switch to Cash at Counter.');
+          return;
+        }
+        triggerConfetti();
+        await refreshCurrentOrder();
+      } catch (e) {
+        hideMascotLoader();
+        showError('Error selecting Cash at Counter: ' + e.message);
       }
     }
 
@@ -1874,7 +2417,7 @@
           try {
             showMascotLoader('Verifying Payment...', 'Confirming transaction with bank network');
             document.getElementById('trkStateDesc').innerHTML = '<strong>Verifying payment with bank...</strong>';
-            const vRes = await fetch(apiUrl('/api/payments/verify-razorpay'), {
+            const vRes = await apiFetch('/api/payments/verify-razorpay', {
               method: 'POST',
               headers: { 'Content-Type': 'application/json' },
               body: JSON.stringify({
@@ -1908,7 +2451,7 @@
       showError(null);
       showMascotLoader('Simulating Payment...', 'Testing instant webhook verification');
       try {
-        const res = await fetch(apiUrl('/api/payments/simulate-upi'), {
+        const res = await apiFetch('/api/payments/simulate-upi', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
@@ -1948,7 +2491,7 @@
     async function refreshCurrentOrder() {
       if (!currentOrder || !currentOrder.publicToken) return;
       try {
-        const res = await fetch(apiUrl('/api/orders/' + encodeURIComponent(currentOrder.publicToken)));
+        const res = await apiFetch('/api/orders/' + encodeURIComponent(currentOrder.publicToken));
         const data = await res.json();
         if (!res.ok || data.error) {
           showError(data.message || 'Could not load order status.');
@@ -1957,7 +2500,6 @@
         document.getElementById('trkOrderCode').textContent = data.orderCode;
         document.getElementById('trkStateBadge').textContent = data.state;
         document.getElementById('trkStateDesc').textContent = data.stateDescription + (data.holdOrRejectReason ? ' (' + data.holdOrRejectReason + ')' : '');
-        document.getElementById('trkPickupCode').textContent = data.pickupCode;
         document.getElementById('trkFileName').textContent = data.fileName + (data.fileDeletedAfterCollection ? ' [Purged from Disk]' : '');
         const cMode = data.colorMode === 'color' ? 'Colour' : 'B&W';
         const pSize = data.paperSize || 'A4';
@@ -1966,17 +2508,28 @@
         document.getElementById('trkConfig').textContent = `${pSize} ${cMode} | ${data.duplexMode}${nUp}${ori} | ${data.copies} copy(s) | Pages: ${data.pageRange} (${data.selectedPages}/${data.documentPages}p)`;
         document.getElementById('trkSidesSheets').textContent = data.printedSides + ' printed sides / ' + data.physicalSheets + ' physical sheets';
         document.getElementById('trkTotal').textContent = Number(data.totalAmountInr).toFixed(2);
-        document.getElementById('trkPayStatus').textContent = data.paymentStatus;
+        document.getElementById('trkPayStatus').textContent = data.paymentStatus === 'cash_at_counter' ? 'Pay Cash at Counter' : data.paymentStatus;
         document.getElementById('trkUpdatedIst').textContent = data.updatedAtIst;
         document.getElementById('trkPubToken').textContent = data.publicToken;
 
         const upiBox = document.getElementById('upiPaymentBox');
+        const cashBox = document.getElementById('cashCounterBox');
         if (data.state === 'awaiting_payment' && currentOrder.gatewayOrderId) {
           document.getElementById('lblGatewayOrder').textContent = currentOrder.gatewayOrderId;
           document.getElementById('lblPayAmount').textContent = Number(data.totalAmountInr).toFixed(2);
           upiBox.classList.remove('hidden');
         } else {
           upiBox.classList.add('hidden');
+        }
+        if (cashBox) {
+          if (data.paymentStatus === 'cash_at_counter' && data.state === 'paid_awaiting_approval') {
+            document.getElementById('lblCashAmount').textContent = Number(data.totalAmountInr).toFixed(2);
+            document.getElementById('lblCashAmount2').textContent = Number(data.totalAmountInr).toFixed(2);
+            document.getElementById('lblCashOrderCode').textContent = data.orderCode;
+            cashBox.classList.remove('hidden');
+          } else {
+            cashBox.classList.add('hidden');
+          }
         }
       } catch (e) {
         console.error(e);
@@ -2031,7 +2584,15 @@
     window.addEventListener('DOMContentLoaded', () => {
       const sp = new URLSearchParams(window.location.search).get('station');
       if (sp) localStorage.setItem('printaway_api_base', sp.trim().replace(/\/+$/, ''));
-      loadShopStatus();
+
+      const spShop = new URLSearchParams(window.location.search).get('shop');
+      if (!spShop) {
+        // Welcome and prompt customer to pick stationery store!
+        openShopSelector();
+      } else {
+        loadShopStatus();
+      }
+
       if (window.location.pathname.startsWith('/track/pub_')) {
         const tok = window.location.pathname.substring('/track/'.length);
         document.getElementById('trackTokenInput').value = tok;
@@ -2040,4 +2601,5 @@
     });
   </script>
 </body>
+
 </html>

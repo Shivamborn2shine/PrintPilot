@@ -26,7 +26,22 @@ $outExe = Join-Path $binDir "PrintAway.exe"
 
 # Stop any running station instance so file lock on bin\PrintAway.exe is released
 Get-Process -Name "PrintAway" -ErrorAction SilentlyContinue | Stop-Process -Force -ErrorAction SilentlyContinue
-Start-Sleep -Milliseconds 500
+
+# Wait up to 5 seconds for file lock to release
+$maxWait = 10
+while ($maxWait -gt 0) {
+    try {
+        if (Test-Path $outExe) {
+            $testStream = [System.IO.File]::Open($outExe, [System.IO.FileMode]::Open, [System.IO.FileAccess]::ReadWrite, [System.IO.FileShare]::None)
+            $testStream.Close()
+            $testStream.Dispose()
+        }
+        break
+    } catch {
+        Start-Sleep -Milliseconds 500
+        $maxWait--
+    }
+}
 
 $sources = @(
     Join-Path $repoRoot "src\SqliteInterop.cs"

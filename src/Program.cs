@@ -228,11 +228,15 @@ namespace PrintAway
                     string rzpKey = Environment.GetEnvironmentVariable("RAZORPAY_KEY_ID");
                     string rzpSec = Environment.GetEnvironmentVariable("RAZORPAY_KEY_SECRET");
                     string rzpWhSec = Environment.GetEnvironmentVariable("RAZORPAY_WEBHOOK_SECRET");
-                    if (!string.IsNullOrWhiteSpace(rzpKey) && !string.IsNullOrWhiteSpace(rzpSec))
+                    string rzpLinkedAcc = Environment.GetEnvironmentVariable("RAZORPAY_LINKED_ACCOUNT_ID");
+                    if (!repo.HasRazorpayConfigured && !string.IsNullOrWhiteSpace(rzpKey) && !string.IsNullOrWhiteSpace(rzpSec))
                     {
-                        repo.ConfigureRazorpay(rzpKey, rzpSec, rzpWhSec);
+                        repo.ConfigureRazorpay(rzpKey, rzpSec, rzpWhSec, rzpLinkedAcc);
+                    }
+                    if (repo.HasRazorpayConfigured)
+                    {
                         Console.ForegroundColor = ConsoleColor.Green;
-                        Console.WriteLine("[Payment Gateway] Razorpay Active -> Key ID: " + rzpKey);
+                        Console.WriteLine("[Payment Gateway] Razorpay Active (" + repo.RazorpayMode.ToUpperInvariant() + ") -> Key ID: " + repo.RazorpayKeyId);
                         Console.ResetColor();
                     }
 
@@ -295,6 +299,10 @@ namespace PrintAway
                     string sbUrl = Environment.GetEnvironmentVariable("SUPABASE_URL");
                     string sbKey = Environment.GetEnvironmentVariable("SUPABASE_SERVICE_ROLE_KEY");
                     if (string.IsNullOrWhiteSpace(sbKey)) sbKey = Environment.GetEnvironmentVariable("SUPABASE_KEY");
+
+                    // Fallback to configured Supabase Control Plane
+                    if (string.IsNullOrWhiteSpace(sbUrl)) sbUrl = "https://zduoifzakiojfqbtxqqm.supabase.co";
+                    if (string.IsNullOrWhiteSpace(sbKey)) sbKey = "sb_publishable_rhmUZZbKhXiJxrChcPTbsg_gFIH9FdO";
 
                     SupabaseSyncClient supabaseSync = null;
                     if (!string.IsNullOrWhiteSpace(sbUrl) && !string.IsNullOrWhiteSpace(sbKey))

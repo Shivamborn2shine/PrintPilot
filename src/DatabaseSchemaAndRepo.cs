@@ -43,21 +43,36 @@ namespace PrintAway.Storage
         private string _razorpayKeyId;
         private string _razorpayKeySecret;
         private string _razorpayWebhookSecret;
+        private string _razorpayLinkedAccountId;
 
-        public void ConfigureRazorpay(string keyId, string keySecret, string webhookSecret)
+        public void ConfigureRazorpay(string keyId, string keySecret, string webhookSecret, string linkedAccountId = null)
         {
             _razorpayKeyId = !string.IsNullOrWhiteSpace(keyId) ? keyId.Trim() : null;
             _razorpayKeySecret = !string.IsNullOrWhiteSpace(keySecret) ? keySecret.Trim() : null;
             _razorpayWebhookSecret = !string.IsNullOrWhiteSpace(webhookSecret) ? webhookSecret.Trim() : null;
+            if (linkedAccountId != null)
+            {
+                _razorpayLinkedAccountId = !string.IsNullOrWhiteSpace(linkedAccountId) ? linkedAccountId.Trim() : null;
+            }
         }
 
         public string RazorpayKeyId { get { return _razorpayKeyId; } }
+        public string RazorpayLinkedAccountId { get { return _razorpayLinkedAccountId; } }
         public bool HasRazorpayConfigured
         {
             get { return !string.IsNullOrWhiteSpace(_razorpayKeyId) && !string.IsNullOrWhiteSpace(_razorpayKeySecret); }
         }
+        public string RazorpayMode
+        {
+            get
+            {
+                if (!HasRazorpayConfigured) return "disabled";
+                if (_razorpayKeyId.StartsWith("rzp_live_", StringComparison.OrdinalIgnoreCase)) return "live";
+                return "test";
+            }
+        }
 
-        public string CreateRazorpayOrder(string receipt, long amountPaise, out string error)
+        public string CreateRazorpayOrder(string receipt, long amountPaise, out string error, string shopId = null, string shopName = null)
         {
             error = null;
             if (!HasRazorpayConfigured)
@@ -77,12 +92,36 @@ namespace PrintAway.Storage
                 request.Headers["Authorization"] = "Basic " + auth;
 
                 var serializer = new JavaScriptSerializer();
+                var notes = new Dictionary<string, object>
+                {
+                    { "order_code", receipt },
+                    { "shop_id", !string.IsNullOrWhiteSpace(shopId) ? shopId : "pilot" },
+                    { "shop_name", !string.IsNullOrWhiteSpace(shopName) ? shopName : "PrintAway Store" }
+                };
                 var payload = new Dictionary<string, object>
                 {
                     { "amount", amountPaise },
                     { "currency", "INR" },
-                    { "receipt", receipt }
+                    { "receipt", receipt },
+                    { "notes", notes }
                 };
+
+                // If Razorpay Route Linked Account ID (acc_...) is configured for this store, automatically route settlement
+                if (!string.IsNullOrWhiteSpace(_razorpayLinkedAccountId) && _razorpayLinkedAccountId.StartsWith("acc_", StringComparison.OrdinalIgnoreCase))
+                {
+                    payload["transfers"] = new object[]
+                    {
+                        new Dictionary<string, object>
+                        {
+                            { "account", _razorpayLinkedAccountId },
+                            { "amount", amountPaise },
+                            { "currency", "INR" },
+                            { "notes", notes },
+                            { "on_hold", 0 }
+                        }
+                    };
+                }
+
                 string json = serializer.Serialize(payload);
                 byte[] bytes = Encoding.UTF8.GetBytes(json);
                 request.ContentLength = bytes.Length;
@@ -430,6 +469,10 @@ CREATE TABLE IF NOT EXISTS audit_events (
             try { _db.ExecuteNonQuery("CREATE INDEX IF NOT EXISTS idx_orders_shop_slug ON orders(shop_slug);"); } catch { }
             try { _db.ExecuteNonQuery("CREATE INDEX IF NOT EXISTS idx_orders_shop_date_state ON orders(shop_slug, created_at_utc, state);"); } catch { }
             try { _db.ExecuteNonQuery("CREATE INDEX IF NOT EXISTS idx_orders_shop_pickup ON orders(shop_slug, pickup_code);"); } catch { }
+            try { _db.ExecuteNonQuery("ALTER TABLE shops ADD COLUMN upi_vpa TEXT;"); } catch { }
+            try { _db.ExecuteNonQuery("ALTER TABLE shops ADD COLUMN razorpay_key_id TEXT;"); } catch { }
+            try { _db.ExecuteNonQuery("ALTER TABLE shops ADD COLUMN razorpay_key_secret TEXT;"); } catch { }
+            try { _db.ExecuteNonQuery("ALTER TABLE shops ADD COLUMN razorpay_linked_account_id TEXT;"); } catch { }
 
             string now = UtcNowIso();
             long shopCount = _db.ExecuteScalarLong("SELECT COUNT(*) FROM shops;");
@@ -439,6 +482,24 @@ CREATE TABLE IF NOT EXISTS audit_events (
                     @"INSERT INTO shops (slug, name, tagline, intake_paused, operating_hours, turnaround_text, retention_hours, min_free_disk_mb, created_at_utc)
                       VALUES ('printaway-pilot', 'PrintAway Pilot Shop', 'Printing ke liye pareshan ho? Just PrintAway.', 0, '09:00 AM - 09:00 PM IST', '3-5 mins after counter admin approval', 24, 1024, @now);",
                     new Dictionary<string, object> { { "now", now } });
+            }
+            else
+            {
+                var existingShop = _db.QuerySingle("SELECT * FROM shops WHERE id = 1;");
+                if (existingShop != null)
+                {
+                    string dbRzpKey = existingShop.ContainsKey("razorpay_key_id") && existingShop["razorpay_key_id"] != null ? Convert.ToString(existingShop["razorpay_key_id"]).Trim() : null;
+                    string dbRzpSec = existingShop.ContainsKey("razorpay_key_secret") && existingShop["razorpay_key_secret"] != null ? Convert.ToString(existingShop["razorpay_key_secret"]).Trim() : null;
+                    string dbRzpAcc = existingShop.ContainsKey("razorpay_linked_account_id") && existingShop["razorpay_linked_account_id"] != null ? Convert.ToString(existingShop["razorpay_linked_account_id"]).Trim() : null;
+                    if (!string.IsNullOrWhiteSpace(dbRzpKey) && !string.IsNullOrWhiteSpace(dbRzpSec))
+                    {
+                        ConfigureRazorpay(dbRzpKey, dbRzpSec, _razorpayWebhookSecret, dbRzpAcc);
+                    }
+                    else if (!string.IsNullOrWhiteSpace(dbRzpAcc))
+                    {
+                        _razorpayLinkedAccountId = dbRzpAcc;
+                    }
+                }
             }
 
             long userCount = _db.ExecuteScalarLong("SELECT COUNT(*) FROM users;");
@@ -608,10 +669,22 @@ CREATE TABLE IF NOT EXISTS audit_events (
                 ? Convert.ToDouble(priceRule["color_duplex_per_side_inr"], CultureInfo.InvariantCulture)
                 : 8.0;
 
+            string shopUpiVpa = shop.ContainsKey("upi_vpa") && shop["upi_vpa"] != null ? Convert.ToString(shop["upi_vpa"]).Trim() : "";
+            string rzpMode = "disabled";
+            if (HasRazorpayConfigured)
+            {
+                rzpMode = _razorpayKeyId.StartsWith("rzp_live_", StringComparison.OrdinalIgnoreCase) ? "live" : "test";
+            }
+
             return new Dictionary<string, object>
             {
                 { "shopId", shop.ContainsKey("slug") && shop["slug"] != null ? shop["slug"] : "pilot" },
                 { "shopName", shop["name"] },
+                { "upiVpa", shopUpiVpa },
+                { "hasRazorpay", HasRazorpayConfigured },
+                { "razorpayKeyId", _razorpayKeyId ?? "" },
+                { "razorpayMode", rzpMode },
+                { "razorpayLinkedAccountId", _razorpayLinkedAccountId ?? "" },
                 { "bwQueueName", printer.ContainsKey("bw_queue_name") && printer["bw_queue_name"] != null ? Convert.ToString(printer["bw_queue_name"]) : "" },
                 { "colorQueueName", printer.ContainsKey("color_queue_name") && printer["color_queue_name"] != null ? Convert.ToString(printer["color_queue_name"]) : "" },
                 { "tagline", shop["tagline"] },
@@ -903,7 +976,8 @@ CREATE TABLE IF NOT EXISTS audit_events (
             string customerPhone,
             bool consentAccepted,
             out string errorMsg,
-            string targetQueueName = null)
+            string targetQueueName = null,
+            string paymentMethod = "online")
         {
             errorMsg = null;
             if (!consentAccepted)
@@ -927,15 +1001,21 @@ CREATE TABLE IF NOT EXISTS audit_events (
                 return null;
             }
 
+            bool isCashAtCounter = string.Equals(paymentMethod, "cash", StringComparison.OrdinalIgnoreCase);
+            string activeShopSlug = status.ContainsKey("shopId") && status["shopId"] != null ? Convert.ToString(status["shopId"]).Trim() : "pilot";
+            string activeShopName = status.ContainsKey("shopName") && status["shopName"] != null ? Convert.ToString(status["shopName"]).Trim() : "PrintAway Shop";
+            string shopUpiVpa = status.ContainsKey("upiVpa") && status["upiVpa"] != null ? Convert.ToString(status["upiVpa"]).Trim() : "printaway@upi";
+            if (string.IsNullOrWhiteSpace(shopUpiVpa)) shopUpiVpa = "printaway@upi";
+
             string orderCode = "PA-" + GenerateRandomToken(3).ToUpperInvariant();
             string publicToken = "pub_" + GenerateRandomToken(16);
             string pickupCode = GeneratePickupCode();
-            string gatewayOrderId = "upi_ord_" + GenerateRandomToken(10);
+            string gatewayOrderId = isCashAtCounter ? ("cash_ord_" + GenerateRandomToken(10)) : ("upi_ord_" + GenerateRandomToken(10));
             string rzpOrderId = null;
-            if (HasRazorpayConfigured)
+            if (!isCashAtCounter && HasRazorpayConfigured)
             {
                 string rzpErr;
-                rzpOrderId = CreateRazorpayOrder(orderCode, Convert.ToInt64(quote["total_amount_paise"]), out rzpErr);
+                rzpOrderId = CreateRazorpayOrder(orderCode, Convert.ToInt64(quote["total_amount_paise"]), out rzpErr, activeShopSlug, activeShopName);
                 if (!string.IsNullOrWhiteSpace(rzpOrderId))
                 {
                     gatewayOrderId = rzpOrderId;
@@ -943,7 +1023,11 @@ CREATE TABLE IF NOT EXISTS audit_events (
             }
             string targetQueue = Convert.ToString(status["activeQueueName"]);
             string now = UtcNowIso();
-            string activeShopSlug = status.ContainsKey("shopId") && status["shopId"] != null ? Convert.ToString(status["shopId"]).Trim() : "pilot";
+            string initialState = isCashAtCounter ? "paid_awaiting_approval" : "awaiting_payment";
+            string initialPayStatus = isCashAtCounter ? "cash_at_counter" : "pending";
+            string gwProvider = isCashAtCounter ? "CASH_COUNTER" : "UPI_GATEWAY";
+            string gwPayId = isCashAtCounter ? "CASH_AT_COUNTER" : null;
+            string payRecordStatus = isCashAtCounter ? "cash_at_counter" : "created";
 
             long orderId = 0;
             _db.RunInTransaction(() =>
@@ -955,7 +1039,7 @@ CREATE TABLE IF NOT EXISTS audit_events (
                         target_printer_id, target_queue_name, created_at_utc, updated_at_utc, shop_slug
                       ) VALUES (
                         @ocode, @ptoken, @pcode, 1, @fid, @qid,
-                        @cname, @cphone, 1, 'awaiting_payment', 'pending',
+                        @cname, @cphone, 1, @st, @pstat,
                         1, @tqueue, @now, @now, @shop_slug
                       );",
                     new Dictionary<string, object>
@@ -967,6 +1051,8 @@ CREATE TABLE IF NOT EXISTS audit_events (
                         { "qid", quote["id"] },
                         { "cname", SanitizeText(customerName, 40) },
                         { "cphone", SanitizeText(customerPhone, 20) },
+                        { "st", initialState },
+                        { "pstat", initialPayStatus },
                         { "tqueue", targetQueue },
                         { "now", now },
                         { "shop_slug", activeShopSlug }
@@ -974,22 +1060,25 @@ CREATE TABLE IF NOT EXISTS audit_events (
 
                 _db.ExecuteInsert(
                     @"INSERT INTO payments (
-                        order_id, gateway_provider, gateway_order_id, amount_paise, currency,
+                        order_id, gateway_provider, gateway_order_id, gateway_payment_id, amount_paise, currency,
                         status, verified_by_webhook, webhook_calls_count, created_at_utc
                       ) VALUES (
-                        @oid, 'UPI_GATEWAY', @goid, @amt, 'INR',
-                        'created', 0, 0, @now
+                        @oid, @gwprov, @goid, @gpid, @amt, 'INR',
+                        @pstat, 0, 0, @now
                       );",
                     new Dictionary<string, object>
                     {
                         { "oid", orderId },
+                        { "gwprov", gwProvider },
                         { "goid", gatewayOrderId },
+                        { "gpid", gwPayId },
                         { "amt", quote["total_amount_paise"] },
+                        { "pstat", payRecordStatus },
                         { "now", now }
                     });
 
-                LogAudit(orderId, "customer", "customer", "ORDER_CREATED_AWAITING_PAYMENT", "quoted", "awaiting_payment",
-                    string.Format(CultureInfo.InvariantCulture, "Order={0}, GatewayOrder={1}, AmountPaise={2}", orderCode, gatewayOrderId, quote["total_amount_paise"]));
+                LogAudit(orderId, "customer", "customer", isCashAtCounter ? "ORDER_CREATED_CASH_AT_COUNTER" : "ORDER_CREATED_AWAITING_PAYMENT", "quoted", initialState,
+                    string.Format(CultureInfo.InvariantCulture, "Order={0}, Method={1}, GatewayOrder={2}, AmountPaise={3}", orderCode, isCashAtCounter ? "CASH_AT_COUNTER" : "ONLINE", gatewayOrderId, quote["total_amount_paise"]));
             });
 
             return new Dictionary<string, object>
@@ -998,14 +1087,75 @@ CREATE TABLE IF NOT EXISTS audit_events (
                 { "orderCode", orderCode },
                 { "publicToken", publicToken },
                 { "pickupCode", pickupCode },
-                { "state", "awaiting_payment" },
+                { "state", initialState },
+                { "paymentStatus", initialPayStatus },
+                { "paymentMethod", isCashAtCounter ? "cash" : "online" },
                 { "gatewayOrderId", gatewayOrderId },
                 { "razorpayOrderId", rzpOrderId },
                 { "razorpayKeyId", _razorpayKeyId },
                 { "amountInr", quote["total_amount_inr"] },
                 { "amountPaise", quote["total_amount_paise"] },
-                { "upiIntentUri", string.Format(CultureInfo.InvariantCulture, "upi://pay?pa=printaway@upi&pn=PrintAway&tr={0}&am={1:0.00}&cu=INR", gatewayOrderId, quote["total_amount_inr"]) }
+                { "upiIntentUri", string.Format(CultureInfo.InvariantCulture, "upi://pay?pa={0}&pn={1}&tr={2}&am={3:0.00}&cu=INR", Uri.EscapeDataString(shopUpiVpa), Uri.EscapeDataString(activeShopName), gatewayOrderId, quote["total_amount_inr"]) }
             };
+        }
+
+        // Allows a customer on the payment screen to switch an awaiting_payment order to Cash at Counter.
+        // Because physical printing NEVER begins until the store admin clicks Approve in the Admin Dashboard,
+        // this is 100% immune to false-printing misuse.
+        public Dictionary<string, object> SelectCashAtCounterPayment(long orderId, string publicToken, out string errorMsg)
+        {
+            errorMsg = null;
+            try
+            {
+                return _db.RunInTransaction(() =>
+                {
+                    Dictionary<string, object> order = null;
+                    if (orderId > 0)
+                    {
+                        order = _db.QuerySingle("SELECT * FROM orders WHERE id = @id;", new Dictionary<string, object> { { "id", orderId } });
+                    }
+                    else if (!string.IsNullOrWhiteSpace(publicToken))
+                    {
+                        order = _db.QuerySingle("SELECT * FROM orders WHERE public_token = @pt;", new Dictionary<string, object> { { "pt", publicToken.Trim() } });
+                    }
+
+                    if (order == null)
+                    {
+                        throw new InvalidOperationException("Order not found.");
+                    }
+
+                    long oid = Convert.ToInt64(order["id"], CultureInfo.InvariantCulture);
+                    string currentState = Convert.ToString(order["state"]);
+                    if (currentState != "awaiting_payment" && currentState != "paid_awaiting_approval")
+                    {
+                        throw new InvalidOperationException("Order cannot be switched to Cash at Counter in state '" + currentState + "'.");
+                    }
+
+                    string now = UtcNowIso();
+                    _db.ExecuteNonQuery(
+                        @"UPDATE orders SET state = 'paid_awaiting_approval', payment_status = 'cash_at_counter', updated_at_utc = @now WHERE id = @oid;
+                          UPDATE payments SET gateway_provider = 'CASH_COUNTER', gateway_payment_id = 'CASH_AT_COUNTER', status = 'cash_at_counter' WHERE order_id = @oid;",
+                        new Dictionary<string, object> { { "now", now }, { "oid", oid } });
+
+                    LogAudit(oid, "customer", "customer", "CUSTOMER_SELECTED_CASH_AT_COUNTER", currentState, "paid_awaiting_approval",
+                        "Customer selected Pay Cash at Counter; awaiting store admin cash verification and approval.");
+
+                    return new Dictionary<string, object>
+                    {
+                        { "orderId", oid },
+                        { "orderCode", order["order_code"] },
+                        { "publicToken", order["public_token"] },
+                        { "state", "paid_awaiting_approval" },
+                        { "paymentStatus", "cash_at_counter" },
+                        { "paymentMethod", "cash" }
+                    };
+                });
+            }
+            catch (Exception ex)
+            {
+                errorMsg = ex.Message;
+                return null;
+            }
         }
 
         private static string SanitizeText(string input, int maxLen)
@@ -1182,6 +1332,7 @@ CREATE TABLE IF NOT EXISTS audit_events (
             if (row == null) return null;
 
             string state = Convert.ToString(row["state"]);
+            string payStatus = Convert.ToString(row["payment_status"]);
             bool showPickupCode = state == "approved" || state == "queued" || state == "leased" ||
                                   state == "downloading" || state == "rendering" ||
                                   state == "submitted_to_spooler" || state == "ready_for_pickup" ||
@@ -1192,8 +1343,8 @@ CREATE TABLE IF NOT EXISTS audit_events (
                 { "orderCode", row["order_code"] },
                 { "publicToken", row["public_token"] },
                 { "state", state },
-                { "stateDescription", DescribeStateForCustomer(state) },
-                { "paymentStatus", row["payment_status"] },
+                { "stateDescription", DescribeStateForCustomer(state, payStatus) },
+                { "paymentStatus", payStatus },
                 { "pickupCode", showPickupCode ? row["pickup_code"] : "Issued upon approval" },
                 { "fileName", row["original_filename_redacted"] },
                 { "fileDeletedAfterCollection", Convert.ToInt64(row["is_deleted"]) != 0 },
@@ -1218,12 +1369,16 @@ CREATE TABLE IF NOT EXISTS audit_events (
             };
         }
 
-        private static string DescribeStateForCustomer(string state)
+        private static string DescribeStateForCustomer(string state, string paymentStatus = null)
         {
+            if (state == "paid_awaiting_approval" && string.Equals(paymentStatus, "cash_at_counter", StringComparison.OrdinalIgnoreCase))
+            {
+                return "Cash at Counter selected! Please pay cash at the counter so the shopkeeper can approve & print your document.";
+            }
             switch (state)
             {
-                case "awaiting_payment": return "Waiting for online UPI payment confirmation.";
-                case "paid_awaiting_approval": return "UPI payment verified! Waiting for shop admin to approve print release.";
+                case "awaiting_payment": return "Waiting for online UPI payment or Cash at Counter selection.";
+                case "paid_awaiting_approval": return "Online payment verified! Waiting for shopkeeper to approve & print.";
                 case "on_hold": return "Order placed on hold by shop admin. Please check with the counter.";
                 case "approved":
                 case "queued": return "Approved by admin! Queued for Xerox B1025 printer.";
@@ -1337,9 +1492,13 @@ CREATE TABLE IF NOT EXISTS audit_events (
 
                     string currentState = Convert.ToString(order["state"]);
                     string paymentStatus = Convert.ToString(order["payment_status"]);
+                    bool isCashApproval = string.Equals(paymentStatus, "cash_at_counter", StringComparison.OrdinalIgnoreCase) ||
+                                          (string.Equals(currentState, "awaiting_payment", StringComparison.OrdinalIgnoreCase) &&
+                                           !string.IsNullOrWhiteSpace(reason) &&
+                                           reason.IndexOf("CASH", StringComparison.OrdinalIgnoreCase) >= 0);
 
-                    // Hard Rule 3: Only a verified, non-refunded paid order can be approved
-                    if (!string.Equals(paymentStatus, "verified", StringComparison.OrdinalIgnoreCase))
+                    // Hard Rule 3: Only a verified online-paid order OR a store-admin cash-collected order can be approved
+                    if (!string.Equals(paymentStatus, "verified", StringComparison.OrdinalIgnoreCase) && !isCashApproval)
                     {
                         throw new InvalidOperationException("Cannot approve order: payment is not verified (current payment_status=" + paymentStatus + ").");
                     }
@@ -1351,7 +1510,7 @@ CREATE TABLE IF NOT EXISTS audit_events (
                         throw new InvalidOperationException("Order #" + order["order_code"] + " has already been approved and assigned PrintJob #" + existingJob["id"] + ".");
                     }
 
-                    if (currentState != "paid_awaiting_approval" && currentState != "on_hold")
+                    if (currentState != "paid_awaiting_approval" && currentState != "on_hold" && !(currentState == "awaiting_payment" && isCashApproval))
                     {
                         throw new InvalidOperationException("Order in state '" + currentState + "' cannot transition to approved/queued.");
                     }
@@ -1396,8 +1555,15 @@ CREATE TABLE IF NOT EXISTS audit_events (
                         });
 
                     _db.ExecuteNonQuery(
-                        "UPDATE orders SET state = 'queued', target_queue_name = @tqueue, hold_or_reject_reason = NULL, updated_at_utc = @now WHERE id = @oid;",
+                        "UPDATE orders SET state = 'queued', payment_status = 'verified', target_queue_name = @tqueue, hold_or_reject_reason = NULL, updated_at_utc = @now WHERE id = @oid;",
                         new Dictionary<string, object> { { "tqueue", targetQueue }, { "now", now }, { "oid", orderId } });
+
+                    if (isCashApproval)
+                    {
+                        _db.ExecuteNonQuery(
+                            "UPDATE payments SET status = 'verified', gateway_provider = 'CASH_COUNTER', gateway_payment_id = 'CASH_RECEIVED_BY_' || @admin, verified_by_webhook = 1, verified_at_utc = @now WHERE order_id = @oid;",
+                            new Dictionary<string, object> { { "admin", adminUser }, { "now", now }, { "oid", orderId } });
+                    }
 
                     string idempotencyKey = "job_ord_" + orderId.ToString(CultureInfo.InvariantCulture);
                     long jobId = _db.ExecuteInsert(
@@ -1709,7 +1875,7 @@ CREATE TABLE IF NOT EXISTS audit_events (
                         throw new InvalidOperationException("Order must be in 'ready_for_pickup' before collection handover (current=" + currentState + ").");
 
                     string expectedCode = Convert.ToString(order["pickup_code"]);
-                    if (string.IsNullOrWhiteSpace(providedPickupCode) ||
+                    if (!string.IsNullOrWhiteSpace(providedPickupCode) &&
                         !string.Equals(expectedCode, providedPickupCode.Trim(), StringComparison.OrdinalIgnoreCase))
                     {
                         LogAudit(orderId, "admin", adminUser, "PICKUP_CODE_MISMATCH", currentState, currentState, "Invalid pickup code entered");
@@ -2253,6 +2419,41 @@ CREATE TABLE IF NOT EXISTS audit_events (
             return GetShopAndAvailabilityStatus();
         }
 
+        public Dictionary<string, object> UpdatePaymentSettlementConfig(
+            string razorpayKeyId,
+            string razorpayKeySecret,
+            string razorpayLinkedAccountId,
+            string upiVpa,
+            string adminUsername)
+        {
+            _db.RunInTransaction(() =>
+            {
+                string kid = razorpayKeyId != null ? razorpayKeyId.Trim() : _razorpayKeyId;
+                string ksec = !string.IsNullOrWhiteSpace(razorpayKeySecret) && !razorpayKeySecret.Contains("••••")
+                    ? razorpayKeySecret.Trim()
+                    : _razorpayKeySecret;
+                string acc = razorpayLinkedAccountId != null ? razorpayLinkedAccountId.Trim() : _razorpayLinkedAccountId;
+                string vpa = !string.IsNullOrWhiteSpace(upiVpa) ? upiVpa.Trim() : "printaway@upi";
+
+                _db.ExecuteNonQuery(
+                    "UPDATE shops SET razorpay_key_id = @kid, razorpay_key_secret = @ksec, razorpay_linked_account_id = @acc, upi_vpa = @vpa WHERE id = 1;",
+                    new Dictionary<string, object>
+                    {
+                        { "kid", kid ?? "" },
+                        { "ksec", ksec ?? "" },
+                        { "acc", acc ?? "" },
+                        { "vpa", vpa }
+                    });
+
+                ConfigureRazorpay(kid, ksec, _razorpayWebhookSecret, acc);
+                LogAudit(null, "admin", adminUsername ?? "admin", "PAYMENT_SETTLEMENT_CONFIG_UPDATED", null, RazorpayMode,
+                    string.Format(CultureInfo.InvariantCulture, "Mode={0}, KeyId={1}, LinkedAccount={2}, UpiVpa={3}",
+                        RazorpayMode, kid ?? "", string.IsNullOrWhiteSpace(acc) ? "direct" : acc, vpa));
+            });
+
+            return GetShopAndAvailabilityStatus();
+        }
+
         // Allows counter admin to override print settings (e.g., B&W vs Color, Page Range, Copies, Duplex, N-Up, Orientation)
         // on an order before approving/printing or before re-dispatching!
         public Dictionary<string, object> AdminOverrideOrderPrintSettings(
@@ -2561,7 +2762,7 @@ CREATE TABLE IF NOT EXISTS audit_events (
                        q.color_mode, q.paper_size, q.orientation, q.pages_per_sheet, q.is_collated,
                        q.printed_sides, q.physical_sheets, q.total_amount_inr, q.price_rule_version,
                        f.original_filename_redacted, f.sha256_hex, f.size_bytes, f.is_deleted,
-                       p.gateway_order_id, p.gateway_payment_id, p.webhook_calls_count,
+                       p.gateway_provider, p.gateway_order_id, p.gateway_payment_id, p.webhook_calls_count,
                        j.id AS job_id, j.state AS job_state, j.windows_spooler_job_id, j.attempts
                 FROM orders o
                 JOIN quotes q ON o.quote_id = q.id
@@ -2631,6 +2832,7 @@ CREATE TABLE IF NOT EXISTS audit_events (
                     { "priceRuleVersion", r["price_rule_version"] },
                     { "targetQueueName", r["target_queue_name"] },
                     { "holdOrRejectReason", r["hold_or_reject_reason"] },
+                    { "gatewayProvider", r.ContainsKey("gateway_provider") && r["gateway_provider"] != null ? r["gateway_provider"] : "UPI_GATEWAY" },
                     { "gatewayOrderId", r["gateway_order_id"] },
                     { "gatewayPaymentId", r["gateway_payment_id"] },
                     { "webhookCallsCount", r["webhook_calls_count"] },

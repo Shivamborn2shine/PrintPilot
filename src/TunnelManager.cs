@@ -47,6 +47,7 @@ namespace PrintAway.Tunnel
             lock (_lock)
             {
                 if (_disposed) return;
+                KillOrphanTunnelProcesses();
                 if (_tunnelProcess != null && !_tunnelProcess.HasExited) return;
 
                 // 1. Read portable config for tunnel settings
@@ -481,6 +482,31 @@ namespace PrintAway.Tunnel
                     _tunnelProcess = null;
                 }
             }
+        }
+
+        private void KillOrphanTunnelProcesses()
+        {
+            try
+            {
+                string expectedBin = Path.Combine(_rootDir, "bin", "cloudflared.exe");
+                string expectedRoot = Path.Combine(_rootDir, "cloudflared.exe");
+                foreach (var p in Process.GetProcessesByName("cloudflared"))
+                {
+                    try
+                    {
+                        string path = null;
+                        try { path = p.MainModule != null ? p.MainModule.FileName : null; } catch { }
+                        if (!string.IsNullOrEmpty(path) &&
+                            (string.Equals(path, expectedBin, StringComparison.OrdinalIgnoreCase) ||
+                             string.Equals(path, expectedRoot, StringComparison.OrdinalIgnoreCase)))
+                        {
+                            p.Kill();
+                        }
+                    }
+                    catch { }
+                }
+            }
+            catch { }
         }
 
         public void Stop()

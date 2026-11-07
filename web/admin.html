@@ -113,6 +113,65 @@
     .alert { padding: 10px 14px; border-radius: 8px; margin-bottom: 12px; font-size: 0.88rem; }
     .alert-error { background: #fee2e2; color: #991b1b; }
     .alert-ok { background: #dcfce7; color: #166534; }
+
+    /* ORDER CATEGORY ROW STRIPS */
+    .row-category-cash {
+      background-color: #fef9c3 !important;
+    }
+    .row-category-cash > td {
+      background-color: #fef9c3 !important;
+    }
+    .row-category-cash > td:first-child {
+      border-left: 6px solid #f59e0b !important;
+    }
+
+    .row-category-online {
+      background-color: #fefce8 !important;
+    }
+    .row-category-online > td {
+      background-color: #fefce8 !important;
+    }
+    .row-category-online > td:first-child {
+      border-left: 6px solid #eab308 !important;
+    }
+
+    .row-category-printing {
+      background-color: #eff6ff !important;
+    }
+    .row-category-printing > td {
+      background-color: #eff6ff !important;
+    }
+    .row-category-printing > td:first-child {
+      border-left: 6px solid #3b82f6 !important;
+    }
+
+    .row-category-ready {
+      background-color: #f0fdf4 !important;
+    }
+    .row-category-ready > td {
+      background-color: #f0fdf4 !important;
+    }
+    .row-category-ready > td:first-child {
+      border-left: 6px solid #10b981 !important;
+    }
+
+    .row-category-collected {
+      background-color: #fafaf9 !important;
+      opacity: 0.88;
+    }
+    .row-category-collected > td:first-child {
+      border-left: 4px solid #cbd5e1 !important;
+    }
+
+    .row-category-danger {
+      background-color: #fef2f2 !important;
+    }
+    .row-category-danger > td {
+      background-color: #fef2f2 !important;
+    }
+    .row-category-danger > td:first-child {
+      border-left: 6px solid #ef4444 !important;
+    }
     .modal-backdrop {
       position: fixed;
       top: 0; left: 0; right: 0; bottom: 0;
@@ -320,6 +379,27 @@
           </div>
         </div>
 
+        <!-- Order Category Legend Bar -->
+        <div style="display:flex;gap:14px;align-items:center;flex-wrap:wrap;margin-bottom:12px;font-size:0.78rem;background:#f8fafc;padding:8px 14px;border-radius:8px;border:1px solid #e2e8f0;">
+          <span style="font-weight:700;color:#334155;">Row Highlights:</span>
+          <span style="display:inline-flex;align-items:center;gap:6px;">
+            <span style="width:14px;height:14px;background:#fef9c3;border:2px solid #eab308;border-radius:3px;"></span>
+            <strong>Cash at Counter</strong> (Collect Cash &amp; Approve)
+          </span>
+          <span style="display:inline-flex;align-items:center;gap:6px;">
+            <span style="width:14px;height:14px;background:#fefce8;border:2px solid #facc15;border-radius:3px;"></span>
+            <strong>Paid Online</strong> (Razorpay Verified — Ready to Approve)
+          </span>
+          <span style="display:inline-flex;align-items:center;gap:6px;">
+            <span style="width:14px;height:14px;background:#eff6ff;border:2px solid #3b82f6;border-radius:3px;"></span>
+            Printing Queue
+          </span>
+          <span style="display:inline-flex;align-items:center;gap:6px;">
+            <span style="width:14px;height:14px;background:#f0fdf4;border:2px solid #22c55e;border-radius:3px;"></span>
+            Ready on Tray
+          </span>
+        </div>
+
         <div style="overflow-x:auto;">
           <table>
             <thead>
@@ -462,6 +542,38 @@
             </div>
           </div>
           <button class="btn" onclick="saveNewPricingRule()">Publish New Price Rule Version</button>
+
+          <!-- Payment Gateway (Live Mode) & Store Settlement Configuration -->
+          <div style="border-top:1px solid #e2e8f0;margin-top:16px;padding-top:14px;">
+            <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;flex-wrap:wrap;gap:6px;">
+              <h3 style="font-size:0.96rem;margin:0;">💳 Razorpay Live Mode &amp; Store Settlement</h3>
+              <span id="lblRazorpayModeBadge" class="badge" style="background:#fef3c7;color:#92400e;font-weight:800;">TEST MODE</span>
+            </div>
+            <p style="font-size:0.76rem;color:var(--muted);margin-bottom:10px;line-height:1.45;">
+              <strong>How Multi-Store Settlement Works:</strong><br/>
+              • <strong>Option 1 (Direct Store Bank Settlement — 0% Split):</strong> Paste this store's own <code>rzp_live_...</code> Key ID &amp; Secret. 100% of online payments settle directly to this store's bank account (T+1).<br/>
+              • <strong>Option 2 (Central Platform + Razorpay Route):</strong> Use your central platform <code>rzp_live_...</code> keys and enter this store's Razorpay Linked Account ID (<code>acc_...</code>) below — PrintAway automatically splits &amp; routes 100% of the order payment to this store!
+            </p>
+            <div class="grid-2" style="gap:8px;margin-bottom:10px;">
+              <div>
+                <label style="font-size:0.74rem;font-weight:600;">Razorpay Key ID (Live or Test)</label>
+                <input type="text" id="inpRzpKeyId" placeholder="rzp_live_xxxxxxxxxxxxxx" style="width:100%;font-family:monospace;font-size:0.78rem;" />
+              </div>
+              <div>
+                <label style="font-size:0.74rem;font-weight:600;">Razorpay Key Secret</label>
+                <input type="password" id="inpRzpKeySecret" placeholder="Enter new secret or leave as ••••" style="width:100%;font-family:monospace;font-size:0.78rem;" />
+              </div>
+              <div>
+                <label style="font-size:0.74rem;font-weight:600;">Store Linked Account ID (Razorpay Route)</label>
+                <input type="text" id="inpRzpLinkedAcc" placeholder="Optional: acc_xxxxxxxxxxxxxx" style="width:100%;font-family:monospace;font-size:0.78rem;" />
+              </div>
+              <div>
+                <label style="font-size:0.74rem;font-weight:600;">Store Direct UPI ID (VPA)</label>
+                <input type="text" id="inpShopUpiVpa" placeholder="e.g. midtownstationary@okaxis" style="width:100%;font-family:monospace;font-size:0.78rem;" />
+              </div>
+            </div>
+            <button class="btn btn-success" style="font-size:0.8rem;" onclick="savePaymentSettlementConfig()">💾 Save Payment &amp; Settlement Config</button>
+          </div>
         </div>
       </div>
 
@@ -884,6 +996,40 @@
         document.getElementById('chkSupportsPageRange').checked = !!shop.supportsPageRange;
         if (shop.allowedPaperSizes) document.getElementById('inpAllowedPapers').value = shop.allowedPaperSizes;
 
+        // Populate Razorpay Live/Test Mode & Store Settlement fields (without overwriting if user is typing)
+        const rzpBadge = document.getElementById('lblRazorpayModeBadge');
+        if (rzpBadge) {
+          if (shop.razorpayMode === 'live') {
+            rzpBadge.textContent = '🟢 LIVE MODE (' + (shop.razorpayKeyId || '') + ')';
+            rzpBadge.style.background = '#dcfce7';
+            rzpBadge.style.color = '#15803d';
+          } else if (shop.razorpayMode === 'test') {
+            rzpBadge.textContent = '🟡 TEST MODE (' + (shop.razorpayKeyId || '') + ')';
+            rzpBadge.style.background = '#fef3c7';
+            rzpBadge.style.color = '#92400e';
+          } else {
+            rzpBadge.textContent = '⚪ CASH ONLY (Razorpay Not Set)';
+            rzpBadge.style.background = '#f1f5f9';
+            rzpBadge.style.color = '#475569';
+          }
+        }
+        const inpKeyId = document.getElementById('inpRzpKeyId');
+        if (inpKeyId && document.activeElement !== inpKeyId && shop.razorpayKeyId !== undefined) {
+          inpKeyId.value = shop.razorpayKeyId || '';
+        }
+        const inpKeySec = document.getElementById('inpRzpKeySecret');
+        if (inpKeySec && document.activeElement !== inpKeySec && !inpKeySec.value && shop.hasRazorpay) {
+          inpKeySec.placeholder = '•••••••••••• (Saved)';
+        }
+        const inpLinked = document.getElementById('inpRzpLinkedAcc');
+        if (inpLinked && document.activeElement !== inpLinked && shop.razorpayLinkedAccountId !== undefined) {
+          inpLinked.value = shop.razorpayLinkedAccountId || '';
+        }
+        const inpVpa = document.getElementById('inpShopUpiVpa');
+        if (inpVpa && document.activeElement !== inpVpa && shop.upiVpa !== undefined) {
+          inpVpa.value = shop.upiVpa || '';
+        }
+
         const isPhysical = (shop.dispatchMode !== 'simulation');
         const txtDisp = document.getElementById('lblDispatchModeText');
         if (txtDisp) {
@@ -932,27 +1078,92 @@
         const isColor = o.colorMode === 'color';
         const colorBadge = isColor ? '<span class="badge badge-color">🎨 Color</span>' : '<span class="badge badge-bw">⚫ B&amp;W</span>';
         const nUp = (o.pagesPerSheet && o.pagesPerSheet > 1) ? ` | ${o.pagesPerSheet}-Up` : '';
+        const isCashPending = (o.paymentStatus === 'cash_at_counter');
+        const isCashVerified = (o.gatewayProvider === 'CASH_COUNTER' && o.paymentStatus === 'verified');
+        const isOnlinePaid = (o.paymentStatus === 'verified' || o.paymentStatus === 'paid') && (o.gatewayProvider !== 'CASH_COUNTER');
+        const amtFormatted = Number(o.totalAmountInr).toFixed(2);
 
-        if (o.state === 'paid_awaiting_approval' || o.state === 'on_hold') {
-          actions += `<button class="btn btn-success" style="margin:2px;" onclick="orderAction(${o.id}, 'approve', {reason:'Approved at counter'})">✓ Approve &amp; Print</button>`;
+        // Strip / Row background coloring as requested:
+        // Light yellow for Razorpay or Online Payment, and light yellow for Cash at Counter!
+        let rowClass = '';
+        let rowStyle = '';
+        if (isCashPending || o.paymentMethod === 'cash' || o.gatewayProvider === 'CASH_COUNTER') {
+          // Cash at Counter (opted for cash method) -> warm light yellow with amber strip
+          if (o.state === 'collected') {
+            rowClass = 'row-category-collected';
+            rowStyle = 'background-color: #ffffff; border-left: 4px solid #cbd5e1; opacity: 0.92;';
+          } else {
+            rowClass = 'row-category-cash';
+            rowStyle = 'background-color: #fef9c3 !important; border-left: 6px solid #f59e0b;';
+          }
+        } else if (isOnlinePaid || o.state === 'paid_awaiting_approval' || (o.gatewayProvider && o.gatewayProvider.startsWith('RAZORPAY'))) {
+          // Razorpay / Online Payment -> light yellow with gold strip
+          if (o.state === 'collected') {
+            rowClass = 'row-category-collected';
+            rowStyle = 'background-color: #ffffff; border-left: 4px solid #cbd5e1; opacity: 0.92;';
+          } else if (o.state === 'queued' || o.state === 'submitted_to_spooler' || o.state === 'rendering') {
+            rowClass = 'row-category-printing';
+            rowStyle = 'background-color: #eff6ff !important; border-left: 6px solid #3b82f6;';
+          } else if (o.state === 'ready_for_pickup') {
+            rowClass = 'row-category-ready';
+            rowStyle = 'background-color: #f0fdf4 !important; border-left: 6px solid #22c55e;';
+          } else {
+            rowClass = 'row-category-online';
+            rowStyle = 'background-color: #fefce8 !important; border-left: 6px solid #eab308;';
+          }
+        } else if (o.state === 'queued' || o.state === 'submitted_to_spooler' || o.state === 'rendering') {
+          rowClass = 'row-category-printing';
+          rowStyle = 'background-color: #eff6ff !important; border-left: 6px solid #3b82f6;';
+        } else if (o.state === 'ready_for_pickup') {
+          rowClass = 'row-category-ready';
+          rowStyle = 'background-color: #f0fdf4 !important; border-left: 6px solid #22c55e;';
+        } else if (o.state === 'collected') {
+          rowClass = 'row-category-collected';
+          rowStyle = 'background-color: #ffffff; border-left: 4px solid #cbd5e1; opacity: 0.92;';
+        } else if (o.state === 'reconciliation_required' || o.state === 'failed' || o.state === 'on_hold') {
+          rowClass = 'row-category-danger';
+          rowStyle = 'background-color: #fef2f2 !important; border-left: 6px solid #ef4444;';
+        }
+
+        if (o.state === 'paid_awaiting_approval' || o.state === 'on_hold' || o.state === 'awaiting_payment') {
+          if (isCashPending || o.state === 'awaiting_payment') {
+            actions += `<button class="btn btn-success" style="margin:2px;background:#059669;" onclick="approveCashOrder(${o.id}, '${amtFormatted}', '${o.orderCode}')">💵 Cash Received (₹${amtFormatted}) — Approve &amp; Print</button>`;
+          } else {
+            actions += `<button class="btn btn-success" style="margin:2px;" onclick="orderAction(${o.id}, 'approve', {reason:'Approved at counter'})">✓ Approve &amp; Print</button>`;
+          }
           actions += `<button class="btn btn-secondary" style="margin:2px;" onclick="openOverrideModal(${o.id})">⚙️ Edit Print Settings</button>`;
-          if (o.state !== 'on_hold') {
+          if (o.state === 'paid_awaiting_approval') {
             actions += `<button class="btn btn-warn" style="margin:2px;" onclick="orderAction(${o.id}, 'hold', {reason:'Pending customer check'})">Hold</button>`;
           }
-          actions += `<button class="btn btn-danger" style="margin:2px;" onclick="orderAction(${o.id}, 'reject', {reason:'Rejected by admin; refund issued'})">Reject &amp; Refund</button>`;
+          if (o.state !== 'awaiting_payment') {
+            actions += `<button class="btn btn-danger" style="margin:2px;" onclick="orderAction(${o.id}, 'reject', {reason:'Rejected by admin; refund issued'})">Reject / Cancel</button>`;
+          } else {
+            actions += `<button class="btn btn-danger" style="margin:2px;" onclick="orderAction(${o.id}, 'cancel', {reason:'Cancelled unpaid order'})">Cancel</button>`;
+          }
         } else if (o.state === 'queued') {
           actions += `<button class="btn btn-danger" style="margin:2px;" onclick="orderAction(${o.id}, 'cancel', {reason:'Cancelled before print'})">Cancel Job</button>`;
         } else if (o.state === 'submitted_to_spooler') {
           actions += `<button class="btn btn-success" style="margin:2px;" onclick="orderAction(${o.id}, 'ready', {})">✓ Confirm Physical Pages Ready</button>`;
         } else if (o.state === 'ready_for_pickup') {
-          actions += `<button class="btn" style="margin:2px;" onclick="promptAndCollect(${o.id}, '${o.pickupCode}')">Verify Pickup Code (${o.pickupCode}) &amp; Hand Over</button>`;
+          actions += `<button class="btn btn-primary" style="margin:2px;" onclick="orderAction(${o.id}, 'collected', {pickupCode: ''})">✓ Hand Over &amp; Purge PDF</button>`;
         } else if (o.state === 'reconciliation_required' || o.state === 'failed') {
           actions += `<button class="btn btn-success" style="margin:2px;" onclick="orderAction(${o.id}, 'reconcile', {resolutionAction:'confirm_printed', reason:'Spooler output verified on tray'})">Confirm Printed</button>`;
           actions += `<button class="btn btn-warn" style="margin:2px;" onclick="orderAction(${o.id}, 'reconcile', {resolutionAction:'authorize_reprint', reason:'Tray empty; safe reprint authorized'})">Authorize Reprint</button>`;
           actions += `<button class="btn btn-secondary" style="margin:2px;" onclick="openOverrideModal(${o.id})">⚙️ Adjust Settings</button>`;
         }
 
-        return `<tr>
+        let payBadgeHtml = '';
+        if (isCashPending) {
+          payBadgeHtml = `<span class="badge" style="background:#fef3c7;color:#92400e;font-weight:800;border:1px solid #f59e0b;">💵 Cash at Counter (Collect ₹${amtFormatted})</span>`;
+        } else if (isCashVerified) {
+          payBadgeHtml = `<span class="badge" style="background:#dcfce7;color:#15803d;font-weight:700;">💵 Cash Received (₹${amtFormatted})</span>`;
+        } else if (o.paymentStatus === 'verified' || o.paymentStatus === 'paid') {
+          payBadgeHtml = `<span class="badge" style="background:#dcfce7;color:#15803d;font-weight:700;">💳 Paid Online (₹${amtFormatted})</span>`;
+        } else {
+          payBadgeHtml = `<span class="badge">${o.paymentStatus}</span>`;
+        }
+
+        return `<tr class="${rowClass}" style="${rowStyle}">
           <td>
             <div style="display:flex;align-items:center;gap:5px;">
               <strong>${o.orderCode}</strong>
@@ -967,23 +1178,21 @@
           </td>
           <td>
             <div>${colorBadge} <strong>${o.paperSize || 'A4'}</strong>${nUp} | <strong>${o.duplexMode}</strong></div>
-            <div style="font-size:0.75rem;color:#334155;margin-top:2px;">🖨️ Target Printer: <strong>${o.target_queue_name || 'Auto-Route'}</strong></div>
+            <div style="font-size:0.75rem;color:#334155;margin-top:2px;">🖨️ Target Printer: <strong>${o.targetQueueName || 'Auto-Route'}</strong></div>
             <div style="font-size:0.78rem;color:var(--muted);margin-top:2px;">
               Pages: <strong>${o.pageRange}</strong> (${o.selectedPages}/${o.documentPages}p) × <strong>${o.copies} copy</strong>
             </div>
             <div style="font-size:0.8rem;margin-top:2px;">
-              <strong>${o.printedSides} sides / ${o.physicalSheets} physical sheets</strong> &rarr; <strong style="color:var(--primary);">₹${Number(o.totalAmountInr).toFixed(2)}</strong>
+              <strong>${o.printedSides} sides / ${o.physicalSheets} physical sheets</strong> &rarr; <strong style="color:var(--primary);">₹${amtFormatted}</strong>
             </div>
           </td>
           <td>
-            <span class="badge" style="${o.paymentStatus === 'paid' ? 'background:#dcfce7;color:#15803d;font-weight:700;' : ''}">${o.paymentStatus === 'paid' ? '✓ Paid (Razorpay)' : o.paymentStatus}</span><br/>
+            ${payBadgeHtml}<br/>
             ${o.gatewayPaymentId ? `<span style="font-size:0.72rem;color:#475569;display:block;word-break:break-all;">${o.gatewayPaymentId}</span>` : ''}
-            <span style="font-size:0.74rem;color:var(--muted);">Webhooks: ${o.webhookCallsCount || 0}</span>
           </td>
           <td>
             <span class="${badgeClass(o.state)}">${o.state}</span><br/>
             ${o.windowsSpoolerJobId ? `<span style="font-size:0.76rem;color:#1e40af;">WinSpooler Job #${o.windowsSpoolerJobId}</span><br/>` : ''}
-            <span style="font-size:0.75rem;color:var(--muted);">Pickup Code: <strong>${o.pickupCode}</strong></span>
             ${o.holdOrRejectReason ? `<div style="font-size:0.75rem;color:#b91c1c;margin-top:2px;">Note: ${o.holdOrRejectReason}</div>` : ''}
           </td>
           <td>${actions || '<span style="color:var(--muted);font-size:0.78rem;">No action needed</span>'}</td>
@@ -1092,10 +1301,43 @@
       }
     }
 
-    async function promptAndCollect(orderId, expectedCode) {
-      const entered = prompt('Enter customer 6-character Pickup Code to verify handover (Expected: ' + expectedCode + '):', expectedCode);
-      if (!entered) return;
-      await orderAction(orderId, 'collected', { pickupCode: entered });
+    async function approveCashOrder(orderId, amountFormatted, orderCode) {
+      await orderAction(orderId, 'approve', {
+        reason: `CASH_RECEIVED_AT_COUNTER (₹${amountFormatted}) — Approved by store admin`
+      });
+    }
+
+    async function savePaymentSettlementConfig() {
+      showNotice(null);
+      const razorpayKeyId = document.getElementById('inpRzpKeyId') ? document.getElementById('inpRzpKeyId').value.trim() : '';
+      const razorpayKeySecret = document.getElementById('inpRzpKeySecret') ? document.getElementById('inpRzpKeySecret').value.trim() : '';
+      const razorpayLinkedAccountId = document.getElementById('inpRzpLinkedAcc') ? document.getElementById('inpRzpLinkedAcc').value.trim() : '';
+      const upiVpa = document.getElementById('inpShopUpiVpa') ? document.getElementById('inpShopUpiVpa').value.trim() : '';
+
+      try {
+        const res = await fetch(apiUrl('/api/admin/payments/config'), {
+          method: 'POST',
+          headers: adminHeaders(),
+          body: JSON.stringify({
+            razorpayKeyId,
+            razorpayKeySecret,
+            razorpayLinkedAccountId,
+            upiVpa
+          })
+        });
+        const data = await res.json();
+        if (!res.ok || data.error) {
+          showNotice(data.message || 'Failed to save payment gateway config', true);
+          return;
+        }
+        if (document.getElementById('inpRzpKeySecret')) {
+          document.getElementById('inpRzpKeySecret').value = '';
+        }
+        showNotice(`Payment & Settlement configuration saved! Active Mode: ${(data.razorpayMode || 'disabled').toUpperCase()} (${data.razorpayKeyId || 'Cash Only'})`, false);
+        await loadDashboard();
+      } catch (e) {
+        showNotice('Error saving payment config: ' + e.message, true);
+      }
     }
 
     async function updateControls(payload) {

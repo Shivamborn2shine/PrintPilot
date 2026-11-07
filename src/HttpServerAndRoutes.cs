@@ -483,15 +483,34 @@ namespace PrintAway.Web
                     string customerName = GetString(body, "customerName", "Walk-in Customer");
                     string customerPhone = GetString(body, "customerPhone", "");
                     bool consent = GetBool(body, "consentAccepted", true);
+                    string paymentMethod = GetString(body, "paymentMethod", "online");
 
                     string errMsg;
-                    var orderRes = _repo.CreateOrderAndPaymentIntent(quoteToken, customerName, customerPhone, consent, out errMsg);
+                    var orderRes = _repo.CreateOrderAndPaymentIntent(quoteToken, customerName, customerPhone, consent, out errMsg, null, paymentMethod);
                     if (orderRes == null)
                     {
                         WriteError(res, 400, "ORDER_CREATION_FAILED", errMsg);
                         return;
                     }
                     WriteJson(res, 201, orderRes);
+                    return;
+                }
+
+                // Switch Order Payment Method to Cash at Counter (POST /api/payments/select-cash)
+                if (method == "POST" && path == "/api/payments/select-cash")
+                {
+                    var body = ReadJsonBody(req);
+                    long orderId = GetLong(body, "orderId", 0);
+                    string publicToken = GetString(body, "publicToken", "");
+
+                    string errMsg;
+                    var cashRes = _repo.SelectCashAtCounterPayment(orderId, publicToken, out errMsg);
+                    if (cashRes == null)
+                    {
+                        WriteError(res, 400, "CASH_SELECTION_FAILED", errMsg);
+                        return;
+                    }
+                    WriteJson(res, 200, cashRes);
                     return;
                 }
 
@@ -828,6 +847,20 @@ namespace PrintAway.Web
                             return;
                         }
                         WriteJson(res, 200, pr);
+                        return;
+                    }
+
+                    if (method == "POST" && path == "/api/admin/payments/config")
+                    {
+                        var body = ReadJsonBody(req);
+                        string rzpKeyId = body.ContainsKey("razorpayKeyId") ? GetString(body, "razorpayKeyId", "") : null;
+                        string rzpKeySecret = body.ContainsKey("razorpayKeySecret") ? GetString(body, "razorpayKeySecret", "") : null;
+                        string rzpLinkedAcc = body.ContainsKey("razorpayLinkedAccountId") ? GetString(body, "razorpayLinkedAccountId", "") : null;
+                        string upiVpa = body.ContainsKey("upiVpa") ? GetString(body, "upiVpa", "printaway@upi") : null;
+
+                        var updatedStatus = _repo.UpdatePaymentSettlementConfig(
+                            rzpKeyId, rzpKeySecret, rzpLinkedAcc, upiVpa, Convert.ToString(adminSess["username"]));
+                        WriteJson(res, 200, updatedStatus);
                         return;
                     }
 
