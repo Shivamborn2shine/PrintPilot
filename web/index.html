@@ -3,83 +3,255 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>PrintAway — Upload. Configure. Pay. Print. Collect.</title>
+  <title>PrintAway — Instant Automated Xerox &amp; Laser Printing</title>
+  <link rel="icon" type="image/svg+xml" href="/assets/favicon.svg" />
+  <link rel="apple-touch-icon" href="/assets/logo.png" />
   <script src="https://checkout.razorpay.com/v1/checkout.js"></script>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=JetBrains+Mono:wght@500;700&display=swap" rel="stylesheet">
   <style>
     :root {
       --bg: #f8fafc;
       --card: #ffffff;
       --text: #0f172a;
-      --muted: #475569;
+      --muted: #64748b;
       --border: #e2e8f0;
-      --primary: #1d4ed8;
-      --primary-hover: #1e40af;
-      --success: #15803d;
-      --success-bg: #dcfce7;
-      --warn: #b45309;
-      --warn-bg: #fef3c7;
-      --danger: #b91c1c;
-      --danger-bg: #fee2e2;
+      --border-hover: #cbd5e1;
+      --primary: #2563eb;
+      --primary-hover: #1d4ed8;
+      --primary-light: #eff6ff;
+      --accent: #f59e0b;
+      --accent-light: #fef3c7;
+      --success: #10b981;
+      --success-light: #ecfdf5;
+      --warn: #d97706;
+      --danger: #ef4444;
+      --danger-light: #fef2f2;
+      --radius: 14px;
+      --shadow-sm: 0 1px 3px rgba(0,0,0,0.05), 0 1px 2px rgba(0,0,0,0.03);
+      --shadow-md: 0 4px 16px -2px rgba(15,23,42,0.06), 0 2px 6px -1px rgba(15,23,42,0.03);
+      --shadow-lg: 0 10px 30px -4px rgba(15,23,42,0.08), 0 4px 12px -2px rgba(15,23,42,0.04);
+      --font-mono: 'JetBrains Mono', monospace;
     }
+
     * { box-sizing: border-box; margin: 0; padding: 0; }
     body {
-      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      font-family: 'Plus Jakarta Sans', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
       background: var(--bg);
       color: var(--text);
       line-height: 1.5;
-      padding-bottom: 48px;
+      padding-bottom: 60px;
+      -webkit-font-smoothing: antialiased;
     }
+
+    /* ==========================================================================
+       HEADER & NAVIGATION
+       ========================================================================== */
     header {
-      background: #0f172a;
+      background: #090d16;
       color: #fff;
-      padding: 18px 20px;
-      border-bottom: 3px solid #3b82f6;
+      padding: 14px 20px;
+      border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+      position: sticky;
+      top: 0;
+      z-index: 50;
+      backdrop-filter: blur(12px);
+      box-shadow: 0 4px 20px rgba(0,0,0,0.25);
     }
     .header-inner {
-      max-width: 820px;
+      max-width: 860px;
       margin: 0 auto;
       display: flex;
       justify-content: space-between;
       align-items: center;
       flex-wrap: wrap;
-      gap: 10px;
+      gap: 12px;
     }
-    .brand-title { font-size: 1.45rem; font-weight: 800; letter-spacing: -0.02em; }
-    .brand-title span { color: #60a5fa; }
-    .brand-sub { font-size: 0.85rem; color: #cbd5e1; }
-    .nav-links a {
-      color: #93c5fd;
+    .brand-wrap {
+      display: flex;
+      align-items: center;
+      gap: 12px;
       text-decoration: none;
-      font-size: 0.85rem;
+      color: inherit;
+      cursor: pointer;
+    }
+    .brand-avatar {
+      width: 44px;
+      height: 44px;
+      border-radius: 50%;
+      background: linear-gradient(135deg, #FFE066, #F59E0B);
+      padding: 2px;
+      box-shadow: 0 0 15px rgba(245, 158, 11, 0.35);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      transition: transform 0.3s cubic-bezier(0.34, 1.56, 0.64, 1);
+    }
+    .brand-avatar:hover {
+      transform: scale(1.08) rotate(-4deg);
+    }
+    .brand-avatar img {
+      width: 100%;
+      height: 100%;
+      border-radius: 50%;
+      object-fit: cover;
+    }
+    .brand-title {
+      font-size: 1.35rem;
+      font-weight: 800;
+      letter-spacing: -0.03em;
+      line-height: 1.2;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+    .brand-title span {
+      background: linear-gradient(135deg, #38bdf8, #60a5fa);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+    }
+    .brand-tag {
+      font-size: 0.65rem;
+      font-weight: 800;
+      padding: 2px 7px;
+      border-radius: 999px;
+      background: rgba(56, 189, 248, 0.15);
+      color: #38bdf8;
+      border: 1px solid rgba(56, 189, 248, 0.3);
+      letter-spacing: 0.05em;
+      text-transform: uppercase;
+    }
+    .brand-sub {
+      font-size: 0.8rem;
+      color: #94a3b8;
+      font-weight: 500;
+    }
+    .nav-links {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      flex-wrap: wrap;
+    }
+    .nav-links a {
+      color: #cbd5e1;
+      text-decoration: none;
+      font-size: 0.82rem;
       font-weight: 600;
       padding: 6px 12px;
-      border: 1px solid #334155;
-      border-radius: 6px;
+      border: 1px solid rgba(255, 255, 255, 0.1);
+      border-radius: 8px;
+      background: rgba(255, 255, 255, 0.04);
+      transition: all 0.2s ease;
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
     }
-    .container { max-width: 820px; margin: 20px auto; padding: 0 16px; }
+    .nav-links a:hover {
+      color: #fff;
+      background: rgba(255, 255, 255, 0.09);
+      border-color: rgba(255, 255, 255, 0.2);
+    }
+    .pill-shop {
+      border-color: rgba(16, 185, 129, 0.35) !important;
+      color: #34d399 !important;
+      background: rgba(16, 185, 129, 0.08) !important;
+    }
+    .pill-station {
+      border-color: rgba(56, 189, 248, 0.35) !important;
+      color: #38bdf8 !important;
+      background: rgba(56, 189, 248, 0.08) !important;
+    }
+
+    /* ==========================================================================
+       CONTAINER & STEPPER PROGRESS BAR
+       ========================================================================== */
+    .container {
+      max-width: 860px;
+      margin: 24px auto;
+      padding: 0 18px;
+    }
+
+    .stepper-bar {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: 22px;
+      padding: 12px 18px;
+      background: #fff;
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      box-shadow: var(--shadow-sm);
+      overflow-x: auto;
+      gap: 10px;
+    }
+    .step-item {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      font-size: 0.82rem;
+      font-weight: 600;
+      color: var(--muted);
+      white-space: nowrap;
+      transition: all 0.2s;
+    }
+    .step-item.active {
+      color: var(--primary);
+      font-weight: 700;
+    }
+    .step-item.completed {
+      color: var(--success);
+    }
+    .step-num {
+      width: 24px;
+      height: 24px;
+      border-radius: 50%;
+      background: #f1f5f9;
+      color: var(--muted);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 0.75rem;
+      font-weight: 700;
+    }
+    .step-item.active .step-num {
+      background: var(--primary);
+      color: #fff;
+      box-shadow: 0 0 10px rgba(37, 99, 235, 0.4);
+    }
+    .step-item.completed .step-num {
+      background: var(--success);
+      color: #fff;
+    }
+    .step-sep {
+      color: #cbd5e1;
+      font-size: 0.8rem;
+    }
+
+    /* ==========================================================================
+       CARDS & DESIGN TOKENS
+       ========================================================================== */
     .card {
       background: var(--card);
       border: 1px solid var(--border);
-      border-radius: 12px;
-      padding: 20px;
-      margin-bottom: 16px;
-      box-shadow: 0 1px 3px rgba(0,0,0,0.04);
+      border-radius: var(--radius);
+      padding: 22px;
+      margin-bottom: 18px;
+      box-shadow: var(--shadow-sm);
+      transition: border-color 0.2s, box-shadow 0.2s;
     }
-    .status-banner {
+    .card:hover {
+      border-color: var(--border-hover);
+    }
+    h2 {
+      font-size: 1.15rem;
+      font-weight: 700;
+      margin-bottom: 14px;
       display: flex;
-      justify-content: space-between;
       align-items: center;
-      flex-wrap: wrap;
-      gap: 8px;
-      padding: 12px 16px;
-      border-radius: 10px;
-      font-size: 0.9rem;
-      margin-bottom: 16px;
-      font-weight: 600;
+      gap: 10px;
+      letter-spacing: -0.01em;
     }
-    .status-open { background: var(--success-bg); color: var(--success); border: 1px solid #86efac; }
-    .status-closed { background: var(--danger-bg); color: var(--danger); border: 1px solid #fca5a5; }
-    h2 { font-size: 1.15rem; margin-bottom: 12px; display: flex; align-items: center; gap: 8px; }
     .step-badge {
       background: var(--primary);
       color: #fff;
@@ -90,62 +262,260 @@
       display: inline-flex;
       align-items: center;
       justify-content: center;
-      font-weight: 700;
+      font-weight: 800;
     }
+
+    /* ==========================================================================
+       SHOP STATUS BANNER
+       ========================================================================== */
+    .status-banner {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      flex-wrap: wrap;
+      gap: 10px;
+      padding: 14px 18px;
+      border-radius: var(--radius);
+      font-size: 0.9rem;
+      margin-bottom: 18px;
+      font-weight: 600;
+      box-shadow: var(--shadow-sm);
+    }
+    .status-open {
+      background: linear-gradient(135deg, #ecfdf5, #d1fae5);
+      color: #065f46;
+      border: 1px solid #a7f3d0;
+    }
+    .status-closed {
+      background: linear-gradient(135deg, #fef2f2, #fee2e2);
+      color: #991b1b;
+      border: 1px solid #fecaca;
+    }
+    .live-dot {
+      display: inline-block;
+      width: 9px;
+      height: 9px;
+      border-radius: 50%;
+      background: #10b981;
+      margin-right: 6px;
+      box-shadow: 0 0 0 rgba(16, 185, 129, 0.4);
+      animation: pulseDot 2s infinite;
+    }
+    @keyframes pulseDot {
+      0% { transform: scale(0.95); box-shadow: 0 0 0 0 rgba(16, 185, 129, 0.7); }
+      70% { transform: scale(1); box-shadow: 0 0 0 8px rgba(16, 185, 129, 0); }
+      100% { transform: scale(0.95); box-shadow: 0 0 0 0 rgba(16, 185, 129, 0); }
+    }
+
+    /* ==========================================================================
+       SKELETON SHIMMER SYSTEM
+       ========================================================================== */
+    .skeleton {
+      background: #f1f5f9;
+      background: linear-gradient(90deg, #f1f5f9 25%, #e2e8f0 50%, #f1f5f9 75%);
+      background-size: 200% 100%;
+      animation: skeletonShimmer 1.5s infinite linear;
+      border-radius: 6px;
+    }
+    @keyframes skeletonShimmer {
+      0% { background-position: 200% 0; }
+      100% { background-position: -200% 0; }
+    }
+    .skeleton-avatar { width: 44px; height: 44px; border-radius: 50%; }
+    .skeleton-title { height: 18px; width: 55%; margin-bottom: 8px; }
+    .skeleton-text { height: 14px; width: 85%; margin-bottom: 6px; }
+    .skeleton-badge { height: 26px; width: 120px; border-radius: 999px; }
+    .skeleton-box { height: 110px; width: 100%; border-radius: 12px; }
+
+    /* ==========================================================================
+       ANIMATED MASCOT LOADER OVERLAY
+       ========================================================================== */
+    .mascot-modal-overlay {
+      position: fixed;
+      top: 0; left: 0; right: 0; bottom: 0;
+      background: rgba(15, 23, 42, 0.6);
+      backdrop-filter: blur(8px);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      z-index: 9999;
+      opacity: 0;
+      pointer-events: none;
+      transition: opacity 0.25s ease;
+    }
+    .mascot-modal-overlay.active {
+      opacity: 1;
+      pointer-events: auto;
+    }
+    .mascot-loader-card {
+      background: #ffffff;
+      padding: 32px 36px;
+      border-radius: 20px;
+      box-shadow: 0 25px 50px -12px rgba(15, 23, 42, 0.35);
+      border: 1px solid rgba(255, 255, 255, 0.8);
+      max-width: 380px;
+      width: 90%;
+      text-align: center;
+      position: relative;
+      animation: modalPop 0.3s cubic-bezier(0.34, 1.56, 0.64, 1);
+    }
+    @keyframes modalPop {
+      0% { transform: scale(0.9) translateY(10px); }
+      100% { transform: scale(1) translateY(0); }
+    }
+    .mascot-svg-wrap {
+      width: 120px;
+      height: 120px;
+      margin: 0 auto 16px;
+      position: relative;
+    }
+    /* Animated Printer Paper Movement */
+    .anim-printer-bob {
+      animation: printerBob 2s ease-in-out infinite;
+      transform-origin: center bottom;
+    }
+    @keyframes printerBob {
+      0%, 100% { transform: translateY(0); }
+      50% { transform: translateY(-5px); }
+    }
+    .anim-paper-feed-in {
+      animation: paperFeedIn 2s ease-in-out infinite;
+    }
+    @keyframes paperFeedIn {
+      0% { transform: translateY(-16px); opacity: 0.2; }
+      40% { transform: translateY(0); opacity: 1; }
+      75% { transform: translateY(12px); opacity: 0; }
+      100% { transform: translateY(-16px); opacity: 0; }
+    }
+    .anim-paper-feed-out {
+      animation: paperFeedOut 2s ease-in-out infinite;
+    }
+    @keyframes paperFeedOut {
+      0% { transform: translateY(-10px); opacity: 0; }
+      45% { transform: translateY(0); opacity: 0.4; }
+      70% { transform: translateY(14px); opacity: 1; }
+      100% { transform: translateY(22px); opacity: 0; }
+    }
+    .mascot-loader-title {
+      font-size: 1.15rem;
+      font-weight: 800;
+      color: #0f172a;
+      margin-bottom: 6px;
+    }
+    .mascot-loader-sub {
+      font-size: 0.85rem;
+      color: #64748b;
+      margin-bottom: 18px;
+    }
+    .progress-track {
+      width: 100%;
+      height: 6px;
+      background: #f1f5f9;
+      border-radius: 999px;
+      overflow: hidden;
+      position: relative;
+    }
+    .progress-bar-sweep {
+      position: absolute;
+      top: 0; bottom: 0;
+      border-radius: 999px;
+      background: linear-gradient(90deg, #38bdf8, #2563eb, #f59e0b);
+      animation: progressSweep 1.8s ease-in-out infinite;
+    }
+    @keyframes progressSweep {
+      0% { left: -35%; width: 35%; }
+      50% { left: 30%; width: 50%; }
+      100% { left: 100%; width: 35%; }
+    }
+
+    /* ==========================================================================
+       STEP 1: UPLOAD ZONE (TACTILE & INTERACTIVE)
+       ========================================================================== */
     .upload-zone {
       border: 2px dashed #94a3b8;
-      border-radius: 10px;
-      padding: 24px;
+      border-radius: 16px;
+      padding: 36px 20px;
       text-align: center;
       background: #f8fafc;
       cursor: pointer;
+      transition: all 0.25s cubic-bezier(0.16, 1, 0.3, 1);
+      position: relative;
+      overflow: hidden;
     }
-    .upload-zone:hover { border-color: var(--primary); background: #eff6ff; }
-    .btn {
-      display: inline-flex;
+    .upload-zone:hover, .upload-zone.dragover {
+      border-color: var(--primary);
+      background: #eff6ff;
+      transform: translateY(-2px);
+      box-shadow: 0 10px 25px -5px rgba(37, 99, 235, 0.12);
+    }
+    .upload-icon-circle {
+      width: 64px;
+      height: 64px;
+      margin: 0 auto 14px;
+      border-radius: 50%;
+      background: #dbeafe;
+      color: var(--primary);
+      display: flex;
       align-items: center;
       justify-content: center;
-      background: var(--primary);
+      font-size: 1.8rem;
+      transition: transform 0.2s;
+    }
+    .upload-zone:hover .upload-icon-circle {
+      transform: scale(1.1) rotate(5deg);
+      background: #bfdbfe;
+    }
+
+    /* Validated File Card */
+    .file-preview-card {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      flex-wrap: wrap;
+      gap: 12px;
+      padding: 14px 18px;
+      border-radius: 12px;
+      background: #f0fdf4;
+      border: 1px solid #86efac;
+      margin-top: 14px;
+    }
+    .file-preview-left {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
+    .pdf-badge {
+      background: #ef4444;
       color: #fff;
-      border: none;
-      padding: 10px 18px;
-      border-radius: 8px;
-      font-weight: 600;
-      font-size: 0.95rem;
-      cursor: pointer;
-      text-decoration: none;
+      font-size: 0.72rem;
+      font-weight: 800;
+      padding: 6px 8px;
+      border-radius: 6px;
+      letter-spacing: 0.05em;
     }
-    .btn:hover { background: var(--primary-hover); }
-    .btn:disabled { opacity: 0.5; cursor: not-allowed; }
-    .btn-secondary { background: #e2e8f0; color: #1e293b; }
-    .btn-secondary:hover { background: #cbd5e1; }
-    .btn-success { background: var(--success); color: #fff; }
-    .grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
-    .grid-3 { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 12px; }
-    @media (max-width: 640px) {
-      .grid-2, .grid-3 { grid-template-columns: 1fr; }
-    }
-    label { display: block; font-size: 0.84rem; font-weight: 600; color: var(--muted); margin-bottom: 5px; }
-    input[type="text"], input[type="number"], select {
-      width: 100%;
-      padding: 9px 12px;
-      border: 1px solid #cbd5e1;
-      border-radius: 8px;
-      font-size: 0.94rem;
-      background: #fff;
-    }
+
+    /* ==========================================================================
+       STEP 2: CONFIGURATION & PAGE CONTROLS
+       ========================================================================== */
     .mode-card-group {
       display: grid;
       grid-template-columns: 1fr 1fr;
-      gap: 10px;
+      gap: 12px;
+    }
+    @media (max-width: 600px) {
+      .mode-card-group { grid-template-columns: 1fr; }
     }
     .mode-option {
-      border: 2px solid #cbd5e1;
-      border-radius: 10px;
-      padding: 12px;
+      border: 2px solid #e2e8f0;
+      border-radius: 12px;
+      padding: 14px 16px;
       cursor: pointer;
       background: #fff;
-      transition: all 0.15s ease;
+      transition: all 0.2s ease;
+      position: relative;
+    }
+    .mode-option:hover {
+      border-color: #cbd5e1;
     }
     .mode-option.active {
       border-color: var(--primary);
@@ -155,8 +525,39 @@
     .mode-option.disabled {
       opacity: 0.5;
       cursor: not-allowed;
-      background: #f1f5f9;
+      background: #f8fafc;
     }
+
+    .grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
+    .grid-3 { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 12px; }
+    @media (max-width: 640px) {
+      .grid-2, .grid-3 { grid-template-columns: 1fr; }
+    }
+
+    label {
+      display: block;
+      font-size: 0.84rem;
+      font-weight: 600;
+      color: var(--muted);
+      margin-bottom: 6px;
+    }
+    input[type="text"], input[type="number"], select {
+      width: 100%;
+      padding: 10px 14px;
+      border: 1px solid #cbd5e1;
+      border-radius: 8px;
+      font-size: 0.94rem;
+      font-family: inherit;
+      background: #fff;
+      transition: border-color 0.15s, box-shadow 0.15s;
+    }
+    input:focus, select:focus {
+      outline: none;
+      border-color: var(--primary);
+      box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.15);
+    }
+
+    /* Page Chips Container */
     .page-chip {
       display: inline-flex;
       align-items: center;
@@ -172,162 +573,431 @@
       color: #475569;
       cursor: pointer;
       user-select: none;
+      transition: all 0.15s ease;
+    }
+    .page-chip:hover {
+      border-color: #94a3b8;
     }
     .page-chip.selected {
       border-color: var(--primary);
       background: #dbeafe;
       color: #1e40af;
+      transform: translateY(-1px);
     }
-    .quote-box {
-      background: #f1f5f9;
-      border-radius: 10px;
-      padding: 14px 16px;
-      margin-top: 16px;
-      border-left: 4px solid var(--primary);
+
+    /* ==========================================================================
+       DIGITAL RECEIPT TICKET (QUOTE BOX)
+       ========================================================================== */
+    .receipt-ticket {
+      background: #fff;
+      border: 1px solid #cbd5e1;
+      border-radius: 14px;
+      padding: 20px;
+      margin-top: 18px;
+      position: relative;
+      box-shadow: var(--shadow-sm);
+      overflow: hidden;
     }
-    .quote-row { display: flex; justify-content: space-between; font-size: 0.9rem; margin-bottom: 6px; }
+    .receipt-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding-bottom: 12px;
+      border-bottom: 2px dashed #e2e8f0;
+      margin-bottom: 14px;
+    }
+    .receipt-title {
+      font-size: 0.8rem;
+      font-weight: 800;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      color: var(--muted);
+      font-family: var(--font-mono);
+    }
+    .quote-row {
+      display: flex;
+      justify-content: space-between;
+      font-size: 0.9rem;
+      margin-bottom: 8px;
+    }
     .quote-total {
       display: flex;
       justify-content: space-between;
-      font-size: 1.18rem;
+      align-items: center;
+      font-size: 1.3rem;
       font-weight: 800;
-      border-top: 1px solid #cbd5e1;
-      padding-top: 8px;
-      margin-top: 6px;
+      border-top: 2px dashed #cbd5e1;
+      padding-top: 14px;
+      margin-top: 12px;
       color: var(--primary);
+      font-family: var(--font-mono);
     }
-    .alert { padding: 12px 14px; border-radius: 8px; font-size: 0.9rem; margin: 10px 0; }
-    .alert-error { background: var(--danger-bg); color: var(--danger); border: 1px solid #fca5a5; }
-    .alert-info { background: #eff6ff; color: #1e40af; border: 1px solid #bfdbfe; }
-    .alert-warn { background: var(--warn-bg); color: var(--warn); border: 1px solid #fde68a; }
-    .pickup-badge {
-      font-size: 1.6rem;
-      font-weight: 900;
-      letter-spacing: 0.14em;
-      background: #0f172a;
-      color: #38bdf8;
-      padding: 10px 18px;
+
+    /* ==========================================================================
+       BUTTONS & BADGES
+       ========================================================================== */
+    .btn {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      gap: 8px;
+      background: var(--primary);
+      color: #fff;
+      border: none;
+      padding: 11px 20px;
       border-radius: 10px;
-      display: inline-block;
-      margin: 8px 0;
+      font-weight: 700;
+      font-size: 0.95rem;
+      cursor: pointer;
+      text-decoration: none;
+      box-shadow: 0 2px 4px rgba(37, 99, 235, 0.2);
+      transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
     }
-    .hidden { display: none !important; }
+    .btn:hover {
+      background: var(--primary-hover);
+      transform: translateY(-1px);
+      box-shadow: 0 4px 12px rgba(37, 99, 235, 0.3);
+    }
+    .btn:active {
+      transform: translateY(0);
+    }
+    .btn:disabled {
+      opacity: 0.5;
+      cursor: not-allowed;
+      transform: none !important;
+      box-shadow: none !important;
+    }
+    .btn-secondary {
+      background: #f1f5f9;
+      color: #1e293b;
+      box-shadow: none;
+      border: 1px solid #cbd5e1;
+    }
+    .btn-secondary:hover {
+      background: #e2e8f0;
+      box-shadow: 0 2px 6px rgba(0,0,0,0.06);
+    }
+    .btn-success {
+      background: var(--success);
+      color: #fff;
+      box-shadow: 0 2px 4px rgba(16, 185, 129, 0.2);
+    }
+    .btn-success:hover {
+      background: #059669;
+    }
     .meta-pill {
-      display: inline-block;
+      display: inline-flex;
+      align-items: center;
+      gap: 4px;
       background: #e0f2fe;
       color: #0369a1;
-      padding: 3px 10px;
+      padding: 4px 11px;
       border-radius: 999px;
-      font-size: 0.8rem;
-      font-weight: 600;
+      font-size: 0.78rem;
+      font-weight: 700;
       margin-right: 6px;
       margin-top: 4px;
     }
+    .alert {
+      padding: 14px 16px;
+      border-radius: 10px;
+      font-size: 0.9rem;
+      margin: 12px 0;
+      font-weight: 500;
+    }
+    .alert-error { background: #fee2e2; color: #991b1b; border: 1px solid #fca5a5; }
+    .alert-info { background: #eff6ff; color: #1e40af; border: 1px solid #bfdbfe; }
+    .alert-warn { background: #fffbeb; color: #92400e; border: 1px solid #fde68a; }
+
+    /* ==========================================================================
+       PICKUP BADGE & CONFETTI
+       ========================================================================== */
+    .pickup-box {
+      text-align: center;
+      padding: 24px 18px;
+      background: linear-gradient(135deg, #090d16, #1e293b);
+      border-radius: 16px;
+      margin: 16px 0;
+      color: #fff;
+      box-shadow: var(--shadow-md);
+      position: relative;
+    }
+    .pickup-badge {
+      font-size: 2.2rem;
+      font-weight: 900;
+      letter-spacing: 0.16em;
+      color: #38bdf8;
+      font-family: var(--font-mono);
+      display: inline-block;
+      margin: 10px 0;
+      background: rgba(56, 189, 248, 0.12);
+      padding: 8px 24px;
+      border-radius: 12px;
+      border: 1px dashed rgba(56, 189, 248, 0.4);
+    }
+
     .section-divider {
       border-top: 1px solid #e2e8f0;
-      margin: 14px 0;
-      padding-top: 14px;
+      margin: 16px 0;
+      padding-top: 16px;
+    }
+    .hidden { display: none !important; }
+
+    /* Confetti Canvas */
+    #confettiCanvas {
+      position: fixed;
+      top: 0; left: 0; width: 100%; height: 100%;
+      pointer-events: none;
+      z-index: 10000;
     }
   </style>
 </head>
 <body>
+
+  <!-- Fullscreen Animated Mascot Loader Modal -->
+  <div id="mascotLoaderModal" class="mascot-modal-overlay">
+    <div class="mascot-loader-card">
+      <div class="mascot-svg-wrap">
+        <svg viewBox="0 0 200 200" width="100%" height="100%">
+          <defs>
+            <radialGradient id="mBadge" cx="40%" cy="35%" r="65%">
+              <stop offset="0%" stop-color="#FFE066" />
+              <stop offset="100%" stop-color="#F59E0B" />
+            </radialGradient>
+            <linearGradient id="mBlue" x1="0%" y1="0%" x2="0%" y2="100%">
+              <stop offset="0%" stop-color="#38BDF8" />
+              <stop offset="100%" stop-color="#0284C7" />
+            </linearGradient>
+          </defs>
+          <!-- Badge -->
+          <circle cx="100" cy="100" r="92" fill="url(#mBadge)" />
+          <circle cx="100" cy="100" r="88" fill="none" stroke="#FFFBEB" stroke-width="3" />
+
+          <!-- Sparks -->
+          <g stroke="#F97316" stroke-width="6" stroke-linecap="round">
+            <line x1="148" y1="52" x2="158" y2="44" />
+            <line x1="156" y1="62" x2="168" y2="60" />
+          </g>
+
+          <!-- Top Paper (Feeds into printer) -->
+          <g class="anim-paper-feed-in">
+            <path d="M 72 48 L 120 48 L 132 60 L 132 98 L 72 98 Z" fill="#FFFFFF" stroke="#0F172A" stroke-width="5" stroke-linejoin="round" />
+            <path d="M 120 48 L 120 60 L 132 60 Z" fill="#38BDF8" stroke="#0F172A" stroke-width="4" />
+            <line x1="84" y1="68" x2="110" y2="68" stroke="#38BDF8" stroke-width="5" stroke-linecap="round" />
+            <line x1="84" y1="80" x2="118" y2="80" stroke="#38BDF8" stroke-width="5" stroke-linecap="round" />
+          </g>
+
+          <!-- Bottom Paper (Printed Sheet) -->
+          <g class="anim-paper-feed-out">
+            <rect x="72" y="125" width="56" height="42" rx="5" fill="#FFFFFF" stroke="#0F172A" stroke-width="5" />
+            <line x1="84" y1="142" x2="116" y2="142" stroke="#F59E0B" stroke-width="5" stroke-linecap="round" />
+            <line x1="84" y1="154" x2="116" y2="154" stroke="#F59E0B" stroke-width="5" stroke-linecap="round" />
+          </g>
+
+          <!-- Printer Body (Bobs up and down) -->
+          <g class="anim-printer-bob">
+            <rect x="48" y="90" width="104" height="48" rx="16" fill="url(#mBlue)" stroke="#0F172A" stroke-width="6" />
+            <!-- Smiling Happy Eyes -->
+            <path d="M 78 111 Q 84 104 90 111" fill="none" stroke="#0F172A" stroke-width="5" stroke-linecap="round" />
+            <path d="M 110 111 Q 116 104 122 111" fill="none" stroke="#0F172A" stroke-width="5" stroke-linecap="round" />
+            <!-- Smile -->
+            <path d="M 94 117 Q 100 126 106 117" fill="none" stroke="#0F172A" stroke-width="4.5" stroke-linecap="round" />
+            <!-- Cheeks -->
+            <circle cx="73" cy="115" r="4" fill="#F472B6" />
+            <circle cx="127" cy="115" r="4" fill="#F472B6" />
+          </g>
+        </svg>
+      </div>
+      <div id="loaderModalTitle" class="mascot-loader-title">Analyzing Document...</div>
+      <div id="loaderModalSub" class="mascot-loader-sub">Counting pages &amp; checking printer queue</div>
+      <div class="progress-track">
+        <div class="progress-bar-sweep"></div>
+      </div>
+    </div>
+  </div>
+
+  <canvas id="confettiCanvas"></canvas>
+
+  <!-- NAVIGATION HEADER -->
   <header>
     <div class="header-inner">
-      <div>
-        <div class="brand-title">Print<span>Away</span></div>
-        <div class="brand-sub" id="shopTagline">Printing ke liye pareshan ho? Just PrintAway.</div>
-      </div>
+      <a href="/" class="brand-wrap" onclick="resetToNewOrder(); return false;">
+        <div class="brand-avatar" title="PrintAway Mascot">
+          <img src="/assets/logo.png" alt="PrintAway Mascot" onerror="this.src='/assets/logo.svg'" />
+        </div>
+        <div>
+          <div class="brand-title">
+            Print<span>Away</span>
+            <span class="brand-tag">Instant Kiosk</span>
+          </div>
+          <div class="brand-sub" id="shopTagline">Printing ke liye pareshan ho? Just PrintAway.</div>
+        </div>
+      </a>
       <div class="nav-links">
-        <a href="/" onclick="resetToNewOrder(); return false;">New Order</a>
-        <a href="/admin">Staff Admin &amp; Printer Controls</a>
-        <a href="#" onclick="switchShopPrompt(); return false;" id="btnShopSwitch" style="border-color:#a7f3d0;color:#a7f3d0;">🏪 Shop: <span id="lblActiveShopBadge">pilot</span></a>
-        <a href="#" onclick="configureStationUrl(); return false;" id="btnStationConfig" style="border-color:#38bdf8;color:#38bdf8;">⚙️ Station URL</a>
+        <a href="/" onclick="resetToNewOrder(); return false;">➕ New Print</a>
+        <a href="/admin">Staff Admin</a>
+        <a href="#" onclick="switchShopPrompt(); return false;" id="btnShopSwitch" class="pill-shop">
+          🏪 <span id="lblActiveShopBadge">midtownstationary</span>
+        </a>
+        <a href="#" onclick="configureStationUrl(); return false;" id="btnStationConfig" class="pill-station">
+          ⚙️ Tunnel
+        </a>
       </div>
     </div>
   </header>
 
   <div class="container">
+
+    <!-- INTERACTIVE STEPPER PROGRESS BAR -->
+    <div class="stepper-bar">
+      <div class="step-item active" id="stepIndicator1">
+        <span class="step-num">1</span>
+        <span>Upload Document</span>
+      </div>
+      <span class="step-sep">&rarr;</span>
+      <div class="step-item" id="stepIndicator2">
+        <span class="step-num">2</span>
+        <span>Options &amp; Quote</span>
+      </div>
+      <span class="step-sep">&rarr;</span>
+      <div class="step-item" id="stepIndicator3">
+        <span class="step-num">3</span>
+        <span>Pay via UPI / Card</span>
+      </div>
+      <span class="step-sep">&rarr;</span>
+      <div class="step-item" id="stepIndicator4">
+        <span class="step-num">4</span>
+        <span>Collect Print</span>
+      </div>
+    </div>
+
+    <!-- SHOP STATUS & HARDWARE AVAILABILITY BANNER -->
     <div id="shopBanner" class="status-banner status-open">
-      <span id="shopStatusText">Checking shop &amp; Xerox B1025 availability...</span>
-      <span id="shopTurnaround" style="font-weight:400;font-size:0.82rem;"></span>
+      <div style="display:flex;align-items:center;">
+        <span class="live-dot" id="liveDotIndicator"></span>
+        <span id="shopStatusText">Connecting to shop station &amp; Xerox hardware...</span>
+      </div>
+      <span id="shopTurnaround" style="font-size:0.82rem;font-weight:600;opacity:0.9;"></span>
+    </div>
+
+    <!-- INITIAL SKELETON PLACEHOLDER (Hidden once live data loads) -->
+    <div id="initialSkeletonWrap" class="hidden">
+      <div class="card">
+        <div class="skeleton skeleton-title"></div>
+        <div class="skeleton skeleton-box"></div>
+      </div>
     </div>
 
     <div id="globalError" class="alert alert-error hidden"></div>
 
-    <!-- Track Existing Order Bar -->
+    <!-- TRACK EXISTING ORDER CARD -->
     <div class="card" style="padding:14px 18px;">
-      <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;">
-        <span style="font-size:0.88rem;font-weight:600;color:var(--muted);">Have a tracking token?</span>
-        <input type="text" id="trackTokenInput" placeholder="Paste pub_... tracking token" style="flex:1;min-width:180px;" />
-        <button class="btn btn-secondary" onclick="lookupTrackedOrder()">Track Order</button>
+      <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap;">
+        <span style="font-size:0.88rem;font-weight:700;color:var(--text);display:flex;align-items:center;gap:6px;">
+          🔎 Already ordered?
+        </span>
+        <input type="text" id="trackTokenInput" placeholder="Paste tracking token (pub_...)" style="flex:1;min-width:180px;" />
+        <button class="btn btn-secondary" onclick="lookupTrackedOrder()">Track Status</button>
       </div>
     </div>
 
-    <!-- Order Creation Wizard -->
+    <!-- ORDER CREATION WIZARD -->
     <div id="orderWizard">
+
       <!-- STEP 1: Upload PDF -->
       <div class="card">
-        <h2><span class="step-badge">1</span> Upload PDF Document (PDF Only)</h2>
-        <div class="upload-zone" onclick="document.getElementById('pdfInput').click()">
+        <h2><span class="step-badge">1</span> Select Document to Print (PDF Only)</h2>
+        <div class="upload-zone" id="uploadDropZone" onclick="document.getElementById('pdfInput').click()">
           <input type="file" id="pdfInput" accept=".pdf,application/pdf" class="hidden" onchange="handleFileSelected(this)" />
-          <div style="font-weight:700;font-size:1rem;margin-bottom:4px;">Tap to Select PDF File (Max 20 MB, 100 Pages)</div>
-          <div style="font-size:0.83rem;color:var(--muted);">Server validates PDF signature, exact page count &amp; security automatically.</div>
-        </div>
-        <div style="margin-top:10px;display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px;">
-          <span style="font-size:0.8rem;color:var(--muted);">Quick local test documents:</span>
-          <div style="display:flex;gap:8px;flex-wrap:wrap;">
-            <button type="button" class="btn" style="font-size:0.82rem;padding:6px 12px;" onclick="loadFounderPdf()">Use 'FIRST SUCCESSFUL DOCUMENT.pdf' (2 Pages)</button>
-            <button type="button" class="btn btn-secondary" style="font-size:0.82rem;padding:6px 12px;" onclick="generateSamplePdf(5)">Generate 5-Page Sample PDF</button>
-            <button type="button" class="btn btn-secondary" style="font-size:0.82rem;padding:6px 12px;" onclick="generateSamplePdf(10)">Generate 10-Page Sample PDF</button>
+          <div class="upload-icon-circle">
+            📄
+          </div>
+          <div style="font-weight:800;font-size:1.1rem;margin-bottom:6px;color:#0f172a;">
+            Tap to Upload or Drop PDF Here
+          </div>
+          <div style="font-size:0.85rem;color:var(--muted);max-width:440px;margin:0 auto 12px;">
+            Supports up to 20 MB, 100 pages. Analyzes simplex/duplex and page selection automatically.
+          </div>
+          <div>
+            <button type="button" class="btn" style="pointer-events:none;">
+              Browse From Phone or PC &rarr;
+            </button>
           </div>
         </div>
 
-        <div id="uploadedFileInfo" class="alert alert-info hidden" style="margin-top:12px;">
-          <div><strong>Validated PDF:</strong> <span id="lblFileName"></span></div>
-          <div style="margin-top:4px;">
-            <span class="meta-pill">Total Document Pages: <strong id="lblPageCount">0</strong> pages</span>
-            <span class="meta-pill">Size: <span id="lblFileSize">0</span> KB</span>
-            <span class="meta-pill">SHA-256: <code id="lblSha"></code></span>
+        <div style="margin-top:14px;display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px;">
+          <span style="font-size:0.8rem;font-weight:600;color:var(--muted);">⚡ Quick test presets:</span>
+          <div style="display:flex;gap:6px;flex-wrap:wrap;">
+            <button type="button" class="btn btn-secondary" style="font-size:0.78rem;padding:6px 11px;" onclick="loadFounderPdf()">📄 First Successful Doc (2p)</button>
+            <button type="button" class="btn btn-secondary" style="font-size:0.78rem;padding:6px 11px;" onclick="generateSamplePdf(5)">5-Page Sample</button>
+            <button type="button" class="btn btn-secondary" style="font-size:0.78rem;padding:6px 11px;" onclick="generateSamplePdf(10)">10-Page Sample</button>
+          </div>
+        </div>
+
+        <!-- Validated File Preview Box -->
+        <div id="uploadedFileInfo" class="file-preview-card hidden">
+          <div class="file-preview-left">
+            <span class="pdf-badge">PDF</span>
+            <div>
+              <strong id="lblFileName" style="font-size:0.95rem;color:#0f172a;">document.pdf</strong>
+              <div style="margin-top:4px;">
+                <span class="meta-pill">📄 <strong id="lblPageCount">0</strong> pages</span>
+                <span class="meta-pill">💾 <span id="lblFileSize">0</span> KB</span>
+                <span class="meta-pill">🔒 SHA-256: <code id="lblSha" style="font-family:var(--font-mono);"></code></span>
+              </div>
+            </div>
+          </div>
+          <div>
+            <button type="button" class="btn btn-secondary" style="font-size:0.8rem;padding:6px 12px;" onclick="document.getElementById('pdfInput').click()">
+              Change File
+            </button>
           </div>
         </div>
       </div>
 
-      <!-- STEP 2: Full Printer & Page Controls + Server Quote -->
+      <!-- STEP 2: Print Settings & Live Digital Receipt Quote -->
       <div id="configCard" class="card hidden">
-        <h2><span class="step-badge">2</span> Customize Print Settings (Color, Pages, Duplex &amp; Layout)</h2>
+        <h2><span class="step-badge">2</span> Customize Print Settings &amp; Review Live Quote</h2>
 
-        <!-- 2A: Color Mode (Black & White vs Full Color) -->
-        <div style="margin-bottom:14px;">
-          <label>Color Mode (Black &amp; White vs Coloured)</label>
+        <!-- 2A: Color Mode -->
+        <div style="margin-bottom:16px;">
+          <label>Print Color Mode</label>
           <div class="mode-card-group">
             <div id="cardModeBw" class="mode-option active" onclick="selectColorMode('bw')">
-              <div style="font-weight:800;font-size:0.98rem;">⚫ Black &amp; White (Monochrome)</div>
-              <div style="font-size:0.8rem;color:var(--muted);" id="lblBwRates">Simplex: ₹2.00/side | Duplex: ₹1.50/side</div>
+              <div style="display:flex;align-items:center;gap:8px;font-weight:800;font-size:1rem;color:#0f172a;">
+                <span>⚫</span> Black &amp; White (Monochrome)
+              </div>
+              <div style="font-size:0.8rem;color:var(--muted);margin-top:4px;" id="lblBwRates">
+                Simplex: ₹2.00/side | Duplex: ₹1.50/side
+              </div>
             </div>
             <div id="cardModeColor" class="mode-option" onclick="selectColorMode('color')">
-              <div style="font-weight:800;font-size:0.98rem;">🎨 Full Colour Print</div>
-              <div style="font-size:0.8rem;color:var(--muted);" id="lblColorRates">Simplex: ₹10.00/side | Duplex: ₹8.00/side</div>
+              <div style="display:flex;align-items:center;gap:8px;font-weight:800;font-size:1rem;color:#0f172a;">
+                <span>🎨</span> Full Colour Print
+              </div>
+              <div style="font-size:0.8rem;color:var(--muted);margin-top:4px;" id="lblColorRates">
+                Simplex: ₹10.00/side | Duplex: ₹8.00/side
+              </div>
             </div>
           </div>
           <input type="hidden" id="colorModeInput" value="bw" />
         </div>
 
-        <!-- 2B: Granular Page Selection ("No. of Pages") -->
+        <!-- 2B: Granular Page Selection -->
         <div class="section-divider">
           <label for="pageSelectionMode">Which Pages Do You Want to Print? (Document has <span id="lblInlineTotalPages">1</span> pages)</label>
           <div class="grid-2" style="align-items:start;">
             <div>
               <select id="pageSelectionMode" onchange="onPageModeChanged()">
                 <option value="all">All Pages (Entire Document)</option>
-                <option value="first_n">First N Pages Only (e.g., First 1, 2, 3... pages)</option>
+                <option value="first_n">First N Pages Only (e.g. First 1, 2, 3...)</option>
                 <option value="from_to">Page Range (From Page X to Page Y)</option>
-                <option value="custom_chips">Pick Individual Pages / Custom Range (e.g., 1-3, 5)</option>
+                <option value="custom_chips">Pick Individual Pages / Custom (e.g. 1-3, 5)</option>
                 <option value="odd">Odd Pages Only (1, 3, 5...)</option>
                 <option value="even">Even Pages Only (2, 4, 6...)</option>
               </select>
             </div>
 
-            <!-- Dynamic sub-control based on selected mode -->
             <div id="subPageFirstN" class="hidden">
               <div style="display:flex;align-items:center;gap:8px;">
                 <span style="font-size:0.86rem;font-weight:600;white-space:nowrap;">Print First</span>
@@ -350,41 +1020,41 @@
             </div>
           </div>
 
-          <!-- Interactive Visual Page Chip Selector -->
-          <div id="visualPagePickerWrap" style="margin-top:10px;background:#f8fafc;border:1px solid #e2e8f0;border-radius:8px;padding:10px;">
-            <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:6px;margin-bottom:6px;">
-              <span style="font-size:0.78rem;font-weight:700;color:var(--muted);">INTERACTIVE PAGE SELECTOR (Click any page to toggle it on/off):</span>
+          <!-- Interactive Page Chips -->
+          <div id="visualPagePickerWrap" style="margin-top:12px;background:#f8fafc;border:1px solid #e2e8f0;border-radius:12px;padding:12px;">
+            <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:6px;margin-bottom:8px;">
+              <span style="font-size:0.78rem;font-weight:700;color:var(--muted);text-transform:uppercase;">Interactive Page Selector (Click page to toggle):</span>
               <div style="display:flex;gap:6px;">
-                <button type="button" class="btn btn-secondary" style="padding:3px 8px;font-size:0.74rem;" onclick="quickSelectPages('all')">Select All</button>
-                <button type="button" class="btn btn-secondary" style="padding:3px 8px;font-size:0.74rem;" onclick="quickSelectPages('first1')">Only Page 1</button>
-                <button type="button" class="btn btn-secondary" style="padding:3px 8px;font-size:0.74rem;" onclick="quickSelectPages('odd')">Odd</button>
-                <button type="button" class="btn btn-secondary" style="padding:3px 8px;font-size:0.74rem;" onclick="quickSelectPages('even')">Even</button>
+                <button type="button" class="btn btn-secondary" style="padding:4px 9px;font-size:0.75rem;" onclick="quickSelectPages('all')">Select All</button>
+                <button type="button" class="btn btn-secondary" style="padding:4px 9px;font-size:0.75rem;" onclick="quickSelectPages('first1')">Only Page 1</button>
+                <button type="button" class="btn btn-secondary" style="padding:4px 9px;font-size:0.75rem;" onclick="quickSelectPages('odd')">Odd</button>
+                <button type="button" class="btn btn-secondary" style="padding:4px 9px;font-size:0.75rem;" onclick="quickSelectPages('even')">Even</button>
               </div>
             </div>
             <div id="pageChipsContainer"></div>
           </div>
         </div>
 
-        <!-- 2C: Copies, Duplex (1-Sided / 2-Sided), Pages per Sheet (N-Up), Orientation, Paper Size, Collate -->
+        <!-- 2C: Copies, Duplex & Layout -->
         <div class="section-divider grid-3">
           <div>
             <label for="copiesInput">Number of Copies (1–<span id="lblMaxCopies">50</span>)</label>
             <input type="number" id="copiesInput" min="1" max="50" value="1" onchange="requestServerQuote()" />
           </div>
           <div>
-            <label for="duplexSelect">Sides (One-Sided / Two-Sided)</label>
+            <label for="duplexSelect">Sides (Duplex / Simplex)</label>
             <select id="duplexSelect" onchange="requestServerQuote()">
-              <option value="OneSided">Single-Sided (1 Side per Sheet)</option>
+              <option value="OneSided">Single-Sided (1 Side/Sheet)</option>
               <option value="TwoSidedLongEdge" id="optDuplexLong">Double-Sided — Long Edge (Book)</option>
               <option value="TwoSidedShortEdge" id="optDuplexShort">Double-Sided — Short Edge (Flip)</option>
             </select>
           </div>
           <div>
-            <label for="pagesPerSheetSelect">Pages per Side (N-Up Layout)</label>
+            <label for="pagesPerSheetSelect">Pages per Side (N-Up)</label>
             <select id="pagesPerSheetSelect" onchange="requestServerQuote()">
-              <option value="1">1 Page per Side (Standard 100%)</option>
-              <option value="2">2 Pages per Side (2-in-1 Compact)</option>
-              <option value="4">4 Pages per Side (4-in-1 Handout)</option>
+              <option value="1">1 Page per Side (100%)</option>
+              <option value="2">2 Pages per Side (2-in-1)</option>
+              <option value="4">4 Pages per Side (Handout)</option>
             </select>
           </div>
           <div>
@@ -404,130 +1074,222 @@
             </select>
           </div>
           <div style="display:flex;flex-direction:column;justify-content:end;">
-            <label style="display:flex;align-items:center;gap:8px;cursor:pointer;padding:9px 10px;border:1px solid #cbd5e1;border-radius:8px;background:#fff;color:var(--text);margin-bottom:0;">
+            <label style="display:flex;align-items:center;gap:8px;cursor:pointer;padding:10px 12px;border:1px solid #cbd5e1;border-radius:8px;background:#fff;color:var(--text);margin-bottom:0;">
               <input type="checkbox" id="collateCheck" checked onchange="requestServerQuote()" />
-              <span style="font-size:0.86rem;font-weight:600;">Collate Copies (1-2-3, 1-2-3)</span>
+              <span style="font-size:0.86rem;font-weight:600;">Collate Copies</span>
             </label>
           </div>
         </div>
 
-        <!-- Live Authoritative Quote Box -->
-        <div id="quoteBox" class="quote-box hidden">
+        <!-- DIGITAL RECEIPT TICKET (LIVE QUOTE) -->
+        <div id="quoteBox" class="receipt-ticket hidden">
+          <div class="receipt-header">
+            <span class="receipt-title">🧾 AUTHORITATIVE SERVER ESTIMATE</span>
+            <span style="font-size:0.75rem;font-family:var(--font-mono);color:var(--muted);">Zero Hidden Charges</span>
+          </div>
           <div class="quote-row">
-            <span>Print Mode &amp; Paper:</span>
+            <span style="color:var(--muted);">Print Mode &amp; Paper:</span>
             <strong id="qModeSummary">A4 Black &amp; White | OneSided</strong>
           </div>
           <div class="quote-row">
-            <span>Selected Pages per Copy:</span>
+            <span style="color:var(--muted);">Selected Pages per Copy:</span>
             <strong><span id="qSelectedPages">0</span> of <span id="qDocPages">0</span> pages (<span id="qRange">all</span>)</strong>
           </div>
           <div class="quote-row">
-            <span>Layout &amp; Copies:</span>
+            <span style="color:var(--muted);">Layout &amp; Copies:</span>
             <strong><span id="qLayoutInfo">1 page/side × 1 copy</span></strong>
           </div>
           <div class="quote-row">
-            <span>Total Printed Sides:</span>
+            <span style="color:var(--muted);">Total Printed Sides:</span>
             <strong><span id="qPrintedSides">0</span> sides (at ₹<span id="qRate">0.00</span>/side)</strong>
           </div>
           <div class="quote-row">
-            <span>Physical Paper Sheets Required:</span>
+            <span style="color:var(--muted);">Physical Paper Sheets:</span>
             <strong><span id="qPhysicalSheets">0</span> sheets</strong>
           </div>
           <div class="quote-total">
-            <span>Authoritative Server Quote:</span>
+            <span>TOTAL AMOUNT DUE:</span>
             <span>₹<span id="qTotalInr">0.00</span></span>
           </div>
         </div>
       </div>
 
-      <!-- STEP 3: Customer Details, Consent & Online UPI Payment -->
+      <!-- STEP 3: Customer Details, Consent & Checkout -->
       <div id="checkoutCard" class="card hidden">
-        <h2><span class="step-badge">3</span> Review Policy &amp; Pay via Online UPI</h2>
-        <div class="grid-2" style="margin-bottom:12px;">
+        <h2><span class="step-badge">3</span> Confirm Details &amp; Instant UPI / Card Checkout</h2>
+        <div class="grid-2" style="margin-bottom:14px;">
           <div>
             <label for="custName">Your Name (for counter pickup)</label>
             <input type="text" id="custName" placeholder="e.g. Vikash / Student Name" value="Walk-in Customer" />
           </div>
           <div>
-            <label for="custPhone">Mobile Number (optional)</label>
+            <label for="custPhone">Mobile Number (optional for SMS/WhatsApp)</label>
             <input type="text" id="custPhone" placeholder="10-digit mobile number" />
           </div>
         </div>
-        <div class="alert alert-warn" style="margin-bottom:12px;">
-          <strong>Important Counter Pickup &amp; Approval Notice:</strong><br/>
-          1. Online UPI payment verifies your order, but <strong>printing begins only after counter staff approval</strong>.<br/>
-          2. Physical pages are collected from staff at the counter using your <strong>6-character Pickup Code</strong>.<br/>
-          3. Your uploaded PDF is stored privately on the shop host and automatically deleted upon collection (or within 24 hours).
+
+        <div class="alert alert-warn" style="font-size:0.86rem;line-height:1.6;">
+          <strong>Counter Pickup Process:</strong><br/>
+          • Once paid, your print job appears instantly on the staff counter screen.<br/>
+          • Collect your fresh printouts using your secret <strong>6-character Pickup Code</strong>.<br/>
+          • Your document is encrypted and automatically deleted after counter pickup.
         </div>
-        <label style="display:flex;align-items:center;gap:8px;cursor:pointer;margin-bottom:14px;color:var(--text);">
-          <input type="checkbox" id="consentCheck" checked />
-          <span>I agree to the document retention policy and staff-verified counter pickup.</span>
+
+        <label style="display:flex;align-items:center;gap:10px;cursor:pointer;margin:14px 0 18px;color:var(--text);font-size:0.88rem;">
+          <input type="checkbox" id="consentCheck" checked style="width:18px;height:18px;" />
+          <span>I agree to the document retention policy and counter pickup verification.</span>
         </label>
-        <button id="btnCreateOrder" class="btn" style="width:100%;padding:13px;" onclick="createOrderAndStartUpi()">
-          Confirm Print Settings &amp; Proceed to UPI Payment
+
+        <button id="btnCreateOrder" class="btn" style="width:100%;padding:14px;font-size:1.05rem;" onclick="createOrderAndStartUpi()">
+          ⚡ Proceed to Secure Checkout (₹<span id="btnAmountSpan">0.00</span>)
         </button>
       </div>
     </div>
 
-    <!-- STEP 4: Payment & Live Order Status Tracker -->
+    <!-- STEP 4: Live Order Status & Pickup Token Card -->
     <div id="trackingCard" class="card hidden">
       <h2>Order Status &amp; Counter Pickup Tracker</h2>
-      <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px;margin-bottom:12px;">
+      <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px;margin-bottom:14px;">
         <div>
-          <div style="font-size:0.82rem;color:var(--muted);">Order Reference</div>
-          <div style="font-size:1.25rem;font-weight:800;" id="trkOrderCode">PA-XXXX</div>
+          <div style="font-size:0.82rem;color:var(--muted);font-weight:600;">ORDER REFERENCE</div>
+          <div style="font-size:1.35rem;font-weight:900;font-family:var(--font-mono);" id="trkOrderCode">PA-XXXX</div>
         </div>
         <div>
-          <span class="meta-pill" id="trkStateBadge" style="font-size:0.9rem;padding:5px 12px;">state</span>
+          <span class="meta-pill" id="trkStateBadge" style="font-size:0.92rem;padding:6px 14px;">state</span>
         </div>
       </div>
 
       <div id="trkStateDesc" class="alert alert-info"></div>
 
-      <!-- Payment Action Box (shown only when awaiting_payment) -->
-      <div id="upiPaymentBox" class="card hidden" style="background:#f0fdf4;border:2px solid #22c55e;">
-        <h3 style="font-size:1.05rem;margin-bottom:8px;color:#166534;">⚡ Complete Instant UPI Payment</h3>
-        <p style="font-size:0.88rem;color:var(--muted);margin-bottom:12px;">
-          Amount to Pay: <strong style="font-size:1.15rem;color:#0f172a;">₹<span id="lblPayAmount"></span></strong> | Reference: <code id="lblGatewayOrder"></code>
+      <!-- Instant Payment Action Box (When awaiting_payment) -->
+      <div id="upiPaymentBox" class="card hidden" style="background:#f0fdf4;border:2px solid #22c55e;padding:20px;">
+        <h3 style="font-size:1.15rem;margin-bottom:8px;color:#166534;display:flex;align-items:center;gap:8px;">
+          ⚡ Complete Payment to Start Printing
+        </h3>
+        <p style="font-size:0.9rem;color:var(--muted);margin-bottom:14px;">
+          Amount to Pay: <strong style="font-size:1.25rem;color:#0f172a;font-family:var(--font-mono);">₹<span id="lblPayAmount"></span></strong> | Gateway ID: <code id="lblGatewayOrder" style="font-family:var(--font-mono);"></code>
         </p>
-        <div style="display:flex;gap:10px;flex-wrap:wrap;align-items:center;">
-          <button id="btnPayRazorpay" class="btn" style="background:#2563eb;color:#fff;font-weight:700;padding:12px 22px;font-size:1rem;" onclick="launchRazorpayCheckout()">
-            💳 Pay via Razorpay (GPay, PhonePe, Paytm, QR)
+        <div style="display:flex;gap:12px;flex-wrap:wrap;align-items:center;">
+          <button id="btnPayRazorpay" class="btn" style="background:#2563eb;color:#fff;font-weight:800;padding:13px 24px;font-size:1.02rem;" onclick="launchRazorpayCheckout()">
+            💳 Pay via Razorpay (GPay, PhonePe, Paytm, Cards)
           </button>
-          <button class="btn btn-secondary" style="font-size:0.82rem;padding:8px 14px;" onclick="simulateVerifiedUpiWebhook()">
-            Demo Simulation (Test Mode)
+          <button class="btn btn-secondary" style="font-size:0.82rem;padding:10px 16px;" onclick="simulateVerifiedUpiWebhook()">
+            🧪 Demo Simulation (Instant Verify)
           </button>
         </div>
-        <p style="font-size:0.78rem;color:var(--muted);margin-top:10px;">
-          ✓ 100% automated digital verification. Your order immediately moves to <code>paid_awaiting_approval</code> upon successful payment.
+        <p style="font-size:0.8rem;color:var(--muted);margin-top:12px;">
+          ✓ Fully automated instant verification. Your order immediately moves to <code>paid_awaiting_approval</code> upon payment.
         </p>
       </div>
 
-      <!-- Pickup Code Box -->
-      <div style="text-align:center;padding:12px;background:#f8fafc;border-radius:10px;margin:12px 0;">
-        <div style="font-size:0.82rem;font-weight:600;color:var(--muted);">COUNTER PICKUP VERIFICATION CODE</div>
+      <!-- COUNTER PICKUP CODE BOX -->
+      <div class="pickup-box">
+        <div style="font-size:0.84rem;font-weight:700;letter-spacing:0.08em;color:#94a3b8;text-transform:uppercase;">
+          YOUR SECRET COUNTER PICKUP CODE
+        </div>
         <div class="pickup-badge" id="trkPickupCode">------</div>
-        <div style="font-size:0.8rem;color:var(--muted);">Show this code to the staff operator at the counter when status is <strong>ready_for_pickup</strong>.</div>
+        <div style="margin-top:6px;">
+          <button type="button" class="btn btn-secondary" style="font-size:0.78rem;padding:5px 12px;background:rgba(255,255,255,0.1);color:#fff;border-color:rgba(255,255,255,0.2);" onclick="copyPickupCode()">
+            📋 Copy Code
+          </button>
+        </div>
+        <div style="font-size:0.82rem;color:#94a3b8;margin-top:10px;">
+          Show this code to the counter staff at <strong><span id="trkShopNameBadge">Midtown Stationary</span></strong> to collect your physical pages.
+        </div>
       </div>
 
-      <div class="quote-box">
-        <div class="quote-row"><span>Document:</span><strong id="trkFileName"></strong></div>
-        <div class="quote-row"><span>Configuration:</span><strong id="trkConfig"></strong></div>
-        <div class="quote-row"><span>Sides / Physical Sheets:</span><strong id="trkSidesSheets"></strong></div>
-        <div class="quote-row"><span>Total Paid / Quoted:</span><strong>₹<span id="trkTotal"></span> (<span id="trkPayStatus"></span>)</strong></div>
-        <div class="quote-row"><span>Last Updated (IST):</span><strong id="trkUpdatedIst"></strong></div>
-        <div class="quote-row"><span>Private Tracking Token:</span><code id="trkPubToken" style="font-size:0.78rem;"></code></div>
+      <div class="receipt-ticket">
+        <div class="quote-row"><span style="color:var(--muted);">Document:</span><strong id="trkFileName"></strong></div>
+        <div class="quote-row"><span style="color:var(--muted);">Configuration:</span><strong id="trkConfig"></strong></div>
+        <div class="quote-row"><span style="color:var(--muted);">Sides / Sheets:</span><strong id="trkSidesSheets"></strong></div>
+        <div class="quote-row"><span style="color:var(--muted);">Total Amount:</span><strong>₹<span id="trkTotal"></span> (<span id="trkPayStatus"></span>)</strong></div>
+        <div class="quote-row"><span style="color:var(--muted);">Last Updated (IST):</span><strong id="trkUpdatedIst"></strong></div>
+        <div class="quote-row"><span style="color:var(--muted);">Tracking Token:</span><code id="trkPubToken" style="font-size:0.78rem;font-family:var(--font-mono);"></code></div>
       </div>
 
-      <div style="margin-top:14px;display:flex;gap:10px;">
-        <button class="btn btn-secondary" onclick="refreshCurrentOrder()">Refresh Status</button>
-        <a href="/admin" target="_blank" class="btn">Open Staff Admin Dashboard to Approve &rarr;</a>
+      <div style="margin-top:16px;display:flex;gap:10px;flex-wrap:wrap;">
+        <button class="btn btn-secondary" onclick="refreshCurrentOrder()">🔄 Refresh Status</button>
+        <button class="btn btn-secondary" onclick="resetToNewOrder()">➕ Print Another File</button>
+        <a href="/admin" target="_blank" class="btn" style="margin-left:auto;">Staff Counter Admin &rarr;</a>
       </div>
     </div>
   </div>
 
   <script>
     const DEFAULT_STATION_URL = 'https://anybody-vpn-slim-suited.trycloudflare.com';
+
+    /* ==========================================================================
+       MASCOT LOADER & CONFETTI HELPERS
+       ========================================================================== */
+    function showMascotLoader(title, subtitle) {
+      const modal = document.getElementById('mascotLoaderModal');
+      document.getElementById('loaderModalTitle').textContent = title || 'Loading...';
+      document.getElementById('loaderModalSub').textContent = subtitle || 'Please wait a moment';
+      modal.classList.add('active');
+    }
+
+    function hideMascotLoader() {
+      const modal = document.getElementById('mascotLoaderModal');
+      modal.classList.remove('active');
+    }
+
+    function triggerConfetti() {
+      const canvas = document.getElementById('confettiCanvas');
+      if (!canvas) return;
+      const ctx = canvas.getContext('2d');
+      canvas.width = window.innerWidth;
+      canvas.height = window.innerHeight;
+      const pieces = [];
+      const colors = ['#2563eb', '#38bdf8', '#f59e0b', '#10b981', '#ec4899', '#8b5cf6'];
+      for (let i = 0; i < 90; i++) {
+        pieces.push({
+          x: Math.random() * canvas.width,
+          y: Math.random() * canvas.height * 0.4,
+          r: Math.random() * 6 + 4,
+          d: Math.random() * 80,
+          color: colors[Math.floor(Math.random() * colors.length)],
+          tilt: Math.random() * 10 - 5,
+          tiltAngleIncremental: (Math.random() * 0.07) + 0.05,
+          tiltAngle: 0
+        });
+      }
+      let animationFrame;
+      let frameCount = 0;
+      function draw() {
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
+        pieces.forEach(p => {
+          ctx.beginPath();
+          ctx.lineWidth = p.r;
+          ctx.strokeStyle = p.color;
+          ctx.moveTo(p.x + p.tilt + p.r / 2, p.y);
+          ctx.lineTo(p.x + p.tilt, p.y + p.tilt + p.r / 2);
+          ctx.stroke();
+          p.tiltAngle += p.tiltAngleIncremental;
+          p.y += (Math.cos(p.d) + 3 + p.r / 2) / 2;
+          p.tilt = Math.sin(p.tiltAngle - (frameCount / 3)) * 15;
+        });
+        frameCount++;
+        if (frameCount < 120) {
+          animationFrame = requestAnimationFrame(draw);
+        } else {
+          ctx.clearRect(0, 0, canvas.width, canvas.height);
+        }
+      }
+      draw();
+    }
+
+    function copyPickupCode() {
+      const code = document.getElementById('trkPickupCode').textContent;
+      if (code && code !== '------') {
+        navigator.clipboard.writeText(code).then(() => {
+          alert('Pickup Code copied to clipboard: ' + code);
+        }).catch(() => {});
+      }
+    }
+
+    /* ==========================================================================
+       SHOP & TUNNEL DISCOVERY
+       ========================================================================== */
     function getActiveShopId() {
       const spShop = new URLSearchParams(window.location.search).get('shop');
       if (spShop && spShop.trim()) {
@@ -535,11 +1297,11 @@
         localStorage.setItem('printaway_shop_id', clean);
         return clean;
       }
-      return localStorage.getItem('printaway_shop_id') || 'pilot';
+      return localStorage.getItem('printaway_shop_id') || 'midtownstationary';
     }
 
     function getRegistryTopicForShop(shopId) {
-      const sid = (shopId || 'pilot').trim().toLowerCase();
+      const sid = (shopId || 'midtownstationary').trim().toLowerCase();
       if (!sid || sid === 'pilot' || sid === 'printaway-pilot') {
         return 'printaway_station_registry_pilot_9f8a7b6c5d4e';
       }
@@ -548,7 +1310,7 @@
 
     function switchShopPrompt() {
       const cur = getActiveShopId();
-      const entered = prompt("Enter Shop ID / Code to connect (e.g. 'pilot', 'shop-02', 'campus-01'):", cur);
+      const entered = prompt("Enter Shop ID to connect (e.g. 'midtownstationary', 'pilot', 'shop-02'):", cur);
       if (entered !== null && entered.trim()) {
         const clean = entered.trim().toLowerCase().replace(/[^a-z0-9_-]/g, '');
         localStorage.setItem('printaway_shop_id', clean);
@@ -574,7 +1336,7 @@
         const badgeEl = document.getElementById('lblActiveShopBadge');
         if (badgeEl) badgeEl.textContent = shopId;
 
-        // Priority 1: Supabase Fleet Lookup (Authoritative live station tunnel)
+        // Priority 1: Supabase Fleet Lookup
         try {
           const sbRes = await fetch(`https://zduoifzakiojfqbtxqqm.supabase.co/rest/v1/shops?shop_id=eq.${encodeURIComponent(shopId)}&select=live_tunnel_url,shop_name,upi_vpa`, {
             headers: {
@@ -624,7 +1386,7 @@
     function configureStationUrl() {
       const cur = localStorage.getItem('printaway_api_base') || '';
       const entered = prompt(
-        "Enter your PrintAway Station Backend URL (e.g., https://your-tunnel.trycloudflare.com or https://...ngrok-free.app or leave empty to use current host):",
+        "Enter your PrintAway Station Backend URL (e.g. https://...lhr.life or https://...trycloudflare.com or leave blank for local):",
         cur
       );
       if (entered !== null) {
@@ -637,6 +1399,9 @@
       }
     }
 
+    /* ==========================================================================
+       APPLICATION STATE
+       ========================================================================== */
     let currentFileToken = null;
     let currentDocPages = 1;
     let selectedChipPages = new Set([1]);
@@ -650,6 +1415,17 @@
       if (!msg) { el.classList.add('hidden'); el.textContent = ''; return; }
       el.textContent = msg;
       el.classList.remove('hidden');
+      window.scrollTo({ top: el.offsetTop - 70, behavior: 'smooth' });
+    }
+
+    function updateStepper(step) {
+      for (let s = 1; s <= 4; s++) {
+        const el = document.getElementById('stepIndicator' + s);
+        if (!el) continue;
+        el.classList.remove('active', 'completed');
+        if (s < step) el.classList.add('completed');
+        else if (s === step) el.classList.add('active');
+      }
     }
 
     async function loadShopStatus() {
@@ -658,10 +1434,11 @@
         const res = await fetch(apiUrl('/api/shop/status'));
         const data = await res.json();
         shopCapabilities = data;
-        document.getElementById('shopTagline').textContent = data.tagline || '';
+        document.getElementById('shopTagline').textContent = data.tagline || 'Printing ke liye pareshan ho? Just PrintAway.';
         const banner = document.getElementById('shopBanner');
         const txt = document.getElementById('shopStatusText');
         const turn = document.getElementById('shopTurnaround');
+        const dot = document.getElementById('liveDotIndicator');
 
         const capTags = [];
         capTags.push('B&W');
@@ -671,17 +1448,20 @@
 
         if (data.acceptingOrders) {
           banner.className = 'status-banner status-open';
+          if (dot) dot.style.background = '#10b981';
           const bEl = document.getElementById('lblActiveShopBadge');
           if (bEl && data.shopId) bEl.textContent = data.shopId;
-          txt.textContent = '● ' + (data.shopName ? data.shopName + ' — ' : '') + data.statusReason + ' — ' + data.printerModel + ' (' + capTags.join(' / ') + ')';
-          turn.textContent = 'Est. turnaround: ' + data.turnaroundText;
+          const trkShop = document.getElementById('trkShopNameBadge');
+          if (trkShop) trkShop.textContent = data.shopName || 'Midtown Stationary';
+          txt.textContent = '● ' + (data.shopName ? data.shopName + ' — ' : '') + data.statusReason + ' (' + capTags.join(' / ') + ')';
+          turn.textContent = '⚡ Turnaround: ' + (data.turnaroundText || '3-5 mins counter pickup');
         } else {
           banner.className = 'status-banner status-closed';
+          if (dot) dot.style.background = '#ef4444';
           txt.textContent = '● ' + data.statusReason;
-          turn.textContent = 'Uploads & checkout disabled while station unavailable';
+          turn.textContent = 'Orders paused';
         }
 
-        // Update pricing labels on B&W and Color cards
         if (data.pricing) {
           const p = data.pricing;
           document.getElementById('lblBwRates').textContent =
@@ -693,9 +1473,7 @@
         const cardColor = document.getElementById('cardModeColor');
         if (!data.supportsColor) {
           cardColor.classList.add('disabled');
-          if (document.getElementById('colorModeInput').value === 'color') {
-            selectColorMode('bw');
-          }
+          if (document.getElementById('colorModeInput').value === 'color') selectColorMode('bw');
         } else {
           cardColor.classList.remove('disabled');
         }
@@ -724,16 +1502,16 @@
         console.error(e);
         const banner = document.getElementById('shopBanner');
         banner.className = 'status-banner status-closed';
-        document.getElementById('shopStatusText').textContent = '● Printer Station Offline / Unreachable';
+        document.getElementById('shopStatusText').textContent = '● Station Offline / Reconnecting...';
         document.getElementById('shopTurnaround').textContent = (window.location.hostname !== 'localhost' && window.location.hostname !== '127.0.0.1')
-          ? 'Running on Netlify? Click "⚙️ Station URL" above to connect to your workstation tunnel.'
-          : 'Make sure PrintAway.exe is running on http://127.0.0.1:8080';
+          ? 'Connecting to secure station tunnel...'
+          : 'Check if PrintAway.exe is running on port 8080';
       }
     }
 
     function selectColorMode(mode) {
       if (mode === 'color' && !shopCapabilities.supportsColor) {
-        showError('Color printing is currently disabled by the shop admin on this printer. You can enable it in Staff Admin.');
+        showError('Color printing is currently disabled by the shopkeeper on this printer.');
         return;
       }
       document.getElementById('colorModeInput').value = mode;
@@ -746,6 +1524,7 @@
       showError(null);
       if (!input.files || !input.files[0]) return;
       const file = input.files[0];
+      showMascotLoader('Validating Document...', 'Analyzing pages and PDF security signatures');
       try {
         const buf = await file.arrayBuffer();
         const res = await fetch(apiUrl('/api/uploads?filename=' + encodeURIComponent(file.name)), {
@@ -754,18 +1533,21 @@
           body: buf
         });
         const data = await res.json();
+        hideMascotLoader();
         if (!res.ok || data.error) {
           showError(data.message || 'Upload validation failed.');
           return;
         }
         onFileValidated(data);
       } catch (e) {
+        hideMascotLoader();
         showError('Failed to upload PDF: ' + e.message);
       }
     }
 
     async function loadFounderPdf() {
       showError(null);
+      showMascotLoader('Loading Test Document...', 'Fetching verified 2-page test document');
       try {
         const res = await fetch(apiUrl('/api/uploads/sample'), {
           method: 'POST',
@@ -773,18 +1555,21 @@
           body: JSON.stringify({ preset: 'first-successful-document' })
         });
         const data = await res.json();
+        hideMascotLoader();
         if (!res.ok || data.error) {
           showError(data.message || 'Could not load FIRST SUCCESSFUL DOCUMENT.pdf.');
           return;
         }
         onFileValidated(data);
       } catch (e) {
+        hideMascotLoader();
         showError('Error: ' + e.message);
       }
     }
 
     async function generateSamplePdf(pages) {
       showError(null);
+      showMascotLoader('Generating Sample Document...', `Synthesizing ${pages}-page test PDF`);
       try {
         const res = await fetch(apiUrl('/api/uploads/sample'), {
           method: 'POST',
@@ -792,12 +1577,14 @@
           body: JSON.stringify({ pages: pages, title: 'Sample_A4_PrintAway_Test' })
         });
         const data = await res.json();
+        hideMascotLoader();
         if (!res.ok || data.error) {
           showError(data.message || 'Could not generate sample PDF.');
           return;
         }
         onFileValidated(data);
       } catch (e) {
+        hideMascotLoader();
         showError('Error: ' + e.message);
       }
     }
@@ -811,7 +1598,6 @@
       document.getElementById('lblFileSize').textContent = Math.max(1, Math.round(data.sizeBytes / 1024));
       document.getElementById('lblSha').textContent = data.sha256Prefix + '...';
 
-      // Initialize page controls for this document's page count
       const inpFirstN = document.getElementById('inpFirstN');
       inpFirstN.max = currentDocPages;
       inpFirstN.value = Math.min(currentDocPages, 1);
@@ -833,6 +1619,12 @@
 
       document.getElementById('uploadedFileInfo').classList.remove('hidden');
       document.getElementById('configCard').classList.remove('hidden');
+      updateStepper(2);
+
+      // Smooth scroll down to options
+      setTimeout(() => {
+        document.getElementById('configCard').scrollIntoView({ behavior: 'smooth', block: 'start' });
+      }, 150);
     }
 
     function renderPageChips() {
@@ -844,7 +1636,7 @@
         html += `<div class="page-chip ${isSel ? 'selected' : ''}" onclick="togglePageChip(${p})">${isSel ? '✓ ' : ''}Page ${p}</div>`;
       }
       if (currentDocPages > maxChips) {
-        html += `<span style="font-size:0.78rem;color:var(--muted);margin-left:6px;">(+${currentDocPages - maxChips} more pages — use range box above)</span>`;
+        html += `<span style="font-size:0.78rem;color:var(--muted);margin-left:6px;">(+${currentDocPages - maxChips} more pages)</span>`;
       }
       container.innerHTML = html;
     }
@@ -989,7 +1781,6 @@
         }
         currentQuoteToken = data.quoteToken;
 
-        // Sync chips if server returned resolvedPages
         if (Array.isArray(data.resolvedPages)) {
           selectedChipPages = new Set(data.resolvedPages);
           renderPageChips();
@@ -997,7 +1788,7 @@
 
         const modeLabel = data.colorMode === 'color' ? '🎨 Full Colour' : '⚫ Black & White';
         const duplexLabel = data.duplexMode === 'OneSided' ? 'Single-Sided (Simplex)' : `Double-Sided (${data.duplexMode})`;
-        document.getElementById('qModeSummary').textContent = `${data.paperSize} ${modeLabel} | ${duplexLabel} | Orientation: ${data.orientation}`;
+        document.getElementById('qModeSummary').textContent = `${data.paperSize} ${modeLabel} | ${duplexLabel}`;
         document.getElementById('qSelectedPages').textContent = data.selectedPages;
         document.getElementById('qDocPages').textContent = data.documentPages;
         document.getElementById('qRange').textContent = data.pageRange;
@@ -1005,9 +1796,14 @@
         document.getElementById('qPrintedSides').textContent = data.printedSides;
         document.getElementById('qRate').textContent = Number(data.ratePerSideInr).toFixed(2);
         document.getElementById('qPhysicalSheets').textContent = data.physicalSheets;
-        document.getElementById('qTotalInr').textContent = Number(data.totalAmountInr).toFixed(2);
+        const totalFormatted = Number(data.totalAmountInr).toFixed(2);
+        document.getElementById('qTotalInr').textContent = totalFormatted;
+        const btnAmt = document.getElementById('btnAmountSpan');
+        if (btnAmt) btnAmt.textContent = totalFormatted;
+
         document.getElementById('quoteBox').classList.remove('hidden');
         document.getElementById('checkoutCard').classList.remove('hidden');
+        updateStepper(3);
       } catch (e) {
         showError('Quote error: ' + e.message);
       }
@@ -1020,6 +1816,8 @@
       const customerName = document.getElementById('custName').value;
       const customerPhone = document.getElementById('custPhone').value;
 
+      showMascotLoader('Securing Order...', 'Reserving hardware printer queue & generating UPI order');
+
       try {
         const res = await fetch(apiUrl('/api/orders'), {
           method: 'POST',
@@ -1027,6 +1825,7 @@
           body: JSON.stringify({ quoteToken: currentQuoteToken, customerName, customerPhone, consentAccepted: consent })
         });
         const data = await res.json();
+        hideMascotLoader();
         if (!res.ok || data.error) {
           showError(data.message || 'Order creation failed.');
           return;
@@ -1035,15 +1834,19 @@
         document.getElementById('trackTokenInput').value = data.publicToken;
         document.getElementById('orderWizard').classList.add('hidden');
         document.getElementById('trackingCard').classList.remove('hidden');
+        updateStepper(4);
+        triggerConfetti();
+
         await refreshCurrentOrder();
         if (pollTimer) clearInterval(pollTimer);
         pollTimer = setInterval(refreshCurrentOrder, 2500);
 
-        // Auto-launch Razorpay Checkout modal if active
+        // Auto-launch Razorpay Checkout modal
         if (data.razorpayOrderId && data.razorpayKeyId && typeof Razorpay !== 'undefined') {
           setTimeout(launchRazorpayCheckout, 350);
         }
       } catch (e) {
+        hideMascotLoader();
         showError('Order error: ' + e.message);
       }
     }
@@ -1065,16 +1868,18 @@
         currency: 'INR',
         name: 'PrintAway',
         description: 'Print Order ' + currentOrder.orderCode,
+        image: '/assets/logo.png',
         order_id: currentOrder.razorpayOrderId,
         prefill: {
           name: custName,
           contact: custPhone
         },
         theme: {
-          color: '#1d4ed8'
+          color: '#2563eb'
         },
         handler: async function (response) {
           try {
+            showMascotLoader('Verifying Payment...', 'Confirming transaction with bank network');
             document.getElementById('trkStateDesc').innerHTML = '<strong>Verifying payment with bank...</strong>';
             const vRes = await fetch(apiUrl('/api/payments/verify-razorpay'), {
               method: 'POST',
@@ -1087,12 +1892,15 @@
               })
             });
             const vData = await vRes.json();
+            hideMascotLoader();
             if (vRes.ok && vData.status === 'success') {
+              triggerConfetti();
               await refreshCurrentOrder();
             } else {
               showError('Payment verification note: ' + (vData.message || 'Check with counter'));
             }
           } catch (err) {
+            hideMascotLoader();
             console.error('Verification error:', err);
             await refreshCurrentOrder();
           }
@@ -1105,6 +1913,7 @@
     async function simulateVerifiedUpiWebhook() {
       if (!currentOrder || !currentOrder.gatewayOrderId) return;
       showError(null);
+      showMascotLoader('Simulating Payment...', 'Testing instant webhook verification');
       try {
         const res = await fetch(apiUrl('/api/payments/simulate-upi'), {
           method: 'POST',
@@ -1115,12 +1924,15 @@
           })
         });
         const data = await res.json();
+        hideMascotLoader();
         if (!res.ok || data.error) {
           showError(data.message || 'Webhook simulation failed.');
           return;
         }
+        triggerConfetti();
         await refreshCurrentOrder();
       } catch (e) {
+        hideMascotLoader();
         showError('Payment simulation error: ' + e.message);
       }
     }
@@ -1128,11 +1940,14 @@
     async function lookupTrackedOrder() {
       const tok = document.getElementById('trackTokenInput').value.trim();
       if (!tok) return;
+      showMascotLoader('Finding Order...', 'Looking up tracking record');
       currentOrder = currentOrder || {};
       currentOrder.publicToken = tok;
       document.getElementById('orderWizard').classList.add('hidden');
       document.getElementById('trackingCard').classList.remove('hidden');
+      updateStepper(4);
       await refreshCurrentOrder();
+      hideMascotLoader();
       if (pollTimer) clearInterval(pollTimer);
       pollTimer = setInterval(refreshCurrentOrder, 2500);
     }
@@ -1185,15 +2000,42 @@
       document.getElementById('checkoutCard').classList.add('hidden');
       document.getElementById('trackingCard').classList.add('hidden');
       document.getElementById('orderWizard').classList.remove('hidden');
+      updateStepper(1);
       showError(null);
-      // Auto-detect ?station=https://... query parameter for seamless Netlify integration
       const sp = new URLSearchParams(window.location.search).get('station');
       if (sp) localStorage.setItem('printaway_api_base', sp.trim().replace(/\/+$/, ''));
       loadShopStatus();
     }
 
+    // Drag and Drop Zone events
+    const dropZone = document.getElementById('uploadDropZone');
+    if (dropZone) {
+      ['dragenter', 'dragover'].forEach(eventName => {
+        dropZone.addEventListener(eventName, e => {
+          e.preventDefault();
+          e.stopPropagation();
+          dropZone.classList.add('dragover');
+        }, false);
+      });
+      ['dragleave', 'drop'].forEach(eventName => {
+        dropZone.addEventListener(eventName, e => {
+          e.preventDefault();
+          e.stopPropagation();
+          dropZone.classList.remove('dragover');
+        }, false);
+      });
+      dropZone.addEventListener('drop', e => {
+        const dt = e.dataTransfer;
+        const files = dt.files;
+        if (files && files.length > 0) {
+          const inp = document.getElementById('pdfInput');
+          inp.files = files;
+          handleFileSelected(inp);
+        }
+      });
+    }
+
     window.addEventListener('DOMContentLoaded', () => {
-      // Auto-detect ?station=https://... query parameter for seamless Netlify integration
       const sp = new URLSearchParams(window.location.search).get('station');
       if (sp) localStorage.setItem('printaway_api_base', sp.trim().replace(/\/+$/, ''));
       loadShopStatus();

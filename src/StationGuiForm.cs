@@ -120,12 +120,33 @@ namespace PrintAway.Gui
                 BackColor = Color.FromArgb(15, 23, 42)
             };
 
+            string logoPath = Path.Combine(_repoRoot, "web", "assets", "logo.png");
+            if (!File.Exists(logoPath)) logoPath = Path.Combine(_repoRoot, "web", "assets", "logo.jpg");
+
+            int textOffsetX = 18;
+            if (File.Exists(logoPath))
+            {
+                try
+                {
+                    var picLogo = new PictureBox
+                    {
+                        Image = Image.FromFile(logoPath),
+                        SizeMode = PictureBoxSizeMode.Zoom,
+                        Size = new Size(42, 42),
+                        Location = new Point(16, 11)
+                    };
+                    pnlHeader.Controls.Add(picLogo);
+                    textOffsetX = 66;
+                }
+                catch { }
+            }
+
             var lblHeaderTitle = new Label
             {
                 Text = "PrintAway Station",
                 ForeColor = Color.White,
                 Font = new Font("Segoe UI", 13f, FontStyle.Bold),
-                Location = new Point(18, 12),
+                Location = new Point(textOffsetX, 11),
                 AutoSize = true
             };
 
@@ -134,7 +155,7 @@ namespace PrintAway.Gui
                 Text = "Automated Hardware Printing & Secure Tunnel Hub",
                 ForeColor = Color.FromArgb(148, 163, 184),
                 Font = new Font("Segoe UI", 8.5f, FontStyle.Regular),
-                Location = new Point(20, 38),
+                Location = new Point(textOffsetX + 2, 36),
                 AutoSize = true
             };
 

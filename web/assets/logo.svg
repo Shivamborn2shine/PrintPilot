@@ -1,0 +1,128 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="100%" height="100%">
+  <defs>
+    <!-- Outer Badge Gradient -->
+    <radialGradient id="badgeGlow" cx="40%" cy="35%" r="65%">
+      <stop offset="0%" stop-color="#FFE066" />
+      <stop offset="65%" stop-color="#FFBE1A" />
+      <stop offset="100%" stop-color="#F59E0B" />
+    </radialGradient>
+    <linearGradient id="badgeRing" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#FFFBEB" stop-opacity="0.9" />
+      <stop offset="100%" stop-color="#FDE68A" stop-opacity="0.4" />
+    </linearGradient>
+
+    <!-- Printer Body Gradient -->
+    <linearGradient id="printerGrad" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" stop-color="#60A5FA" />
+      <stop offset="25%" stop-color="#38BDF8" />
+      <stop offset="100%" stop-color="#0284C7" />
+    </linearGradient>
+
+    <!-- Top Paper Gradient -->
+    <linearGradient id="paperGrad" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" stop-color="#FFFFFF" />
+      <stop offset="100%" stop-color="#F1F5F9" />
+    </linearGradient>
+
+    <!-- Drop Shadows -->
+    <filter id="shadowSmall" x="-10%" y="-10%" width="120%" height="120%">
+      <feDropShadow dx="0" dy="6" stdDeviation="6" flood-color="#78350F" flood-opacity="0.22" />
+    </filter>
+    <filter id="glowPrinter" x="-10%" y="-10%" width="120%" height="120%">
+      <feDropShadow dx="0" dy="8" stdDeviation="10" flood-color="#0369A1" flood-opacity="0.35" />
+    </filter>
+  </defs>
+
+  <!-- Golden Circular Badge Background -->
+  <circle cx="256" cy="256" r="236" fill="url(#badgeGlow)" filter="url(#shadowSmall)" />
+  <circle cx="256" cy="256" r="226" fill="none" stroke="url(#badgeRing)" stroke-width="8" />
+
+  <!-- Radiating Energetic Sparks (Top-Right) -->
+  <g stroke="#F97316" stroke-width="15" stroke-linecap="round">
+    <line x1="375" y1="130" x2="395" y2="110" />
+    <line x1="398" y1="155" x2="424" y2="150" />
+    <line x1="390" y1="185" x2="416" y2="195" />
+  </g>
+
+  <!-- Main Illustration Group -->
+  <g id="mascotPrinter">
+    <!-- 1. Top Input Paper -->
+    <g id="topPaper">
+      <!-- Paper Sheet -->
+      <path d="M 184 120 
+               L 305 120 
+               L 340 155 
+               L 340 250 
+               L 184 250 Z" 
+            fill="url(#paperGrad)" 
+            stroke="#0F172A" 
+            stroke-width="14" 
+            stroke-linejoin="round" />
+      
+      <!-- Folded Dog-Ear Corner -->
+      <path d="M 305 120 L 305 155 L 340 155 Z" 
+            fill="#38BDF8" 
+            stroke="#0F172A" 
+            stroke-width="12" 
+            stroke-linejoin="round" />
+
+      <!-- Document Text Stripes (Blue) -->
+      <line x1="218" y1="168" x2="280" y2="168" stroke="#38BDF8" stroke-width="12" stroke-linecap="round" />
+      <line x1="218" y1="198" x2="300" y2="198" stroke="#38BDF8" stroke-width="12" stroke-linecap="round" />
+    </g>
+
+    <!-- 2. Bottom Printed Paper -->
+    <g id="bottomPaper">
+      <rect x="184" y="320" width="144" height="105" rx="14" 
+            fill="#FFFFFF" 
+            stroke="#0F172A" 
+            stroke-width="14" 
+            stroke-linejoin="round" />
+      <!-- Printed Golden Stripes -->
+      <line x1="218" y1="365" x2="294" y2="365" stroke="#F59E0B" stroke-width="12" stroke-linecap="round" />
+      <line x1="218" y1="395" x2="294" y2="395" stroke="#F59E0B" stroke-width="12" stroke-linecap="round" />
+    </g>
+
+    <!-- 3. Friendly Printer Body -->
+    <g id="printerBody" filter="url(#glowPrinter)">
+      <!-- Main Chassis -->
+      <rect x="120" y="230" width="272" height="120" rx="42" 
+            fill="url(#printerGrad)" 
+            stroke="#0F172A" 
+            stroke-width="15" 
+            stroke-linejoin="round" />
+
+      <!-- Top Specular Gloss Highlight -->
+      <path d="M 152 245 Q 256 240 360 245" 
+            fill="none" 
+            stroke="#FFFFFF" 
+            stroke-width="6" 
+            stroke-linecap="round" 
+            stroke-opacity="0.6" />
+
+      <!-- Smiling Happy Eyes (Closed Curves) -->
+      <path d="M 198 284 C 205 268, 225 268, 232 284" 
+            fill="none" 
+            stroke="#0F172A" 
+            stroke-width="12" 
+            stroke-linecap="round" />
+      
+      <path d="M 280 284 C 287 268, 307 268, 314 284" 
+            fill="none" 
+            stroke="#0F172A" 
+            stroke-width="12" 
+            stroke-linecap="round" />
+
+      <!-- Rosy Cheeks -->
+      <circle cx="188" cy="296" r="10" fill="#F472B6" fill-opacity="0.45" />
+      <circle cx="324" cy="296" r="10" fill="#F472B6" fill-opacity="0.45" />
+
+      <!-- Joyful Smiling Mouth -->
+      <path d="M 236 298 Q 256 324 276 298" 
+            fill="none" 
+            stroke="#0F172A" 
+            stroke-width="11" 
+            stroke-linecap="round" />
+    </g>
+  </g>
+</svg>
