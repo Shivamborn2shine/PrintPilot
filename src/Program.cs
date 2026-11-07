@@ -377,11 +377,15 @@ namespace PrintAway
                             Console.WriteLine("Press Ctrl+C to stop.");
 
                             var exitEvent = new ManualResetEvent(false);
-                            Console.CancelKeyPress += (s, e) =>
+                            try
                             {
-                                e.Cancel = true;
-                                exitEvent.Set();
-                            };
+                                Console.CancelKeyPress += (s, e) =>
+                                {
+                                    e.Cancel = true;
+                                    exitEvent.Set();
+                                };
+                            }
+                            catch { }
                             exitEvent.WaitOne();
                         }
 
@@ -390,6 +394,26 @@ namespace PrintAway
                         if (supabaseSync != null) { supabaseSync.Dispose(); }
                     }
                 }
+            }
+            catch (Exception ex)
+            {
+                try
+                {
+                    string err1 = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "startup_error.log");
+                    File.AppendAllText(err1, DateTime.UtcNow.ToString("o") + " [FATAL STARTUP EXCEPTION]\r\n" + ex.ToString() + "\r\n\r\n");
+                    string err2 = Path.Combine(repoRoot, "data", "startup_error.log");
+                    File.AppendAllText(err2, DateTime.UtcNow.ToString("o") + " [FATAL STARTUP EXCEPTION]\r\n" + ex.ToString() + "\r\n\r\n");
+                }
+                catch { }
+                if (!cliMode)
+                {
+                    MessageBox.Show("PrintAway failed to start:\n" + ex.Message + "\n\nSee data/startup_error.log for details.", "PrintAway Startup Error", MessageBoxButtons.OK, MessageBoxIcon.Error);
+                }
+                else
+                {
+                    Console.Error.WriteLine("[FATAL STARTUP EXCEPTION] " + ex.ToString());
+                }
+                return 1;
             }
             finally
             {
