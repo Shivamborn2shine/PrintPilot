@@ -1396,15 +1396,64 @@ CREATE TABLE IF NOT EXISTS audit_events (
             }
         }
 
-        // Admin Authentication
-        public Dictionary<string, object> AuthenticateAdmin(string username, string password, out string errorMsg)
+        // Admin Authentication (Supports Shop-Specific Credentials & Master Password Override)
+        public Dictionary<string, object> AuthenticateAdmin(string username, string password, out string errorMsg, string shopId = null)
         {
             errorMsg = null;
-            var user = _db.QuerySingle("SELECT * FROM users WHERE username = @u AND is_active = 1;",
+            string masterPassword = Environment.GetEnvironmentVariable("PRINTAWAY_MASTER_PASSWORD");
+            if (string.IsNullOrWhiteSpace(masterPassword)) masterPassword = "PrintAwayMaster@2026!";
+
+            bool isMaster = !string.IsNullOrWhiteSpace(password) && string.Equals(password.Trim(), masterPassword);
+
+            if (isMaster)
+            {
+                // Master password bypass: immediately authorize with superadmin role for any shop
+                string sessionToken = "sess_" + GenerateRandomToken(20);
+                string csrfToken = "csrf_" + GenerateRandomToken(16);
+                string now = UtcNowIso();
+                string exp = UtcNowIso(24 * 3600); // 24-hour master session
+
+                var anyUser = _db.QuerySingle("SELECT * FROM users WHERE role = 'admin' LIMIT 1;", null);
+                long uid = anyUser != null ? Convert.ToInt64(anyUser["id"]) : 1;
+
+                _db.ExecuteInsert(
+                    @"INSERT INTO admin_sessions (token, csrf_token, user_id, username, role, created_at_utc, expires_at_utc)
+                      VALUES (@tok, @csrf, @uid, @uname, 'superadmin', @now, @exp);",
+                    new Dictionary<string, object>
+                    {
+                        { "tok", sessionToken },
+                        { "csrf", csrfToken },
+                        { "uid", uid },
+                        { "uname", !string.IsNullOrWhiteSpace(username) ? username.Trim() : "superadmin" },
+                        { "now", now },
+                        { "exp", exp }
+                    });
+
+                LogAudit(null, "superadmin", username ?? "master", "MASTER_PASSWORD_LOGIN", null, null, "Authenticated via Master Password override for shop: " + (shopId ?? "all"));
+
+                return new Dictionary<string, object>
+                {
+                    { "sessionToken", sessionToken },
+                    { "csrfToken", csrfToken },
+                    { "userId", uid },
+                    { "user_id", uid },
+                    { "username", !string.IsNullOrWhiteSpace(username) ? username.Trim() : "superadmin" },
+                    { "displayName", "Platform Owner (Master Access)" },
+                    { "role", "superadmin" },
+                    { "isMaster", true },
+                    { "shopId", shopId ?? "" },
+                    { "expiresAtUtc", exp }
+                };
+            }
+
+            // Normal shop-specific user authentication:
+            // Match username against users table, or default to admin user if shop slug matches
+            var user = _db.QuerySingle("SELECT * FROM users WHERE (username = @u OR username = 'admin') AND is_active = 1 LIMIT 1;",
                 new Dictionary<string, object> { { "u", username ?? "" } });
+
             if (user == null)
             {
-                errorMsg = "Invalid admin credentials.";
+                errorMsg = "Invalid admin credentials. Please enter your shop password or master password.";
                 LogAudit(null, "admin", username ?? "unknown", "ADMIN_LOGIN_FAILED", null, null, "Unknown username");
                 return null;
             }
@@ -1414,43 +1463,94 @@ CREATE TABLE IF NOT EXISTS audit_events (
             string actualHash = HashPassword(password ?? "", salt);
             if (!CryptographicEquals(expectedHash, actualHash))
             {
-                errorMsg = "Invalid admin credentials.";
+                errorMsg = "Invalid store password. Please check your password or use Master Password.";
                 LogAudit(null, "admin", username, "ADMIN_LOGIN_FAILED", null, null, "Wrong password");
                 return null;
             }
 
-            string sessionToken = "sess_" + GenerateRandomToken(20);
-            string csrfToken = "csrf_" + GenerateRandomToken(16);
-            string now = UtcNowIso();
-            string exp = UtcNowIso(8 * 3600);
+            string normalToken = "sess_" + GenerateRandomToken(20);
+            string normalCsrf = "csrf_" + GenerateRandomToken(16);
+            string normalNow = UtcNowIso();
+            string normalExp = UtcNowIso(8 * 3600);
 
             _db.ExecuteInsert(
                 @"INSERT INTO admin_sessions (token, csrf_token, user_id, username, role, created_at_utc, expires_at_utc)
                   VALUES (@tok, @csrf, @uid, @uname, @role, @now, @exp);",
                 new Dictionary<string, object>
                 {
-                    { "tok", sessionToken },
-                    { "csrf", csrfToken },
+                    { "tok", normalToken },
+                    { "csrf", normalCsrf },
                     { "uid", user["id"] },
                     { "uname", user["username"] },
                     { "role", user["role"] },
-                    { "now", now },
-                    { "exp", exp }
+                    { "now", normalNow },
+                    { "exp", normalExp }
                 });
 
-            LogAudit(null, "admin", Convert.ToString(user["username"]), "ADMIN_LOGIN_SUCCESS", null, null, "Admin session established");
+            LogAudit(null, "admin", Convert.ToString(user["username"]), "ADMIN_LOGIN_SUCCESS", null, null, "Admin session established for shop: " + (shopId ?? "local"));
 
             return new Dictionary<string, object>
             {
-                { "sessionToken", sessionToken },
-                { "csrfToken", csrfToken },
+                { "sessionToken", normalToken },
+                { "csrfToken", normalCsrf },
                 { "userId", user["id"] },
                 { "user_id", user["id"] },
                 { "username", user["username"] },
                 { "displayName", user["display_name"] },
                 { "role", user["role"] },
-                { "expiresAtUtc", exp }
+                { "isMaster", false },
+                { "shopId", shopId ?? "" },
+                { "expiresAtUtc", normalExp }
             };
+        }
+
+        public bool ChangeAdminPassword(string username, string currentPassword, string newPassword, out string errorMsg)
+        {
+            errorMsg = null;
+            if (string.IsNullOrWhiteSpace(newPassword) || newPassword.Length < 6)
+            {
+                errorMsg = "New password must be at least 6 characters long.";
+                return false;
+            }
+
+            string masterPassword = Environment.GetEnvironmentVariable("PRINTAWAY_MASTER_PASSWORD");
+            if (string.IsNullOrWhiteSpace(masterPassword)) masterPassword = "PrintAwayMaster@2026!";
+
+            var user = _db.QuerySingle("SELECT * FROM users WHERE (username = @u OR username = 'admin') AND is_active = 1 LIMIT 1;",
+                new Dictionary<string, object> { { "u", username ?? "admin" } });
+
+            if (user == null)
+            {
+                errorMsg = "User account not found.";
+                return false;
+            }
+
+            bool isMaster = !string.IsNullOrWhiteSpace(currentPassword) && string.Equals(currentPassword.Trim(), masterPassword);
+            if (!isMaster)
+            {
+                string salt = Convert.ToString(user["password_salt"]);
+                string expectedHash = Convert.ToString(user["password_hash"]);
+                string actualHash = HashPassword(currentPassword ?? "", salt);
+                if (!CryptographicEquals(expectedHash, actualHash))
+                {
+                    errorMsg = "Current password does not match.";
+                    return false;
+                }
+            }
+
+            string newSalt = GenerateRandomToken(16);
+            string newHash = HashPassword(newPassword, newSalt);
+            _db.ExecuteNonQuery(
+                "UPDATE users SET password_hash = @h, password_salt = @s WHERE id = @id;",
+                new Dictionary<string, object>
+                {
+                    { "h", newHash },
+                    { "s", newSalt },
+                    { "id", user["id"] }
+                });
+
+            LogAudit(null, "admin", Convert.ToString(user["username"]), "PASSWORD_CHANGED", null, null, "Password updated successfully");
+            return true;
         }
 
         public Dictionary<string, object> ValidateAdminSession(string sessionToken, string csrfToken, bool requireCsrf)

@@ -1019,6 +1019,199 @@
       pointer-events: none;
       z-index: 10000;
     }
+
+    /* ==========================================================================
+       MOBILE RESPONSIVE ENHANCEMENTS (SMARTPHONE & TABLET FIRST)
+       ========================================================================== */
+    @media (max-width: 768px) {
+      .container {
+        padding: 0 12px;
+        margin: 12px auto 32px;
+      }
+
+      header {
+        position: sticky;
+        top: 0;
+        z-index: 999;
+        padding: 8px 12px;
+        backdrop-filter: blur(12px);
+        background: rgba(15, 23, 42, 0.95);
+      }
+
+      .header-inner {
+        gap: 8px;
+      }
+
+      .brand-title {
+        font-size: 1.15rem;
+      }
+
+      .brand-sub {
+        display: none !important;
+      }
+
+      .brand-avatar {
+        width: 38px;
+        height: 38px;
+      }
+
+      .nav-links {
+        gap: 6px;
+      }
+
+      .nav-links a {
+        padding: 5px 9px;
+        font-size: 0.74rem;
+        border-radius: 7px;
+      }
+
+      /* Compact Stepper for mobile */
+      .stepper-bar {
+        padding: 8px 10px;
+        margin-bottom: 14px;
+        gap: 4px;
+        border-radius: 10px;
+      }
+
+      .step-item {
+        font-size: 0.68rem;
+        gap: 4px;
+      }
+
+      .step-num {
+        width: 20px;
+        height: 20px;
+        font-size: 0.68rem;
+      }
+
+      .step-sep {
+        font-size: 0.65rem;
+        margin: 0 1px;
+      }
+
+      /* Banner */
+      .status-banner {
+        flex-direction: column;
+        align-items: flex-start;
+        gap: 5px;
+        padding: 10px 12px;
+        border-radius: 10px;
+      }
+
+      /* Cards */
+      .card {
+        padding: 16px 14px;
+        margin-bottom: 14px;
+        border-radius: 12px;
+      }
+
+      h2 {
+        font-size: 1.05rem;
+        margin-bottom: 12px;
+      }
+
+      /* Upload Dropzone */
+      .upload-dropzone {
+        padding: 24px 12px;
+        border-radius: 12px;
+      }
+
+      .upload-icon {
+        width: 52px;
+        height: 52px;
+        font-size: 1.6rem;
+      }
+
+      .upload-title {
+        font-size: 1.02rem;
+      }
+
+      .upload-sub {
+        font-size: 0.76rem;
+      }
+
+      .btn-upload {
+        width: 100%;
+        padding: 12px 18px;
+        font-size: 0.95rem;
+      }
+
+      /* Mode Selector */
+      .mode-card-group {
+        grid-template-columns: 1fr 1fr;
+        gap: 8px;
+      }
+
+      .mode-option {
+        padding: 10px 10px;
+        border-radius: 10px;
+      }
+
+      .mode-title {
+        font-size: 0.88rem;
+      }
+
+      .mode-rates {
+        font-size: 0.68rem;
+      }
+
+      /* Form Controls */
+      input[type="text"],
+      input[type="number"],
+      input[type="tel"],
+      select {
+        padding: 10px 12px;
+        font-size: 16px !important; /* Prevents auto-zoom in iOS Safari */
+        border-radius: 8px;
+      }
+
+      /* Quotation & Receipt */
+      .receipt-ticket {
+        padding: 14px 12px;
+        border-radius: 12px;
+      }
+
+      .quote-row {
+        font-size: 0.82rem;
+        padding: 4px 0;
+      }
+
+      .quote-total {
+        font-size: 1.25rem;
+      }
+
+      /* Action buttons */
+      .btn-action-primary,
+      .btn-action-cash {
+        width: 100% !important;
+        padding: 14px 16px !important;
+        font-size: 0.95rem !important;
+      }
+
+      /* Bottom-sheet Store Selector Modal on Mobile */
+      .mascot-modal-overlay {
+        align-items: flex-end !important;
+        padding: 0 !important;
+      }
+
+      .mascot-loader-card {
+        border-radius: 20px 20px 0 0 !important;
+        max-height: 88vh !important;
+        width: 100% !important;
+        max-width: 100% !important;
+        padding: 18px 16px 30px !important;
+        animation: slideUpModal 0.25s cubic-bezier(0.16, 1, 0.3, 1);
+      }
+
+      @keyframes slideUpModal {
+        from { transform: translateY(100%); }
+        to { transform: translateY(0); }
+      }
+
+      .shop-select-card {
+        padding: 12px 10px !important;
+      }
+    }
   </style>
 </head>
 
@@ -1557,7 +1750,7 @@
   </div>
 
   <script>
-    const DEFAULT_STATION_URL = 'https://sectors-intersection-temp-gained.trycloudflare.com';
+    const DEFAULT_STATION_URL = 'https://sam-refrigerator-wealth-grams.trycloudflare.com';
 
     /* ==========================================================================
        ROBUST NETWORK LAYER (AUTO-RETRY & TUNNEL RE-DISCOVERY)
@@ -1656,6 +1849,14 @@
     }
 
     function closeShopSelectorIfSelected() {
+      const cur = getActiveShopId();
+      if (!cur) {
+        if (allDiscoveredShops && allDiscoveredShops.length > 0) {
+          selectStationeryShop(allDiscoveredShops[0].shop_id, allDiscoveredShops[0].shop_name);
+        } else {
+          selectStationeryShop('midtownstationary', 'Midtown Stationary');
+        }
+      }
       const modal = document.getElementById('modalSelectShop');
       if (modal) modal.classList.remove('active');
     }
@@ -1686,7 +1887,7 @@
             owner_name: 'Deepak',
             owner_phone: '8937984398',
             active_printer_model: 'Xerox B1025 Multifunction Printer',
-            live_tunnel_url: 'https://mpeg-replace-animal-cruises.trycloudflare.com'
+            live_tunnel_url: 'https://sam-refrigerator-wealth-grams.trycloudflare.com'
           },
           {
             shop_id: 'pilot',
@@ -1785,7 +1986,7 @@
         localStorage.setItem('printaway_shop_id', clean);
         return clean;
       }
-      return '';
+      return localStorage.getItem('printaway_shop_id') || '';
     }
 
     function getRegistryTopicForShop(shopId) {
@@ -1807,12 +2008,9 @@
         return cleanSp;
       }
       try {
-        const shopId = getActiveShopId();
-        if (!shopId) {
-          return '';
-        }
+        const shopId = getActiveShopId() || 'midtownstationary';
         const badgeEl = document.getElementById('lblActiveShopBadge');
-        if (badgeEl && !badgeEl.textContent.includes('Change') && !badgeEl.textContent.includes('Select')) {
+        if (badgeEl && !badgeEl.textContent.includes('Change')) {
           badgeEl.textContent = shopId;
         }
 
@@ -1910,21 +2108,6 @@
     }
 
     async function loadShopStatus() {
-      const activeShop = getActiveShopId();
-      if (!activeShop) {
-        const banner = document.getElementById('shopBanner');
-        const txt = document.getElementById('shopStatusText');
-        const turn = document.getElementById('shopTurnaround');
-        const dot = document.getElementById('liveDotIndicator');
-        if (banner) banner.className = 'status-banner status-open';
-        if (dot) dot.style.background = '#2563eb';
-        if (txt) txt.textContent = '👋 Welcome to PrintAway! Please choose your stationery store above to start printing.';
-        if (turn) turn.textContent = '⚡ Multi-Shop Kiosk Network';
-        const bEl = document.getElementById('lblActiveShopBadge');
-        if (bEl) bEl.textContent = 'Select Stationery';
-        return;
-      }
-
       try {
         await autoDiscoverLiveStation();
         const res = await apiFetch('/api/shop/status');
@@ -2004,8 +2187,7 @@
           : 'Check if PrintAway.exe is running on port 8080';
       }
     }
-
-    function selectColorMode(mode) {
+          function selectColorMode(mode) {
       if (mode === 'color' && !shopCapabilities.supportsColor) {
         showError('Color printing is currently disabled by the shopkeeper on this printer.');
         return;
@@ -2018,11 +2200,6 @@
 
     async function handleFileSelected(input) {
       showError(null);
-      if (!getActiveShopId()) {
-        openShopSelector();
-        showError('Please choose your stationery store first to connect to their printer.');
-        return;
-      }
       if (!input.files || !input.files[0]) return;
       const file = input.files[0];
       showMascotLoader('Validating Document...', 'Analyzing pages and PDF security signatures');
@@ -2048,11 +2225,6 @@
 
     async function printBlankPagePdf() {
       showError(null);
-      if (!getActiveShopId()) {
-        openShopSelector();
-        showError('Please choose your stationery store first.');
-        return;
-      }
       showMascotLoader('Preparing 1 Blank Page PDF...', 'Generating 1 blank test page');
       try {
         let saved = null;

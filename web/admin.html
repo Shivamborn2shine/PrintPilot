@@ -2,8 +2,8 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>PrintAway Staff Admin Dashboard</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+  <title>PrintAway Counter Admin &amp; Hardware Hub</title>
   <link rel="icon" type="image/svg+xml" href="/assets/favicon.svg" />
   <link rel="apple-touch-icon" href="/assets/logo.png" />
   <script src="https://checkout.razorpay.com/v1/checkout.js"></script>
@@ -18,9 +18,14 @@
       --muted: #475569;
       --border: #cbd5e1;
       --primary: #1d4ed8;
+      --primary-hover: #1e40af;
       --success: #15803d;
       --warn: #b45309;
       --danger: #b91c1c;
+      --cash-bg: #fef9c3;
+      --cash-border: #eab308;
+      --online-bg: #fefce8;
+      --online-border: #facc15;
     }
     * { box-sizing: border-box; margin: 0; padding: 0; }
     body {
@@ -29,28 +34,91 @@
       color: var(--text);
       line-height: 1.45;
       padding-bottom: 48px;
+      -webkit-font-smoothing: antialiased;
     }
     header {
       background: #0f172a;
       color: #fff;
-      padding: 14px 24px;
+      padding: 12px 20px;
       border-bottom: 3px solid #3b82f6;
       display: flex;
       justify-content: space-between;
       align-items: center;
       flex-wrap: wrap;
       gap: 10px;
+      position: sticky;
+      top: 0;
+      z-index: 100;
+      box-shadow: 0 4px 12px rgba(15, 23, 42, 0.15);
     }
-    .brand { font-size: 1.25rem; font-weight: 800; }
-    .brand span { color: #60a5fa; }
-    .container { max-width: 1280px; margin: 20px auto; padding: 0 16px; }
+    .brand-wrap { display: flex; align-items: center; gap: 10px; }
+    .brand-logo { width: 36px; height: 36px; border-radius: 50%; background: #F59E0B; padding: 2px; }
+    .brand-title { font-size: 1.15rem; font-weight: 800; letter-spacing: -0.02em; }
+    .brand-title span { color: #60a5fa; }
+    .brand-subtitle { font-size: 0.75rem; color: #94a3b8; font-weight: 500; }
+    .container { max-width: 1280px; margin: 18px auto; padding: 0 16px; }
     .card {
       background: var(--card);
       border: 1px solid var(--border);
-      border-radius: 10px;
+      border-radius: 12px;
       padding: 18px;
       margin-bottom: 16px;
+      box-shadow: 0 1px 3px rgba(0,0,0,0.03);
     }
+
+    /* Admin Navigation Tabs */
+    .admin-nav-bar {
+      display: flex;
+      gap: 8px;
+      overflow-x: auto;
+      -webkit-overflow-scrolling: touch;
+      padding: 4px 2px 14px 2px;
+      margin-bottom: 16px;
+      border-bottom: 2px solid #e2e8f0;
+      scrollbar-width: none;
+    }
+    .admin-nav-bar::-webkit-scrollbar { display: none; }
+    .nav-tab-btn {
+      background: #ffffff;
+      border: 1.5px solid #cbd5e1;
+      color: #334155;
+      padding: 8px 16px;
+      border-radius: 999px;
+      font-size: 0.85rem;
+      font-weight: 700;
+      cursor: pointer;
+      white-space: nowrap;
+      display: inline-flex;
+      align-items: center;
+      gap: 7px;
+      transition: all 0.15s ease-in-out;
+      flex-shrink: 0;
+    }
+    .nav-tab-btn:hover {
+      border-color: #94a3b8;
+      background: #f8fafc;
+    }
+    .nav-tab-btn.active {
+      background: #1d4ed8;
+      color: #ffffff;
+      border-color: #1d4ed8;
+      box-shadow: 0 3px 10px rgba(29, 78, 216, 0.25);
+    }
+    .nav-tab-badge {
+      background: #ef4444;
+      color: #ffffff;
+      font-size: 0.7rem;
+      font-weight: 800;
+      padding: 2px 7px;
+      border-radius: 999px;
+      line-height: 1;
+    }
+    .nav-tab-btn.active .nav-tab-badge {
+      background: #ffffff;
+      color: #1d4ed8;
+    }
+
+    /* KPI Grid */
     .kpi-grid {
       display: grid;
       grid-template-columns: repeat(auto-fit, minmax(165px, 1fr));
@@ -63,40 +131,58 @@
       border-radius: 10px;
       padding: 14px;
     }
-    .kpi-label { font-size: 0.78rem; color: var(--muted); font-weight: 600; text-transform: uppercase; }
-    .kpi-val { font-size: 1.55rem; font-weight: 800; margin-top: 4px; }
+    .kpi-label { font-size: 0.75rem; color: var(--muted); font-weight: 700; text-transform: uppercase; letter-spacing: 0.03em; }
+    .kpi-val { font-size: 1.5rem; font-weight: 800; margin-top: 4px; color: #0f172a; }
+
+    /* Buttons */
     .btn {
       background: var(--primary);
       color: #fff;
       border: none;
-      padding: 7px 13px;
-      border-radius: 6px;
-      font-weight: 600;
-      font-size: 0.83rem;
+      padding: 8px 14px;
+      border-radius: 7px;
+      font-weight: 700;
+      font-size: 0.84rem;
       cursor: pointer;
       display: inline-flex;
       align-items: center;
       justify-content: center;
-      gap: 4px;
+      gap: 5px;
+      text-decoration: none;
+      transition: background 0.15s ease;
     }
+    .btn:hover { opacity: 0.95; }
     .btn-success { background: var(--success); }
     .btn-warn { background: var(--warn); }
     .btn-danger { background: var(--danger); }
     .btn-secondary { background: #e2e8f0; color: #0f172a; }
+    .btn-secondary:hover { background: #cbd5e1; }
+
     input, select {
-      padding: 7px 10px;
-      border: 1px solid #cbd5e1;
-      border-radius: 6px;
+      padding: 8px 11px;
+      border: 1.5px solid #cbd5e1;
+      border-radius: 7px;
       font-size: 0.88rem;
+      font-family: inherit;
+      background: #ffffff;
+      color: #0f172a;
     }
-    table { width: 100%; border-collapse: collapse; font-size: 0.85rem; }
+    input:focus, select:focus {
+      outline: none;
+      border-color: #2563eb;
+      box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.15);
+    }
+
+    table { width: 100%; border-collapse: collapse; font-size: 0.84rem; }
     th, td { padding: 10px 8px; border-bottom: 1px solid #e2e8f0; text-align: left; vertical-align: top; }
     th { background: #f8fafc; font-weight: 700; color: var(--muted); }
+
+    /* Badges */
     .badge {
       display: inline-block;
       padding: 3px 8px;
       border-radius: 999px;
-      font-size: 0.75rem;
+      font-size: 0.72rem;
       font-weight: 700;
       background: #e2e8f0;
     }
@@ -106,76 +192,21 @@
     .badge-danger { background: #fee2e2; color: #991b1b; }
     .badge-color { background: #fce7f3; color: #be185d; border: 1px solid #f472b6; }
     .badge-bw { background: #f1f5f9; color: #334155; border: 1px solid #cbd5e1; }
+
     .hidden { display: none !important; }
-    .grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+    .grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
     .grid-3 { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 12px; }
-    @media (max-width: 860px) { .grid-2, .grid-3 { grid-template-columns: 1fr; } }
-    .alert { padding: 10px 14px; border-radius: 8px; margin-bottom: 12px; font-size: 0.88rem; }
-    .alert-error { background: #fee2e2; color: #991b1b; }
-    .alert-ok { background: #dcfce7; color: #166534; }
 
-    /* ORDER CATEGORY ROW STRIPS */
-    .row-category-cash {
-      background-color: #fef9c3 !important;
-    }
-    .row-category-cash > td {
-      background-color: #fef9c3 !important;
-    }
-    .row-category-cash > td:first-child {
-      border-left: 6px solid #f59e0b !important;
-    }
+    .alert { padding: 11px 15px; border-radius: 8px; margin-bottom: 14px; font-size: 0.88rem; font-weight: 600; }
+    .alert-error { background: #fee2e2; color: #991b1b; border: 1px solid #fca5a5; }
+    .alert-ok { background: #dcfce7; color: #166534; border: 1px solid #86efac; }
 
-    .row-category-online {
-      background-color: #fefce8 !important;
-    }
-    .row-category-online > td {
-      background-color: #fefce8 !important;
-    }
-    .row-category-online > td:first-child {
-      border-left: 6px solid #eab308 !important;
-    }
-
-    .row-category-printing {
-      background-color: #eff6ff !important;
-    }
-    .row-category-printing > td {
-      background-color: #eff6ff !important;
-    }
-    .row-category-printing > td:first-child {
-      border-left: 6px solid #3b82f6 !important;
-    }
-
-    .row-category-ready {
-      background-color: #f0fdf4 !important;
-    }
-    .row-category-ready > td {
-      background-color: #f0fdf4 !important;
-    }
-    .row-category-ready > td:first-child {
-      border-left: 6px solid #10b981 !important;
-    }
-
-    .row-category-collected {
-      background-color: #fafaf9 !important;
-      opacity: 0.88;
-    }
-    .row-category-collected > td:first-child {
-      border-left: 4px solid #cbd5e1 !important;
-    }
-
-    .row-category-danger {
-      background-color: #fef2f2 !important;
-    }
-    .row-category-danger > td {
-      background-color: #fef2f2 !important;
-    }
-    .row-category-danger > td:first-child {
-      border-left: 6px solid #ef4444 !important;
-    }
+    /* Modal Backdrop */
     .modal-backdrop {
       position: fixed;
       top: 0; left: 0; right: 0; bottom: 0;
-      background: rgba(15, 23, 42, 0.6);
+      background: rgba(15, 23, 42, 0.65);
+      backdrop-filter: blur(4px);
       display: flex;
       align-items: center;
       justify-content: center;
@@ -184,30 +215,199 @@
     }
     .modal-card {
       background: #fff;
-      border-radius: 12px;
+      border-radius: 14px;
       width: 100%;
-      max-width: 540px;
+      max-width: 520px;
       padding: 22px;
-      box-shadow: 0 10px 25px rgba(0,0,0,0.2);
+      box-shadow: 0 20px 25px -5px rgba(0,0,0,0.25);
+    }
+
+    /* Mobile Orders Cards View */
+    .mobile-orders-wrap { display: none; }
+    .desktop-table-wrap { display: block; }
+
+    .mobile-order-card {
+      background: #ffffff;
+      border: 1px solid #cbd5e1;
+      border-radius: 12px;
+      padding: 14px;
+      box-shadow: 0 2px 6px rgba(0,0,0,0.04);
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+      position: relative;
+    }
+    .moc-top {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      gap: 6px;
+    }
+    .moc-code-wrap {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+    .moc-code {
+      font-size: 1.05rem;
+      font-weight: 800;
+      color: #0f172a;
+    }
+    .moc-shop-badge {
+      background: #f1f5f9;
+      color: #475569;
+      font-size: 0.68rem;
+      font-weight: 700;
+      padding: 2px 6px;
+      border-radius: 6px;
+    }
+    .moc-time {
+      font-size: 0.74rem;
+      color: #64748b;
+      margin-top: -3px;
+    }
+    .moc-customer {
+      font-size: 0.86rem;
+      color: #0f172a;
+      border-bottom: 1px dashed #e2e8f0;
+      padding-bottom: 6px;
+    }
+    .moc-file {
+      display: block;
+      font-size: 0.78rem;
+      color: #475569;
+      word-break: break-all;
+      margin-top: 2px;
+    }
+    .moc-spec {
+      font-size: 0.82rem;
+      color: #1e293b;
+      line-height: 1.4;
+      background: rgba(255, 255, 255, 0.7);
+      padding: 8px 10px;
+      border-radius: 8px;
+      border: 1px solid rgba(0, 0, 0, 0.05);
+    }
+    .moc-pages {
+      font-size: 0.78rem;
+      color: #475569;
+      margin-top: 2px;
+    }
+    .moc-cost {
+      font-size: 0.84rem;
+      margin-top: 3px;
+    }
+    .moc-amount {
+      color: #1d4ed8;
+      font-size: 1.05rem;
+      font-weight: 800;
+    }
+    .moc-queue {
+      font-size: 0.75rem;
+      color: #334155;
+      margin-top: 3px;
+    }
+    .moc-payment {
+      margin-top: 2px;
+    }
+    .moc-pay-id {
+      font-size: 0.72rem;
+      color: #64748b;
+      font-family: monospace;
+      word-break: break-all;
+      margin-top: 2px;
+    }
+    .moc-spooler {
+      font-size: 0.75rem;
+      color: #1e40af;
+      font-weight: 700;
+    }
+    .moc-reject-reason {
+      font-size: 0.75rem;
+      color: #b91c1c;
+      background: #fee2e2;
+      padding: 4px 8px;
+      border-radius: 6px;
+    }
+    .moc-actions {
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+      margin-top: 6px;
+      border-top: 1px solid rgba(0,0,0,0.06);
+      padding-top: 8px;
+    }
+    .moc-actions .btn {
+      width: 100%;
+      min-height: 42px;
+      font-size: 0.88rem;
+      font-weight: 700;
+      border-radius: 8px;
+    }
+
+    /* Mobile Media Queries */
+    @media (max-width: 768px) {
+      header {
+        padding: 10px 14px;
+      }
+      .brand-title {
+        font-size: 1rem;
+      }
+      .brand-subtitle {
+        display: none;
+      }
+      .desktop-table-wrap {
+        display: none;
+      }
+      .mobile-orders-wrap {
+        display: flex;
+        flex-direction: column;
+        gap: 12px;
+      }
+      .container {
+        padding: 0 10px;
+        margin: 10px auto;
+      }
+      .card {
+        padding: 14px;
+        border-radius: 10px;
+      }
+      .kpi-grid {
+        grid-template-columns: repeat(2, 1fr);
+        gap: 8px;
+      }
+      .kpi-box {
+        padding: 10px;
+      }
+      .kpi-val {
+        font-size: 1.35rem;
+      }
+      .grid-2, .grid-3 {
+        grid-template-columns: 1fr;
+      }
+      input, select, button {
+        font-size: 16px !important;
+      }
     }
   </style>
 </head>
 <body>
   <header>
-    <div style="display:flex;align-items:center;gap:12px;">
+    <div class="brand-wrap">
       <a href="/" style="text-decoration:none;display:flex;align-items:center;">
-        <img src="/assets/logo.png" style="width:38px;height:38px;border-radius:50%;background:#F59E0B;padding:2px;box-shadow:0 0 10px rgba(245,158,11,0.35);" alt="Logo" onerror="this.src='/assets/logo.svg'" />
+        <img src="/assets/logo.png" class="brand-logo" alt="Logo" onerror="this.src='/assets/logo.svg'" />
       </a>
       <div>
-        <div class="brand">Print<span>Away</span> — Staff Admin &amp; Controls</div>
-        <div style="font-size:0.8rem;color:#cbd5e1;">Active Windows Queue: <strong id="lblActiveQueueTop">Xerox B1025 Multifunction Printer PCL6 (USB001)</strong></div>
+        <div class="brand-title">Print<span>Away</span> Counter Admin</div>
+        <div class="brand-subtitle">Queue: <strong id="lblActiveQueueTop">Xerox B1025 Multifunction Printer (USB001)</strong></div>
       </div>
     </div>
-    <div style="display:flex;gap:10px;align-items:center;">
-      <a href="/" style="color:#93c5fd;text-decoration:none;font-size:0.85rem;font-weight:600;">&larr; Customer Portal</a>
-      <a href="#" onclick="switchShopPrompt(); return false;" style="color:#a7f3d0;text-decoration:none;font-size:0.85rem;font-weight:600;border:1px solid #059669;padding:4px 8px;border-radius:6px;">🏪 Shop: <span id="lblAdminShopBadge">pilot</span></a>
-      <a href="#" onclick="configureStationUrl(); return false;" style="color:#38bdf8;text-decoration:none;font-size:0.85rem;font-weight:600;border:1px solid #0284c7;padding:4px 8px;border-radius:6px;">⚙️ Station URL</a>
-      <button id="btnRefreshTop" class="btn btn-secondary hidden" onclick="loadDashboard()">Refresh Now</button>
+    <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;">
+      <a href="/" style="color:#93c5fd;text-decoration:none;font-size:0.82rem;font-weight:600;">&larr; Customer Portal</a>
+      <a href="#" onclick="switchShopPrompt(); return false;" style="color:#a7f3d0;text-decoration:none;font-size:0.82rem;font-weight:600;border:1px solid #059669;padding:4px 8px;border-radius:6px;">🏪 <span id="lblAdminShopBadge">midtownstationary</span></a>
+      <a href="#" onclick="configureStationUrl(); return false;" style="color:#38bdf8;text-decoration:none;font-size:0.82rem;font-weight:600;border:1px solid #0284c7;padding:4px 8px;border-radius:6px;">⚙️ Tunnel</a>
+      <button id="btnRefreshTop" class="btn btn-secondary hidden" style="padding:4px 9px;font-size:0.78rem;" onclick="loadDashboard()">↻ Refresh</button>
+      <button id="btnLogoutTop" class="btn btn-danger hidden" style="padding:4px 9px;font-size:0.78rem;" onclick="doAdminLogout()">Sign Out</button>
     </div>
   </header>
 
@@ -215,385 +415,499 @@
     <div id="adminMsg" class="alert hidden"></div>
 
     <!-- Admin Login Card -->
-    <div id="loginCard" class="card" style="max-width:440px;margin:40px auto;">
-      <h2 style="margin-bottom:12px;">Staff Admin Sign-In</h2>
-      <p style="font-size:0.85rem;color:var(--muted);margin-bottom:14px;">
-        Authorized staff approval is mandatory before any paid order is dispatched to the Xerox B1025 printer.
-      </p>
-      <div style="margin-bottom:10px;">
-        <label style="display:block;font-size:0.82rem;font-weight:600;margin-bottom:4px;">Username</label>
-        <input type="text" id="loginUser" placeholder="Enter username" autocomplete="username" style="width:100%;" />
+    <div id="loginCard" class="card" style="max-width:440px;margin:30px auto;border-radius:14px;box-shadow:0 8px 24px rgba(15,23,42,0.08);">
+      <div style="text-align:center;margin-bottom:18px;">
+        <div style="width:52px;height:52px;border-radius:50%;background:#fef3c7;display:inline-flex;align-items:center;justify-content:center;font-size:1.6rem;margin-bottom:8px;box-shadow:0 4px 12px rgba(245,158,11,0.25);">
+          🏪
+        </div>
+        <h2 style="font-size:1.3rem;font-weight:800;color:#0f172a;margin-bottom:4px;">Station Staff Sign-In</h2>
+        <p style="font-size:0.82rem;color:var(--muted);max-width:340px;margin:0 auto;">
+          Select your stationery store and sign in with your counter password or platform Master Password.
+        </p>
       </div>
-      <div style="margin-bottom:14px;">
-        <label style="display:block;font-size:0.82rem;font-weight:600;margin-bottom:4px;">Password</label>
-        <input type="password" id="loginPass" placeholder="Enter password" autocomplete="current-password" style="width:100%;" />
+
+      <!-- Station / Shop Selector -->
+      <div style="margin-bottom:12px;">
+        <label style="display:block;font-size:0.8rem;font-weight:700;color:#334155;margin-bottom:5px;">
+          🏪 Choose Stationery Store
+        </label>
+        <select id="loginShopSelect" onchange="onLoginShopSelected()" style="width:100%;font-size:0.92rem;font-weight:600;padding:9px 12px;border-radius:8px;">
+          <option value="midtownstationary">Midtown Stationary (Xerox B1025)</option>
+          <option value="pilot">PrintAway Pilot Shop</option>
+          <option value="campus-xerox">Campus Central Stationary</option>
+          <option value="__custom__">✏️ Enter Other Shop ID / Code...</option>
+        </select>
       </div>
-      <button class="btn" style="width:100%;padding:10px;" onclick="doAdminLogin()">Sign In to Admin Dashboard</button>
+
+      <!-- Custom Shop ID Field (revealed if chosen) -->
+      <div id="wrapCustomShopId" class="hidden" style="margin-bottom:12px;">
+        <label style="display:block;font-size:0.78rem;font-weight:600;color:#475569;margin-bottom:4px;">Custom Shop Slug / ID</label>
+        <input type="text" id="loginCustomShopId" placeholder="e.g. shop-02, north-counter" style="width:100%;" oninput="onCustomShopInput(this.value)" />
+      </div>
+
+      <div style="margin-bottom:12px;">
+        <label style="display:block;font-size:0.8rem;font-weight:700;color:#334155;margin-bottom:5px;">Staff Username</label>
+        <input type="text" id="loginUser" value="midtownstationary" placeholder="Enter username (or shop ID)" autocomplete="username" style="width:100%;" />
+      </div>
+
+      <div style="margin-bottom:16px;">
+        <label style="display:block;font-size:0.8rem;font-weight:700;color:#334155;margin-bottom:5px;">Password</label>
+        <input type="password" id="loginPass" placeholder="Enter counter password or Master Password" autocomplete="current-password" style="width:100%;" />
+        <div style="font-size:0.74rem;color:#64748b;margin-top:6px;line-height:1.4;display:flex;align-items:flex-start;gap:6px;">
+          <span>🔑</span>
+          <span><strong>Master Password Supported:</strong> Platform Superadmin can access and configure any station dashboard anytime with the master password.</span>
+        </div>
+      </div>
+
+      <button class="btn" id="btnAdminSignIn" style="width:100%;padding:11px;font-size:0.92rem;font-weight:700;border-radius:8px;" onclick="doAdminLogin()">
+        Sign In to Admin Dashboard &rarr;
+      </button>
     </div>
 
     <!-- Authenticated Dashboard Content -->
     <div id="dashboardContent" class="hidden">
+      <!-- Navigation Tabs -->
+      <nav class="admin-nav-bar">
+        <button class="nav-tab-btn active" id="tabBtnOrders" onclick="switchAdminTab('orders')">
+          <span>📋 Live Orders</span>
+          <span class="nav-tab-badge" id="tabBadgeOrders">0</span>
+        </button>
+        <button class="nav-tab-btn" id="tabBtnLedger" onclick="switchAdminTab('ledger')">
+          <span>📊 Daily Ledger</span>
+        </button>
+        <button class="nav-tab-btn" id="tabBtnHardware" onclick="switchAdminTab('hardware')">
+          <span>🖨️ Hardware &amp; Rates</span>
+        </button>
+        <button class="nav-tab-btn" id="tabBtnSettings" onclick="switchAdminTab('settings')">
+          <span>⚙️ Store &amp; Tunnel</span>
+        </button>
+      </nav>
+
       <!-- SaaS Freemium Daily Quota Banner -->
-      <div id="saasQuotaBanner" style="background:#f8fafc;border:1px solid #e2e8f0;border-radius:10px;padding:12px 16px;margin-bottom:14px;display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:10px;">
-        <div style="display:flex;align-items:center;gap:12px;">
-          <div style="width:36px;height:36px;border-radius:8px;background:#e0e7ff;color:#4f46e5;display:flex;align-items:center;justify-content:center;font-weight:bold;font-size:1.1rem;">
+      <div id="saasQuotaBanner" style="background:#f8fafc;border:1px solid #e2e8f0;border-radius:10px;padding:10px 14px;margin-bottom:14px;display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:10px;">
+        <div style="display:flex;align-items:center;gap:10px;">
+          <div style="width:32px;height:32px;border-radius:8px;background:#e0e7ff;color:#4f46e5;display:flex;align-items:center;justify-content:center;font-weight:bold;font-size:1rem;">
             📊
           </div>
           <div>
-            <div style="font-weight:700;font-size:0.92rem;display:flex;align-items:center;gap:8px;">
+            <div style="font-weight:700;font-size:0.88rem;display:flex;align-items:center;gap:8px;">
               <span id="saasPlanTitle">Daily Printing Quota: 0 / 10 Pages (Free Tier)</span>
-              <span id="saasTierBadge" style="font-size:0.7rem;padding:2px 8px;border-radius:999px;background:#e0e7ff;color:#4338ca;font-weight:700;">FREE</span>
+              <span id="saasTierBadge" style="font-size:0.68rem;padding:2px 7px;border-radius:999px;background:#e0e7ff;color:#4338ca;font-weight:700;">FREE</span>
             </div>
-            <div style="font-size:0.78rem;color:var(--muted);margin-top:2px;" id="saasQuotaSub">
+            <div style="font-size:0.75rem;color:var(--muted);margin-top:2px;" id="saasQuotaSub">
               Resets every midnight at 00:00 IST. Soft grace buffer active.
             </div>
           </div>
         </div>
-        <div style="display:flex;align-items:center;gap:8px;">
-          <button class="btn" style="background:linear-gradient(135deg,#4f46e5,#7c3aed);color:#fff;font-size:0.8rem;padding:6px 14px;border:none;border-radius:6px;cursor:pointer;font-weight:700;" onclick="openProUpgradeModal()">
+        <div>
+          <button class="btn" style="background:linear-gradient(135deg,#4f46e5,#7c3aed);color:#fff;font-size:0.78rem;padding:5px 12px;border:none;border-radius:6px;cursor:pointer;font-weight:700;" onclick="openProUpgradeModal()">
             ⚡ Upgrade to Pro (₹149/mo)
           </button>
         </div>
       </div>
 
-      <!-- Date Period & Day-Wise Filter Bar -->
-      <div class="card" style="margin-bottom:14px;padding:12px 16px;background:#f8fafc;border:1px solid #e2e8f0;display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:12px;">
-        <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;">
-          <div style="font-size:0.85rem;font-weight:700;color:#0f172a;display:flex;align-items:center;gap:6px;">
-            <i class="fa-solid fa-calendar-day" style="color:var(--primary);"></i>
-            <span>Date Filter (IST):</span>
-          </div>
-          <div style="display:flex;gap:6px;flex-wrap:wrap;" id="periodBtnGroup">
-            <button class="btn btn-primary" id="btnPeriodToday" onclick="setPeriodFilter('today')" style="padding:5px 12px;font-size:0.8rem;">📅 Today</button>
-            <button class="btn btn-secondary" id="btnPeriodYesterday" onclick="setPeriodFilter('yesterday')" style="padding:5px 12px;font-size:0.8rem;">Yesterday</button>
-            <button class="btn btn-secondary" id="btnPeriod7Days" onclick="setPeriodFilter('last7days')" style="padding:5px 12px;font-size:0.8rem;">Last 7 Days</button>
-            <button class="btn btn-secondary" id="btnPeriodAll" onclick="setPeriodFilter('all')" style="padding:5px 12px;font-size:0.8rem;">All Time</button>
-          </div>
-          <div style="display:flex;align-items:center;gap:6px;">
-            <span style="font-size:0.75rem;color:var(--muted);font-weight:600;">Specific:</span>
-            <input type="date" id="inpSpecificDate" onchange="setCustomDateFilter(this.value)" style="padding:4px 8px;font-size:0.8rem;border:1px solid #cbd5e1;border-radius:6px;" />
-          </div>
-        </div>
-
-        <div style="display:flex;align-items:center;gap:8px;">
-          <span class="badge" id="lblPeriodScopeBadge" style="background:#e0e7ff;color:#4338ca;font-weight:700;padding:4px 10px;font-size:0.8rem;">
-            Viewing: Today (IST)
-          </span>
-          <span class="badge" id="lblActiveShopFilterBadge" style="background:#f1f5f9;color:#334155;font-weight:700;padding:4px 10px;font-size:0.8rem;">
-            🏪 Station: <span id="lblActiveShopSlug">pilot</span>
-          </span>
-        </div>
-      </div>
-
-      <!-- KPI Row -->
-      <div class="kpi-grid">
-        <div class="kpi-box" style="border-left:4px solid #f59e0b;">
-          <div class="kpi-label">Awaiting Admin Approval</div>
-          <div class="kpi-val" id="kpiApproval">0</div>
-          <div style="font-size:0.7rem;color:var(--muted);margin-top:2px;" id="kpiSubApproval">For selected period</div>
-        </div>
-        <div class="kpi-box" style="border-left:4px solid #3b82f6;">
-          <div class="kpi-label">Active Print / Spooler</div>
-          <div class="kpi-val" id="kpiActiveQueue">0</div>
-          <div style="font-size:0.7rem;color:var(--muted);margin-top:2px;" id="kpiSubActive">In spooler / printing</div>
-        </div>
-        <div class="kpi-box" style="border-left:4px solid #16a34a;">
-          <div class="kpi-label">Ready for Counter Pickup</div>
-          <div class="kpi-val" id="kpiReady">0</div>
-          <div style="font-size:0.7rem;color:var(--muted);margin-top:2px;" id="kpiSubReady">Printed & awaiting customer</div>
-        </div>
-        <div class="kpi-box">
-          <div class="kpi-label">Collected (PDF Purged)</div>
-          <div class="kpi-val" id="kpiCollected">0</div>
-          <div style="font-size:0.7rem;color:var(--muted);margin-top:2px;" id="kpiSubCollected">Handed over to customer</div>
-        </div>
-        <div class="kpi-box">
-          <div class="kpi-label">Verified Revenue</div>
-          <div class="kpi-val">₹<span id="kpiRevenue">0.00</span></div>
-          <div style="font-size:0.7rem;color:var(--muted);margin-top:2px;" id="kpiSubRevenue">Selected period revenue</div>
-        </div>
-        <div class="kpi-box">
-          <div class="kpi-label">Printed Sides / Sheets</div>
-          <div class="kpi-val"><span id="kpiSides">0</span> / <span id="kpiSheets">0</span></div>
-          <div style="font-size:0.7rem;color:var(--muted);margin-top:2px;" id="kpiSubSides">Sides / Physical paper</div>
-        </div>
-      </div>
-
-      <!-- Day-Wise Counter Breakdown & Historical Audit Card -->
-      <div class="card" style="margin-bottom:16px;">
-        <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:10px;margin-bottom:10px;">
-          <div>
-            <h3 style="font-size:1.05rem;display:flex;align-items:center;gap:6px;">
-              <span>📊 Day-Wise Prints Performance &amp; Counter Ledger</span>
-              <span class="badge" style="background:#e0f2fe;color:#0369a1;font-size:0.72rem;">IST Daily Breakdown</span>
-            </h3>
-            <p style="font-size:0.78rem;color:var(--muted);margin-top:2px;">Individual day records for this shop station. Click "View Day Orders" to inspect past day jobs.</p>
-          </div>
-          <button class="btn btn-secondary" onclick="loadDashboard()" style="font-size:0.78rem;padding:4px 10px;">
-            <i class="fa-solid fa-arrows-rotate"></i> Refresh Ledger
-          </button>
-        </div>
-
-        <div style="overflow-x:auto;">
-          <table style="width:100%;font-size:0.82rem;">
-            <thead>
-              <tr style="background:#f8fafc;">
-                <th>Date (IST)</th>
-                <th>Total Orders</th>
-                <th>Completed / Pending</th>
-                <th>B&amp;W Sides</th>
-                <th>Color Sides</th>
-                <th>Total Sides / Sheets</th>
-                <th>Daily Revenue (₹)</th>
-                <th style="text-align:right;">Action</th>
-              </tr>
-            </thead>
-            <tbody id="dailyBreakdownBody">
-              <tr><td colspan="8" style="text-align:center;color:var(--muted);padding:14px;">Loading day-wise ledger...</td></tr>
-            </tbody>
-          </table>
-        </div>
-      </div>
-
-      <!-- Orders & Approval Queue Card -->
-      <div class="card" id="ordersCard">
-        <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:10px;margin-bottom:12px;">
-          <div>
-            <h3 style="font-size:1.05rem;">Orders &amp; Mandatory Admin Approval Gate</h3>
-            <p style="font-size:0.78rem;color:var(--muted);margin-top:2px;" id="lblOrdersScopeNote">Showing orders matching current filter.</p>
-          </div>
-          <div style="display:flex;gap:8px;flex-wrap:wrap;">
-            <select id="filterState" onchange="loadDashboard()">
-              <option value="all">All Order States</option>
-              <option value="paid_awaiting_approval">Paid — Awaiting Admin Approval</option>
-              <option value="queued">Queued for Worker</option>
-              <option value="submitted_to_spooler">Submitted to Windows Spooler</option>
-              <option value="ready_for_pickup">Ready for Counter Pickup</option>
-              <option value="reconciliation_required">Reconciliation Required</option>
-              <option value="on_hold">On Hold</option>
-              <option value="collected">Collected</option>
-              <option value="refunded">Rejected / Refunded</option>
-            </select>
-            <input type="text" id="searchBox" placeholder="Search Order / Pickup code..." onkeyup="if(event.key==='Enter') loadDashboard()" />
-            <button class="btn btn-secondary" onclick="loadDashboard()">Filter</button>
-          </div>
-        </div>
-
-        <!-- Order Category Legend Bar -->
-        <div style="display:flex;gap:14px;align-items:center;flex-wrap:wrap;margin-bottom:12px;font-size:0.78rem;background:#f8fafc;padding:8px 14px;border-radius:8px;border:1px solid #e2e8f0;">
-          <span style="font-weight:700;color:#334155;">Row Highlights:</span>
-          <span style="display:inline-flex;align-items:center;gap:6px;">
-            <span style="width:14px;height:14px;background:#fef9c3;border:2px solid #eab308;border-radius:3px;"></span>
-            <strong>Cash at Counter</strong> (Collect Cash &amp; Approve)
-          </span>
-          <span style="display:inline-flex;align-items:center;gap:6px;">
-            <span style="width:14px;height:14px;background:#fefce8;border:2px solid #facc15;border-radius:3px;"></span>
-            <strong>Paid Online</strong> (Razorpay Verified — Ready to Approve)
-          </span>
-          <span style="display:inline-flex;align-items:center;gap:6px;">
-            <span style="width:14px;height:14px;background:#eff6ff;border:2px solid #3b82f6;border-radius:3px;"></span>
-            Printing Queue
-          </span>
-          <span style="display:inline-flex;align-items:center;gap:6px;">
-            <span style="width:14px;height:14px;background:#f0fdf4;border:2px solid #22c55e;border-radius:3px;"></span>
-            Ready on Tray
-          </span>
-        </div>
-
-        <div style="overflow-x:auto;">
-          <table>
-            <thead>
-              <tr>
-                <th>Order / Time (IST)</th>
-                <th>Customer &amp; Metadata</th>
-                <th>Print Spec &amp; Layout</th>
-                <th>Payment</th>
-                <th>Current State &amp; Spooler</th>
-                <th>Staff / Admin Actions</th>
-              </tr>
-            </thead>
-            <tbody id="ordersTableBody"></tbody>
-          </table>
-        </div>
-      </div>
-
-      <!-- Hardware Controls & Pricing Configuration Row -->
-      <div class="grid-2">
-        <!-- Printer Hardware & Capability Controls -->
-        <div class="card">
-          <h3 style="font-size:1rem;margin-bottom:10px;">Printer Hardware &amp; Queue Controls</h3>
-
-          <div style="background:#eff6ff;border:1px solid #bfdbfe;border-radius:8px;padding:10px 12px;margin-bottom:12px;display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px;">
+      <!-- ==========================================
+           TAB 1: LIVE ORDERS & APPROVAL GATE
+           ========================================== -->
+      <div id="tabSectionOrders" class="tab-section">
+        <div class="card" id="ordersCard">
+          <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:10px;margin-bottom:12px;">
             <div>
-              <div style="font-size:0.75rem;font-weight:700;color:#1e40af;text-transform:uppercase;">Worker Print Dispatch Mode</div>
-              <div style="font-size:0.92rem;font-weight:800;color:#15803d;" id="lblDispatchModeText">● LIVE PHYSICAL PRINT (Xerox B1025 USB001)</div>
+              <h3 style="font-size:1.05rem;">Orders &amp; Mandatory Admin Approval Gate</h3>
+              <p style="font-size:0.78rem;color:var(--muted);margin-top:2px;" id="lblOrdersScopeNote">Showing orders matching current filter.</p>
             </div>
-            <div style="display:flex;gap:6px;">
-              <button class="btn btn-success" id="btnSetPhysical" onclick="setDispatchMode('physical')">● Live Physical Print</button>
-              <button class="btn btn-secondary" id="btnSetSimulation" onclick="setDispatchMode('simulation')">Simulation Mode</button>
+            <div style="display:flex;gap:8px;flex-wrap:wrap;">
+              <select id="filterState" onchange="loadDashboard()">
+                <option value="all">All Order States</option>
+                <option value="paid_awaiting_approval">Paid — Awaiting Admin Approval</option>
+                <option value="queued">Queued for Worker</option>
+                <option value="submitted_to_spooler">Submitted to Windows Spooler</option>
+                <option value="ready_for_pickup">Ready for Counter Pickup</option>
+                <option value="reconciliation_required">Reconciliation Required</option>
+                <option value="on_hold">On Hold</option>
+                <option value="collected">Collected</option>
+                <option value="refunded">Rejected / Refunded</option>
+              </select>
+              <input type="text" id="searchBox" placeholder="Search Order / File..." onkeyup="if(event.key==='Enter') loadDashboard()" />
+              <button class="btn btn-secondary" onclick="loadDashboard()">Filter</button>
             </div>
           </div>
 
-          <div style="margin-bottom:12px;">
-            <label style="font-size:0.8rem;font-weight:700;">Target Windows Print Queue</label>
-            <div style="display:flex;gap:8px;">
-              <select id="selQueueSwitch" style="flex:1;"></select>
-              <button class="btn btn-secondary" onclick="saveTargetQueueSelection()">Set Primary</button>
+          <!-- Order Category Legend Bar -->
+          <div style="display:flex;gap:14px;align-items:center;flex-wrap:wrap;margin-bottom:12px;font-size:0.78rem;background:#f8fafc;padding:8px 14px;border-radius:8px;border:1px solid #e2e8f0;">
+            <span style="font-weight:700;color:#334155;">Row Highlights:</span>
+            <span style="display:inline-flex;align-items:center;gap:6px;">
+              <span style="width:14px;height:14px;background:#fef9c3;border:2px solid #eab308;border-radius:3px;"></span>
+              <strong>Cash at Counter</strong> (Collect Cash &amp; Approve)
+            </span>
+            <span style="display:inline-flex;align-items:center;gap:6px;">
+              <span style="width:14px;height:14px;background:#fefce8;border:2px solid #facc15;border-radius:3px;"></span>
+              <strong>Paid Online</strong> (Razorpay Verified — Ready to Approve)
+            </span>
+            <span style="display:inline-flex;align-items:center;gap:6px;">
+              <span style="width:14px;height:14px;background:#eff6ff;border:2px solid #3b82f6;border-radius:3px;"></span>
+              Printing Queue
+            </span>
+            <span style="display:inline-flex;align-items:center;gap:6px;">
+              <span style="width:14px;height:14px;background:#f0fdf4;border:2px solid #22c55e;border-radius:3px;"></span>
+              Ready on Tray
+            </span>
+          </div>
+
+          <!-- Desktop Table View -->
+          <div class="desktop-table-wrap" style="overflow-x:auto;">
+            <table>
+              <thead>
+                <tr>
+                  <th>Order / Time (IST)</th>
+                  <th>Customer &amp; Metadata</th>
+                  <th>Print Spec &amp; Layout</th>
+                  <th>Payment</th>
+                  <th>Current State &amp; Spooler</th>
+                  <th>Staff / Admin Actions</th>
+                </tr>
+              </thead>
+              <tbody id="ordersTableBody"></tbody>
+            </table>
+          </div>
+
+          <!-- Mobile Cards View -->
+          <div class="mobile-orders-wrap" id="ordersCardsMobile"></div>
+        </div>
+      </div>
+
+      <!-- ==========================================
+           TAB 2: DAILY LEDGER & KPIS
+           ========================================== -->
+      <div id="tabSectionLedger" class="tab-section hidden">
+        <!-- Date Period & Day-Wise Filter Bar -->
+        <div class="card" style="margin-bottom:14px;padding:12px 16px;background:#f8fafc;border:1px solid #e2e8f0;display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:12px;">
+          <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;">
+            <div style="font-size:0.85rem;font-weight:700;color:#0f172a;display:flex;align-items:center;gap:6px;">
+              <span>📅 Date Filter (IST):</span>
+            </div>
+            <div style="display:flex;gap:6px;flex-wrap:wrap;" id="periodBtnGroup">
+              <button class="btn btn-primary" id="btnPeriodToday" onclick="setPeriodFilter('today')" style="padding:5px 12px;font-size:0.8rem;">📅 Today</button>
+              <button class="btn btn-secondary" id="btnPeriodYesterday" onclick="setPeriodFilter('yesterday')" style="padding:5px 12px;font-size:0.8rem;">Yesterday</button>
+              <button class="btn btn-secondary" id="btnPeriod7Days" onclick="setPeriodFilter('last7days')" style="padding:5px 12px;font-size:0.8rem;">Last 7 Days</button>
+              <button class="btn btn-secondary" id="btnPeriodAll" onclick="setPeriodFilter('all')" style="padding:5px 12px;font-size:0.8rem;">All Time</button>
+            </div>
+            <div style="display:flex;align-items:center;gap:6px;">
+              <span style="font-size:0.75rem;color:var(--muted);font-weight:600;">Specific:</span>
+              <input type="date" id="inpSpecificDate" onchange="setCustomDateFilter(this.value)" style="padding:4px 8px;font-size:0.8rem;" />
             </div>
           </div>
 
-          <div style="margin-bottom:12px;background:#f8fafc;border:1px solid #cbd5e1;border-radius:8px;padding:10px;">
-            <div style="font-size:0.78rem;font-weight:700;color:#0f172a;margin-bottom:6px;">🖨️ Multi-Printer Smart Auto-Routing (B&amp;W vs Color Fleet)</div>
-            <div class="grid-2" style="gap:8px;margin-bottom:8px;">
+          <div style="display:flex;align-items:center;gap:8px;">
+            <span class="badge" id="lblPeriodScopeBadge" style="background:#e0e7ff;color:#4338ca;font-weight:700;padding:4px 10px;font-size:0.8rem;">
+              Viewing: Today (IST)
+            </span>
+            <span class="badge" id="lblActiveShopFilterBadge" style="background:#f1f5f9;color:#334155;font-weight:700;padding:4px 10px;font-size:0.8rem;">
+              🏪 Station: <span id="lblActiveShopSlug">midtownstationary</span>
+            </span>
+          </div>
+        </div>
+
+        <!-- KPI Row -->
+        <div class="kpi-grid">
+          <div class="kpi-box" style="border-left:4px solid #f59e0b;">
+            <div class="kpi-label">Awaiting Admin Approval</div>
+            <div class="kpi-val" id="kpiApproval">0</div>
+            <div style="font-size:0.7rem;color:var(--muted);margin-top:2px;" id="kpiSubApproval">For selected period</div>
+          </div>
+          <div class="kpi-box" style="border-left:4px solid #3b82f6;">
+            <div class="kpi-label">Active Print / Spooler</div>
+            <div class="kpi-val" id="kpiActiveQueue">0</div>
+            <div style="font-size:0.7rem;color:var(--muted);margin-top:2px;" id="kpiSubActive">In spooler / printing</div>
+          </div>
+          <div class="kpi-box" style="border-left:4px solid #16a34a;">
+            <div class="kpi-label">Ready for Counter Pickup</div>
+            <div class="kpi-val" id="kpiReady">0</div>
+            <div style="font-size:0.7rem;color:var(--muted);margin-top:2px;" id="kpiSubReady">Printed &amp; awaiting customer</div>
+          </div>
+          <div class="kpi-box">
+            <div class="kpi-label">Collected (PDF Purged)</div>
+            <div class="kpi-val" id="kpiCollected">0</div>
+            <div style="font-size:0.7rem;color:var(--muted);margin-top:2px;" id="kpiSubCollected">Handed over to customer</div>
+          </div>
+          <div class="kpi-box">
+            <div class="kpi-label">Verified Revenue</div>
+            <div class="kpi-val">₹<span id="kpiRevenue">0.00</span></div>
+            <div style="font-size:0.7rem;color:var(--muted);margin-top:2px;" id="kpiSubRevenue">Selected period revenue</div>
+          </div>
+          <div class="kpi-box">
+            <div class="kpi-label">Printed Sides / Sheets</div>
+            <div class="kpi-val"><span id="kpiSides">0</span> / <span id="kpiSheets">0</span></div>
+            <div style="font-size:0.7rem;color:var(--muted);margin-top:2px;" id="kpiSubSides">Sides / Physical paper</div>
+          </div>
+        </div>
+
+        <!-- Day-Wise Counter Breakdown & Historical Audit Card -->
+        <div class="card">
+          <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:10px;margin-bottom:10px;">
+            <div>
+              <h3 style="font-size:1.05rem;display:flex;align-items:center;gap:6px;">
+                <span>📊 Day-Wise Prints Performance &amp; Counter Ledger</span>
+                <span class="badge" style="background:#e0f2fe;color:#0369a1;font-size:0.72rem;">IST Daily Breakdown</span>
+              </h3>
+              <p style="font-size:0.78rem;color:var(--muted);margin-top:2px;">Individual day records for this shop station. Click "View Day" to inspect orders.</p>
+            </div>
+            <button class="btn btn-secondary" onclick="loadDashboard()" style="font-size:0.78rem;padding:4px 10px;">
+              ↻ Refresh Ledger
+            </button>
+          </div>
+
+          <div style="overflow-x:auto;">
+            <table style="width:100%;font-size:0.82rem;">
+              <thead>
+                <tr style="background:#f8fafc;">
+                  <th>Date (IST)</th>
+                  <th>Total Orders</th>
+                  <th>Completed / Pending</th>
+                  <th>B&amp;W Sides</th>
+                  <th>Color Sides</th>
+                  <th>Total Sides / Sheets</th>
+                  <th>Daily Revenue (₹)</th>
+                  <th style="text-align:right;">Action</th>
+                </tr>
+              </thead>
+              <tbody id="dailyBreakdownBody">
+                <tr><td colspan="8" style="text-align:center;color:var(--muted);padding:14px;">Loading day-wise ledger...</td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+
+      <!-- ==========================================
+           TAB 3: HARDWARE & PRICING MATRIX
+           ========================================== -->
+      <div id="tabSectionHardware" class="tab-section hidden">
+        <!-- 1-Click Blank Test Page Card -->
+        <div class="card" style="border-left:5px solid #2563eb;background:#eff6ff;">
+          <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:10px;">
+            <div>
+              <h3 style="font-size:1rem;color:#1e40af;margin-bottom:2px;">🖨️ Windows Spooler Hardware Diagnostic</h3>
+              <p style="font-size:0.8rem;color:#3b82f6;">Dispatch 1 blank test page directly to the connected Xerox printer queue to verify hardware connectivity.</p>
+            </div>
+            <button class="btn btn-primary" id="btnTestBlank" onclick="printBlankTestPage()" style="padding:10px 18px;font-size:0.9rem;">
+              🖨️ Print 1 Blank Test Page
+            </button>
+          </div>
+        </div>
+
+        <div class="grid-2">
+          <!-- Printer Hardware & Capability Controls -->
+          <div class="card">
+            <h3 style="font-size:1rem;margin-bottom:10px;">Printer Hardware &amp; Queue Controls</h3>
+
+            <div style="background:#f8fafc;border:1px solid #cbd5e1;border-radius:8px;padding:10px 12px;margin-bottom:12px;display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px;">
               <div>
-                <label style="font-size:0.74rem;font-weight:600;">⚫ Dedicated B&amp;W Printer</label>
-                <select id="selBwQueueSwitch" style="width:100%;font-size:0.8rem;"><option value="">(Use Primary Queue)</option></select>
+                <div style="font-size:0.75rem;font-weight:700;color:#1e40af;text-transform:uppercase;">Worker Print Dispatch Mode</div>
+                <div style="font-size:0.9rem;font-weight:800;color:#15803d;" id="lblDispatchModeText">● LIVE PHYSICAL PRINT</div>
               </div>
-              <div>
-                <label style="font-size:0.74rem;font-weight:600;">🎨 Dedicated Color Printer</label>
-                <select id="selColorQueueSwitch" style="width:100%;font-size:0.8rem;"><option value="">(Use Primary Queue)</option></select>
+              <div style="display:flex;gap:6px;">
+                <button class="btn btn-success" id="btnSetPhysical" style="font-size:0.78rem;" onclick="setDispatchMode('physical')">● Live Physical</button>
+                <button class="btn btn-secondary" id="btnSetSimulation" style="font-size:0.78rem;" onclick="setDispatchMode('simulation')">Simulation</button>
               </div>
             </div>
-            <div style="font-size:0.78rem;font-weight:700;color:#0f172a;margin-bottom:6px;">🏪 Multi-Shop Franchise Identity</div>
-            <div class="grid-2" style="gap:8px;">
+
+            <div style="margin-bottom:12px;">
+              <label style="font-size:0.8rem;font-weight:700;">Target Windows Print Queue</label>
+              <div style="display:flex;gap:8px;margin-top:4px;">
+                <select id="selQueueSwitch" style="flex:1;"></select>
+                <button class="btn btn-secondary" onclick="saveTargetQueueSelection()">Set Primary</button>
+              </div>
+            </div>
+
+            <div style="margin-bottom:12px;background:#f8fafc;border:1px solid #cbd5e1;border-radius:8px;padding:10px;">
+              <div style="font-size:0.78rem;font-weight:700;color:#0f172a;margin-bottom:6px;">🖨️ Multi-Printer Smart Auto-Routing (B&amp;W vs Color Fleet)</div>
+              <div class="grid-2" style="gap:8px;">
+                <div>
+                  <label style="font-size:0.74rem;font-weight:600;">⚫ Dedicated B&amp;W Printer</label>
+                  <select id="selBwQueueSwitch" style="width:100%;font-size:0.8rem;margin-top:2px;"><option value="">(Use Primary Queue)</option></select>
+                </div>
+                <div>
+                  <label style="font-size:0.74rem;font-weight:600;">🎨 Dedicated Color Printer</label>
+                  <select id="selColorQueueSwitch" style="width:100%;font-size:0.8rem;margin-top:2px;"><option value="">(Use Primary Queue)</option></select>
+                </div>
+              </div>
+            </div>
+
+            <div style="margin-bottom:12px;display:grid;grid-template-columns:1fr 1fr;gap:10px;">
+              <label style="display:flex;align-items:center;gap:6px;cursor:pointer;font-size:0.82rem;font-weight:600;">
+                <input type="checkbox" id="chkSupportsColor" />
+                <span>Allow Color (🎨)</span>
+              </label>
+              <label style="display:flex;align-items:center;gap:6px;cursor:pointer;font-size:0.82rem;font-weight:600;">
+                <input type="checkbox" id="chkSupportsDuplex" />
+                <span>Allow Duplex / 2-Sided</span>
+              </label>
+              <label style="display:flex;align-items:center;gap:6px;cursor:pointer;font-size:0.82rem;font-weight:600;">
+                <input type="checkbox" id="chkSupportsPageRange" checked />
+                <span>Allow Page Range</span>
+              </label>
               <div>
-                <label style="font-size:0.74rem;font-weight:600;">Shop ID / QR Slug (e.g. pilot, shop-02)</label>
-                <input type="text" id="inpShopId" value="pilot" style="width:100%;font-size:0.8rem;" />
+                <label style="font-size:0.75rem;font-weight:600;margin-bottom:2px;display:block;">Allowed Papers</label>
+                <input type="text" id="inpAllowedPapers" value="A4,Legal,Letter" style="width:100%;" />
+              </div>
+            </div>
+
+            <div style="margin-bottom:12px;">
+              <button class="btn" onclick="saveHardwareCapabilities()">Save Printer Capabilities</button>
+            </div>
+
+            <p style="font-size:0.8rem;color:var(--muted);margin-bottom:8px;">
+              Status: <strong id="lblStationStatus"></strong> | Free Disk: <strong id="lblFreeDisk"></strong> MB
+            </p>
+            <div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:10px;">
+              <button class="btn btn-warn" style="font-size:0.78rem;" onclick="updateControls({intakePaused:true, pauseReason:'Counter busy / paper reload'})">Pause Intake</button>
+              <button class="btn btn-success" style="font-size:0.78rem;" onclick="updateControls({intakePaused:false, pauseReason:''})">Resume Intake</button>
+              <button class="btn btn-danger" style="font-size:0.78rem;" onclick="updateControls({printerReady:false, pauseReason:'Paper Jam / Out of Paper on Xerox B1025'})">Report Jam</button>
+              <button class="btn btn-secondary" style="font-size:0.78rem;" onclick="updateControls({printerReady:true, pauseReason:''})">Clear Alert</button>
+            </div>
+
+            <div style="border-top:1px solid #e2e8f0;padding-top:10px;margin-top:8px;">
+              <button class="btn btn-secondary" style="font-size:0.78rem;" onclick="loadLiveWindowsQueues()">Inspect Live Windows Print Queues (WMI)</button>
+              <div id="liveQueuesBox" style="margin-top:8px;font-size:0.8rem;"></div>
+            </div>
+          </div>
+
+          <!-- Dynamic Pricing Configuration -->
+          <div class="card">
+            <h3 style="font-size:1rem;margin-bottom:10px;">Pricing Configuration (B&amp;W &amp; Color)</h3>
+            <p style="font-size:0.8rem;color:var(--muted);margin-bottom:10px;">
+              Active Rule Version: <strong id="lblPriceVer">v1</strong> (Changing prices never alters past confirmed orders).
+            </p>
+            <div class="grid-2" style="gap:10px;margin-bottom:10px;">
+              <div>
+                <label style="font-size:0.78rem;font-weight:600;">⚫ B&amp;W Simplex (₹ / side)</label>
+                <input type="number" step="0.5" id="inpSimplexRate" value="2.00" style="width:100%;margin-top:2px;" />
+              </div>
+              <div>
+                <label style="font-size:0.78rem;font-weight:600;">⚫ B&amp;W Duplex (₹ / side)</label>
+                <input type="number" step="0.5" id="inpDuplexRate" value="1.50" style="width:100%;margin-top:2px;" />
+              </div>
+              <div>
+                <label style="font-size:0.78rem;font-weight:600;">🎨 Color Simplex (₹ / side)</label>
+                <input type="number" step="0.5" id="inpColorSimplexRate" value="10.00" style="width:100%;margin-top:2px;" />
+              </div>
+              <div>
+                <label style="font-size:0.78rem;font-weight:600;">🎨 Color Duplex (₹ / side)</label>
+                <input type="number" step="0.5" id="inpColorDuplexRate" value="8.00" style="width:100%;margin-top:2px;" />
+              </div>
+              <div>
+                <label style="font-size:0.78rem;font-weight:600;">Minimum Order Charge (₹)</label>
+                <input type="number" step="1" id="inpMinOrder" value="2.00" style="width:100%;margin-top:2px;" />
+              </div>
+              <div>
+                <label style="font-size:0.78rem;font-weight:600;">Tax (%)</label>
+                <input type="number" step="0.5" id="inpTax" value="0" style="width:100%;margin-top:2px;" />
+              </div>
+            </div>
+            <button class="btn" onclick="saveNewPricingRule()">Publish New Price Rule Version</button>
+          </div>
+        </div>
+      </div>
+
+      <!-- ==========================================
+           TAB 4: STORE IDENTITY, PASSWORD & TUNNEL
+           ========================================== -->
+      <div id="tabSectionSettings" class="tab-section hidden">
+        <div class="grid-2">
+          <!-- Multi-Shop Identity Card -->
+          <div class="card">
+            <h3 style="font-size:1rem;margin-bottom:10px;">🏪 Multi-Shop Franchise Identity</h3>
+            <div class="grid-2" style="gap:8px;margin-bottom:10px;">
+              <div>
+                <label style="font-size:0.74rem;font-weight:600;">Shop ID / QR Slug</label>
+                <input type="text" id="inpShopId" value="midtownstationary" style="width:100%;margin-top:2px;" />
               </div>
               <div>
                 <label style="font-size:0.74rem;font-weight:600;">Shop Display Name</label>
-                <input type="text" id="inpShopName" value="PrintAway Pilot Shop" style="width:100%;font-size:0.8rem;" />
+                <input type="text" id="inpShopName" value="Midtown Stationary" style="width:100%;margin-top:2px;" />
               </div>
             </div>
-            <div style="font-size:0.73rem;color:#0369a1;margin-top:6px;">
-              Shop Permanent QR Link: <code id="lblShopQrUrl">https://printitaway.netlify.app/?shop=pilot</code>
-            </div>
-            </div>
-          </div>
-
-          <div style="margin-bottom:12px;display:grid;grid-template-columns:1fr 1fr;gap:10px;">
-            <label style="display:flex;align-items:center;gap:6px;cursor:pointer;font-size:0.82rem;font-weight:600;">
-              <input type="checkbox" id="chkSupportsColor" />
-              <span>Allow Color Printing (🎨)</span>
-            </label>
-            <label style="display:flex;align-items:center;gap:6px;cursor:pointer;font-size:0.82rem;font-weight:600;">
-              <input type="checkbox" id="chkSupportsDuplex" />
-              <span>Allow Duplex / 2-Sided</span>
-            </label>
-            <label style="display:flex;align-items:center;gap:6px;cursor:pointer;font-size:0.82rem;font-weight:600;">
-              <input type="checkbox" id="chkSupportsPageRange" checked />
-              <span>Allow Page Range &amp; Selection</span>
-            </label>
-            <div>
-              <label style="font-size:0.75rem;font-weight:600;margin-bottom:2px;">Allowed Paper Sizes</label>
-              <input type="text" id="inpAllowedPapers" value="A4,Legal,Letter" style="width:100%;" />
+            <button class="btn btn-secondary" onclick="saveHardwareCapabilities()">Update Shop Identity</button>
+            <div style="font-size:0.78rem;color:#0369a1;margin-top:10px;background:#e0f2fe;padding:8px 10px;border-radius:6px;">
+              Permanent Customer QR URL: <strong id="lblShopQrUrl">https://printitaway.netlify.app/?shop=midtownstationary</strong>
             </div>
           </div>
 
-          <div style="margin-bottom:12px;">
-            <button class="btn" onclick="saveHardwareCapabilities()">Save Printer Capabilities</button>
-          </div>
-
-          <p style="font-size:0.82rem;color:var(--muted);margin-bottom:8px;">
-            Status: <strong id="lblStationStatus"></strong> | Free Disk: <strong id="lblFreeDisk"></strong> MB
-          </p>
-          <div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:10px;">
-            <button class="btn btn-warn" style="font-size:0.78rem;" onclick="updateControls({intakePaused:true, pauseReason:'Counter busy / paper reload'})">Pause Intake</button>
-            <button class="btn btn-success" style="font-size:0.78rem;" onclick="updateControls({intakePaused:false, pauseReason:''})">Resume Intake</button>
-            <button class="btn btn-danger" style="font-size:0.78rem;" onclick="updateControls({printerReady:false, pauseReason:'Paper Jam / Out of Paper on Xerox B1025'})">Report Jam / Out of Paper</button>
-            <button class="btn btn-secondary" style="font-size:0.78rem;" onclick="updateControls({printerReady:true, pauseReason:''})">Clear Alert</button>
-          </div>
-          <div style="border-top:1px solid #e2e8f0;padding-top:10px;margin-top:8px;">
-            <button class="btn btn-secondary" style="font-size:0.78rem;" onclick="loadLiveWindowsQueues()">Inspect Live Windows Print Queues (WMI)</button>
-            <div id="liveQueuesBox" style="margin-top:8px;font-size:0.8rem;"></div>
-          </div>
-        </div>
-
-        <!-- Dynamic Pricing Configuration (B&W and Color) -->
-        <div class="card">
-          <h3 style="font-size:1rem;margin-bottom:10px;">Pricing Configuration (B&amp;W &amp; Color)</h3>
-          <p style="font-size:0.8rem;color:var(--muted);margin-bottom:10px;">
-            Active Rule Version: <strong id="lblPriceVer">v1</strong> (Changing prices never alters confirmed past orders).
-          </p>
-          <div class="grid-2" style="gap:10px;margin-bottom:10px;">
-            <div>
-              <label style="font-size:0.78rem;font-weight:600;">⚫ B&amp;W Simplex (₹ / side)</label>
-              <input type="number" step="0.5" id="inpSimplexRate" value="2.00" style="width:100%;" />
-            </div>
-            <div>
-              <label style="font-size:0.78rem;font-weight:600;">⚫ B&amp;W Duplex (₹ / side)</label>
-              <input type="number" step="0.5" id="inpDuplexRate" value="1.50" style="width:100%;" />
-            </div>
-            <div>
-              <label style="font-size:0.78rem;font-weight:600;">🎨 Color Simplex (₹ / side)</label>
-              <input type="number" step="0.5" id="inpColorSimplexRate" value="10.00" style="width:100%;" />
-            </div>
-            <div>
-              <label style="font-size:0.78rem;font-weight:600;">🎨 Color Duplex (₹ / side)</label>
-              <input type="number" step="0.5" id="inpColorDuplexRate" value="8.00" style="width:100%;" />
-            </div>
-            <div>
-              <label style="font-size:0.78rem;font-weight:600;">Minimum Order Charge (₹)</label>
-              <input type="number" step="1" id="inpMinOrder" value="2.00" style="width:100%;" />
-            </div>
-            <div>
-              <label style="font-size:0.78rem;font-weight:600;">Tax (%)</label>
-              <input type="number" step="0.5" id="inpTax" value="0" style="width:100%;" />
-            </div>
-          </div>
-          <button class="btn" onclick="saveNewPricingRule()">Publish New Price Rule Version</button>
-
-          <!-- Payment Gateway (Live Mode) & Store Settlement Configuration -->
-          <div style="border-top:1px solid #e2e8f0;margin-top:16px;padding-top:14px;">
-            <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;flex-wrap:wrap;gap:6px;">
-              <h3 style="font-size:0.96rem;margin:0;">💳 Razorpay Live Mode &amp; Store Settlement</h3>
-              <span id="lblRazorpayModeBadge" class="badge" style="background:#fef3c7;color:#92400e;font-weight:800;">TEST MODE</span>
-            </div>
-            <p style="font-size:0.76rem;color:var(--muted);margin-bottom:10px;line-height:1.45;">
-              <strong>How Multi-Store Settlement Works:</strong><br/>
-              • <strong>Option 1 (Direct Store Bank Settlement — 0% Split):</strong> Paste this store's own <code>rzp_live_...</code> Key ID &amp; Secret. 100% of online payments settle directly to this store's bank account (T+1).<br/>
-              • <strong>Option 2 (Central Platform + Razorpay Route):</strong> Use your central platform <code>rzp_live_...</code> keys and enter this store's Razorpay Linked Account ID (<code>acc_...</code>) below — PrintAway automatically splits &amp; routes 100% of the order payment to this store!
+          <!-- Store Counter Password Management -->
+          <div class="card" style="border-left:4px solid #10b981;">
+            <h3 style="font-size:1rem;margin-bottom:6px;">🔐 Store Counter Password</h3>
+            <p style="font-size:0.78rem;color:var(--muted);margin-bottom:10px;">
+              Shopkeepers can update their store counter sign-in password anytime. (Master password remains active for superadmin recovery).
             </p>
+            <div style="margin-bottom:8px;">
+              <label style="font-size:0.74rem;font-weight:600;">Current Password</label>
+              <input type="password" id="inpCurPass" placeholder="Enter current password" style="width:100%;margin-top:2px;" />
+            </div>
             <div class="grid-2" style="gap:8px;margin-bottom:10px;">
               <div>
-                <label style="font-size:0.74rem;font-weight:600;">Razorpay Key ID (Live or Test)</label>
-                <input type="text" id="inpRzpKeyId" placeholder="rzp_live_xxxxxxxxxxxxxx" style="width:100%;font-family:monospace;font-size:0.78rem;" />
+                <label style="font-size:0.74rem;font-weight:600;">New Password</label>
+                <input type="password" id="inpNewPass" placeholder="Min 6 characters" style="width:100%;margin-top:2px;" />
               </div>
               <div>
-                <label style="font-size:0.74rem;font-weight:600;">Razorpay Key Secret</label>
-                <input type="password" id="inpRzpKeySecret" placeholder="Enter new secret or leave as ••••" style="width:100%;font-family:monospace;font-size:0.78rem;" />
-              </div>
-              <div>
-                <label style="font-size:0.74rem;font-weight:600;">Store Linked Account ID (Razorpay Route)</label>
-                <input type="text" id="inpRzpLinkedAcc" placeholder="Optional: acc_xxxxxxxxxxxxxx" style="width:100%;font-family:monospace;font-size:0.78rem;" />
-              </div>
-              <div>
-                <label style="font-size:0.74rem;font-weight:600;">Store Direct UPI ID (VPA)</label>
-                <input type="text" id="inpShopUpiVpa" placeholder="e.g. midtownstationary@okaxis" style="width:100%;font-family:monospace;font-size:0.78rem;" />
+                <label style="font-size:0.74rem;font-weight:600;">Confirm New Password</label>
+                <input type="password" id="inpConfPass" placeholder="Re-type new password" style="width:100%;margin-top:2px;" />
               </div>
             </div>
-            <button class="btn btn-success" style="font-size:0.8rem;" onclick="savePaymentSettlementConfig()">💾 Save Payment &amp; Settlement Config</button>
+            <button class="btn btn-success" onclick="submitChangePassword()">Update Store Password</button>
           </div>
         </div>
-      </div>
 
-      <!-- Immutable UTC Audit Log -->
-      <div class="card">
-        <h3 style="font-size:1rem;margin-bottom:10px;">Immutable UTC Audit &amp; Worker Event Trail</h3>
-        <div style="max-height:260px;overflow-y:auto;">
-          <table>
-            <thead>
-              <tr>
-                <th>UTC Timestamp</th>
-                <th>Order ID</th>
-                <th>Actor</th>
-                <th>Event</th>
-                <th>Transition</th>
-                <th>Details</th>
-              </tr>
-            </thead>
-            <tbody id="auditTableBody"></tbody>
-          </table>
+        <!-- Payment Gateway (Live Mode) & Store Settlement Configuration -->
+        <div class="card" style="margin-top:4px;">
+          <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;flex-wrap:wrap;gap:6px;">
+            <h3 style="font-size:0.96rem;margin:0;">💳 Razorpay Live Mode &amp; Store Settlement</h3>
+            <span id="lblRazorpayModeBadge" class="badge" style="background:#fef3c7;color:#92400e;font-weight:800;">TEST MODE</span>
+          </div>
+          <p style="font-size:0.76rem;color:var(--muted);margin-bottom:10px;line-height:1.45;">
+            <strong>How Multi-Store Settlement Works:</strong><br/>
+            • <strong>Option 1 (Direct Store Bank Settlement — 0% Split):</strong> Paste this store's own <code>rzp_live_...</code> Key ID &amp; Secret. 100% of online payments settle directly to this store's bank account (T+1).<br/>
+            • <strong>Option 2 (Central Platform + Razorpay Route):</strong> Use central platform keys and enter this store's Razorpay Linked Account ID (<code>acc_...</code>) below — PrintAway automatically splits &amp; routes order payments to this store!
+          </p>
+          <div class="grid-2" style="gap:8px;margin-bottom:10px;">
+            <div>
+              <label style="font-size:0.74rem;font-weight:600;">Razorpay Key ID (Live or Test)</label>
+              <input type="text" id="inpRzpKeyId" placeholder="rzp_live_xxxxxxxxxxxxxx" style="width:100%;font-family:monospace;font-size:0.78rem;" />
+            </div>
+            <div>
+              <label style="font-size:0.74rem;font-weight:600;">Razorpay Key Secret</label>
+              <input type="password" id="inpRzpKeySecret" placeholder="Enter new secret or leave as ••••" style="width:100%;font-family:monospace;font-size:0.78rem;" />
+            </div>
+            <div>
+              <label style="font-size:0.74rem;font-weight:600;">Store Linked Account ID (Razorpay Route)</label>
+              <input type="text" id="inpRzpLinkedAcc" placeholder="Optional: acc_xxxxxxxxxxxxxx" style="width:100%;font-family:monospace;font-size:0.78rem;" />
+            </div>
+            <div>
+              <label style="font-size:0.74rem;font-weight:600;">Store Direct UPI ID (VPA)</label>
+              <input type="text" id="inpShopUpiVpa" placeholder="e.g. midtownstationary@okaxis" style="width:100%;font-family:monospace;font-size:0.78rem;" />
+            </div>
+          </div>
+          <button class="btn btn-success" style="font-size:0.8rem;" onclick="savePaymentSettlementConfig()">💾 Save Payment &amp; Settlement Config</button>
+        </div>
+
+        <!-- Immutable UTC Audit Log -->
+        <div class="card">
+          <h3 style="font-size:1rem;margin-bottom:10px;">Immutable UTC Audit &amp; Worker Event Trail</h3>
+          <div style="max-height:240px;overflow-y:auto;">
+            <table>
+              <thead>
+                <tr>
+                  <th>UTC Timestamp</th>
+                  <th>Order ID</th>
+                  <th>Actor</th>
+                  <th>Event</th>
+                  <th>Transition</th>
+                  <th>Details</th>
+                </tr>
+              </thead>
+              <tbody id="auditTableBody"></tbody>
+            </table>
+          </div>
         </div>
       </div>
     </div>
@@ -661,7 +975,84 @@
     </div>
   </div>
 
+  <!-- Pro Upgrade Modal -->
+  <div id="modalProUpgrade" style="display:none;position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,0.65);z-index:9999;align-items:center;justify-content:center;padding:16px;">
+    <div style="background:#fff;border-radius:14px;max-width:480px;width:100%;padding:24px;box-shadow:0 20px 25px -5px rgba(0,0,0,0.3);position:relative;">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px;">
+        <h3 style="margin:0;font-size:1.15rem;display:flex;align-items:center;gap:8px;">
+          <span>⚡ Upgrade to PrintAway Pro</span>
+        </h3>
+        <button onclick="closeProUpgradeModal()" style="background:none;border:none;font-size:1.3rem;cursor:pointer;color:#64748b;">&times;</button>
+      </div>
+
+      <p style="font-size:0.85rem;color:#475569;margin-bottom:16px;line-height:1.4;">
+        Unlock unlimited daily printing, automated Smart Color Routing, and multi-printer queue balancing.
+      </p>
+
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:18px;">
+        <label style="border:2px solid #4f46e5;border-radius:10px;padding:12px;cursor:pointer;background:#eef2ff;display:block;">
+          <input type="radio" name="proPlan" value="annual" checked style="margin-right:6px;" />
+          <strong style="font-size:0.9rem;color:#1e1b4b;">Annual Plan</strong>
+          <div style="font-size:1.15rem;font-weight:800;color:#4338ca;margin-top:4px;">₹149 <span style="font-size:0.75rem;font-weight:600;">/ mo</span></div>
+          <div style="font-size:0.72rem;color:#6366f1;font-weight:700;margin-top:2px;">Billed as ₹1,788/yr (Save 40%)</div>
+        </label>
+
+        <label style="border:1px solid #cbd5e1;border-radius:10px;padding:12px;cursor:pointer;display:block;">
+          <input type="radio" name="proPlan" value="monthly" style="margin-right:6px;" />
+          <strong style="font-size:0.9rem;color:#1e293b;">Monthly Plan</strong>
+          <div style="font-size:1.15rem;font-weight:800;color:#0f172a;margin-top:4px;">₹249 <span style="font-size:0.75rem;font-weight:600;">/ mo</span></div>
+          <div style="font-size:0.72rem;color:#64748b;margin-top:2px;">Billed monthly</div>
+        </label>
+      </div>
+
+      <div style="margin-bottom:16px;">
+        <button id="btnPayProRzp" class="btn" style="width:100%;background:linear-gradient(135deg, #4f46e5 0%, #7c3aed 100%);color:#fff;border:none;padding:12px 18px;border-radius:10px;font-weight:800;font-size:0.95rem;display:flex;align-items:center;justify-content:center;gap:8px;box-shadow:0 4px 15px rgba(79, 70, 229, 0.35);cursor:pointer;" onclick="payProWithRazorpay()">
+          <span>⚡ Pay via Razorpay &amp; Upgrade Instantly</span>
+        </button>
+        <p style="font-size:0.75rem;color:#64748b;text-align:center;margin-top:6px;">
+          ✓ Instant automated activation via UPI (GPay, PhonePe, Paytm, QR), Cards &amp; NetBanking.
+        </p>
+      </div>
+
+      <div style="text-align:center;margin:12px 0 10px;font-size:0.72rem;font-weight:700;color:#94a3b8;letter-spacing:0.05em;">
+        — OR PAY DIRECTLY VIA UPI VPA —
+      </div>
+
+      <div style="background:#f1f5f9;border-radius:10px;padding:10px 12px;font-size:0.8rem;color:#334155;margin-bottom:12px;">
+        <div>Pay via any UPI app (GPay / PhonePe / Paytm / BHIM) to:</div>
+        <div style="font-family:monospace;font-weight:bold;color:#4338ca;margin-top:2px;font-size:0.92rem;">shivam@upi</div>
+      </div>
+
+      <div style="margin-bottom:14px;">
+        <label style="display:block;font-size:0.78rem;font-weight:600;margin-bottom:4px;color:#1e293b;">UPI Transaction Reference (UTR / Txn ID)</label>
+        <div style="display:flex;gap:8px;">
+          <input type="text" id="inpProUtr" placeholder="e.g. 334156789012" style="flex:1;padding:8px 10px;border:1px solid #cbd5e1;border-radius:8px;font-size:0.82rem;" />
+          <button class="btn btn-secondary" style="font-size:0.8rem;padding:6px 12px;" onclick="submitProRequest()">Submit UTR</button>
+        </div>
+      </div>
+
+      <div style="display:flex;justify-content:flex-end;">
+        <button class="btn btn-secondary" style="font-size:0.8rem;" onclick="closeProUpgradeModal()">Close</button>
+      </div>
+    </div>
+  </div>
+
   <script>
+    // Tab switching support
+    let currentAdminTab = localStorage.getItem('printaway_admin_tab') || 'orders';
+    function switchAdminTab(tabName) {
+      currentAdminTab = tabName;
+      localStorage.setItem('printaway_admin_tab', tabName);
+
+      const tabs = ['orders', 'ledger', 'hardware', 'settings'];
+      tabs.forEach(t => {
+        const btn = document.getElementById('tabBtn' + t.charAt(0).toUpperCase() + t.slice(1));
+        const sec = document.getElementById('tabSection' + t.charAt(0).toUpperCase() + t.slice(1));
+        if (btn) btn.classList.toggle('active', t === tabName);
+        if (sec) sec.classList.toggle('hidden', t !== tabName);
+      });
+    }
+
     // Auto-detect ?station=https://... query parameter for seamless Netlify integration
     const adminStationParam = new URLSearchParams(window.location.search).get('station');
     if (adminStationParam) {
@@ -676,11 +1067,11 @@
         localStorage.setItem('printaway_shop_id', clean);
         return clean;
       }
-      return localStorage.getItem('printaway_shop_id') || 'pilot';
+      return localStorage.getItem('printaway_shop_id') || 'midtownstationary';
     }
 
     function getRegistryTopicForShop(shopId) {
-      const sid = (shopId || 'pilot').trim().toLowerCase();
+      const sid = (shopId || 'midtownstationary').trim().toLowerCase();
       if (!sid || sid === 'pilot' || sid === 'printaway-pilot') {
         return 'printaway_station_registry_pilot_9f8a7b6c5d4e';
       }
@@ -689,7 +1080,7 @@
 
     function switchShopPrompt() {
       const cur = getActiveShopId();
-      const entered = prompt("Enter Shop ID / Code to manage (e.g. 'pilot', 'shop-02', 'campus-01'):", cur);
+      const entered = prompt("Enter Shop ID / Code to manage (e.g. 'midtownstationary', 'pilot', 'campus-xerox'):", cur);
       if (entered !== null && entered.trim()) {
         const clean = entered.trim().toLowerCase().replace(/[^a-z0-9_-]/g, '');
         localStorage.setItem('printaway_shop_id', clean);
@@ -710,10 +1101,31 @@
         localStorage.setItem('printaway_api_base', cleanSp);
         return cleanSp;
       }
+
+      const shopId = getActiveShopId();
+      const badgeEl = document.getElementById('lblAdminShopBadge');
+      if (badgeEl) badgeEl.textContent = shopId;
+
+      // Priority 1: Supabase lookup for live tunnel URL
       try {
-        const shopId = getActiveShopId();
-        const badgeEl = document.getElementById('lblAdminShopBadge');
-        if (badgeEl) badgeEl.textContent = shopId;
+        const sbRes = await fetch(`https://zduoifzakiojfqbtxqqm.supabase.co/rest/v1/shops?shop_id=eq.${encodeURIComponent(shopId)}&select=live_tunnel_url`, {
+          headers: {
+            'apikey': 'sb_publishable_rhmUZZbKhXiJxrChcPTbsg_gFIH9FdO',
+            'Accept': 'application/json'
+          }
+        });
+        if (sbRes.ok) {
+          const list = await sbRes.json();
+          if (list && list.length > 0 && list[0].live_tunnel_url && list[0].live_tunnel_url.startsWith('https://')) {
+            const cleanUrl = list[0].live_tunnel_url.trim().replace(/\/+$/, '');
+            localStorage.setItem('printaway_api_base', cleanUrl);
+            return cleanUrl;
+          }
+        }
+      } catch (err) { }
+
+      // Priority 2: ntfy registry lookup
+      try {
         const topic = getRegistryTopicForShop(shopId);
         const res = await fetch('https://ntfy.sh/' + topic + '/raw?poll=1&since=12h', { cache: 'no-store' });
         if (res.ok) {
@@ -725,9 +1137,8 @@
             return latest;
           }
         }
-      } catch (e) {
-        console.warn('Live station registry lookup skipped:', e);
-      }
+      } catch (e) { }
+
       return localStorage.getItem('printaway_api_base') || DEFAULT_STATION_URL;
     }
 
@@ -745,7 +1156,7 @@
     function configureStationUrl() {
       const cur = localStorage.getItem('printaway_api_base') || '';
       const entered = prompt(
-        "Enter your PrintAway Station Backend URL (e.g., https://your-tunnel.trycloudflare.com or https://...ngrok-free.app or leave empty to use current host):",
+        "Enter your PrintAway Station Backend URL (e.g. https://your-tunnel.trycloudflare.com or leave empty to use current host):",
         cur
       );
       if (entered !== null) {
@@ -758,8 +1169,8 @@
       }
     }
 
-    let adminSessionToken = null;
-    let adminCsrfToken = null;
+    let adminSessionToken = localStorage.getItem('printaway_admin_session') || null;
+    let adminCsrfToken = localStorage.getItem('printaway_admin_csrf') || null;
     let dashTimer = null;
     let cachedOrders = [];
 
@@ -771,35 +1182,143 @@
       el.classList.remove('hidden');
     }
 
+    // Shop selector on Login card
+    function onLoginShopSelected() {
+      const sel = document.getElementById('loginShopSelect');
+      const val = sel.value;
+      const wrapCustom = document.getElementById('wrapCustomShopId');
+      const inpUser = document.getElementById('loginUser');
+
+      if (val === '__custom__') {
+        wrapCustom.classList.remove('hidden');
+        inpUser.value = document.getElementById('loginCustomShopId').value.trim();
+      } else {
+        wrapCustom.classList.add('hidden');
+        inpUser.value = val;
+        localStorage.setItem('printaway_shop_id', val);
+        const badgeEl = document.getElementById('lblAdminShopBadge');
+        if (badgeEl) badgeEl.textContent = val;
+      }
+    }
+
+    function onCustomShopInput(val) {
+      const clean = (val || '').trim().toLowerCase().replace(/[^a-z0-9_-]/g, '');
+      document.getElementById('loginUser').value = clean;
+      if (clean) {
+        localStorage.setItem('printaway_shop_id', clean);
+      }
+    }
+
+    async function loadShopListForLogin() {
+      const sel = document.getElementById('loginShopSelect');
+      if (!sel) return;
+      const curShop = getActiveShopId();
+
+      try {
+        const res = await fetch('https://zduoifzakiojfqbtxqqm.supabase.co/rest/v1/shops?select=*', {
+          headers: {
+            'apikey': 'sb_publishable_rhmUZZbKhXiJxrChcPTbsg_gFIH9FdO',
+            'Accept': 'application/json'
+          }
+        });
+        if (res.ok) {
+          const shops = await res.json();
+          if (shops && shops.length > 0) {
+            let html = '';
+            let matched = false;
+            shops.forEach(s => {
+              const isSel = (s.shop_id === curShop);
+              if (isSel) matched = true;
+              html += `<option value="${s.shop_id}" ${isSel ? 'selected' : ''}>${s.shop_name} (${s.shop_id})</option>`;
+            });
+            html += '<option value="__custom__">✏️ Enter Other Shop ID / Code...</option>';
+            sel.innerHTML = html;
+            if (!matched && curShop) {
+              sel.value = '__custom__';
+              document.getElementById('wrapCustomShopId').classList.remove('hidden');
+              document.getElementById('loginCustomShopId').value = curShop;
+            }
+          }
+        }
+      } catch (e) { }
+
+      // Update initial username field
+      if (sel.value && sel.value !== '__custom__') {
+        document.getElementById('loginUser').value = sel.value;
+      } else {
+        document.getElementById('loginUser').value = curShop || 'midtownstationary';
+      }
+    }
+
     async function doAdminLogin() {
       showNotice(null);
-      const username = document.getElementById('loginUser').value;
+      const selShop = document.getElementById('loginShopSelect').value;
+      const shopId = selShop === '__custom__'
+        ? (document.getElementById('loginCustomShopId').value.trim() || getActiveShopId())
+        : selShop;
+      const username = document.getElementById('loginUser').value.trim();
       const password = document.getElementById('loginPass').value;
+      const btn = document.getElementById('btnAdminSignIn');
+
+      if (!username || !password) {
+        showNotice('Please enter your username and password.', true);
+        return;
+      }
+
+      if (btn) {
+        btn.disabled = true;
+        btn.innerHTML = 'Signing in...';
+      }
+
       try {
         await autoDiscoverLiveStation();
         const res = await fetch(apiUrl('/api/admin/login'), {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ username, password })
+          body: JSON.stringify({ username, password, shopId })
         });
         const data = await res.json();
         if (!res.ok || data.error) {
           showNotice(data.message || 'Login failed', true);
           return;
         }
+
         adminSessionToken = data.sessionToken;
         adminCsrfToken = data.csrfToken;
+        localStorage.setItem('printaway_admin_session', adminSessionToken);
+        localStorage.setItem('printaway_admin_csrf', adminCsrfToken);
+        localStorage.setItem('printaway_shop_id', shopId);
+
         document.getElementById('loginCard').classList.add('hidden');
         document.getElementById('dashboardContent').classList.remove('hidden');
         document.getElementById('btnRefreshTop').classList.remove('hidden');
+        document.getElementById('btnLogoutTop').classList.remove('hidden');
+
+        switchAdminTab(currentAdminTab);
         await loadLiveWindowsQueues();
         await loadDashboard();
-        await loadLiveWindowsQueues();
         if (dashTimer) clearInterval(dashTimer);
         dashTimer = setInterval(loadDashboard, 3000);
       } catch (e) {
         showNotice('Login error: ' + e.message, true);
+      } finally {
+        if (btn) {
+          btn.disabled = false;
+          btn.innerHTML = 'Sign In to Admin Dashboard &rarr;';
+        }
       }
+    }
+
+    function doAdminLogout() {
+      localStorage.removeItem('printaway_admin_session');
+      localStorage.removeItem('printaway_admin_csrf');
+      adminSessionToken = null;
+      adminCsrfToken = null;
+      document.getElementById('dashboardContent').classList.add('hidden');
+      document.getElementById('loginCard').classList.remove('hidden');
+      document.getElementById('btnRefreshTop').classList.add('hidden');
+      document.getElementById('btnLogoutTop').classList.add('hidden');
+      if (dashTimer) clearInterval(dashTimer);
     }
 
     function adminHeaders() {
@@ -821,8 +1340,8 @@
         osc.connect(gain);
         gain.connect(ctx.destination);
         osc.type = 'sine';
-        osc.frequency.setValueAtTime(587.33, ctx.currentTime); // D5
-        osc.frequency.setValueAtTime(880, ctx.currentTime + 0.15); // A5
+        osc.frequency.setValueAtTime(587.33, ctx.currentTime);
+        osc.frequency.setValueAtTime(880, ctx.currentTime + 0.15);
         gain.gain.setValueAtTime(0.25, ctx.currentTime);
         gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.6);
         osc.start();
@@ -853,8 +1372,7 @@
       if (inp) inp.value = dt;
       updatePeriodButtons();
       loadDashboard();
-      const el = document.getElementById('ordersCard');
-      if (el) el.scrollIntoView({ behavior: 'smooth' });
+      switchAdminTab('orders');
     }
 
     function updatePeriodButtons() {
@@ -913,8 +1431,8 @@
 
     async function loadDashboard() {
       if (!adminSessionToken) return;
-      const st = document.getElementById('filterState').value;
-      const q = document.getElementById('searchBox').value;
+      const st = document.getElementById('filterState') ? document.getElementById('filterState').value : 'all';
+      const q = document.getElementById('searchBox') ? document.getElementById('searchBox').value : '';
       const activeShop = getActiveShopId();
       try {
         const queryUrl = apiUrl('/api/admin/dashboard?state=' + encodeURIComponent(st) + 
@@ -925,7 +1443,12 @@
           headers: adminHeaders()
         });
         const data = await res.json();
-        if (!res.ok || data.error) return;
+        if (!res.ok || data.error) {
+          if (res.status === 401) {
+            doAdminLogout();
+          }
+          return;
+        }
 
         const m = data.metrics;
         document.getElementById('kpiApproval').textContent = m.paidAwaitingApproval;
@@ -945,11 +1468,11 @@
         const shop = data.shopStatus;
         document.getElementById('lblStationStatus').textContent = shop.statusReason;
         document.getElementById('lblFreeDisk').textContent = m.freeDiskMb;
-        document.getElementById('lblActiveQueueTop').textContent = shop.activeQueueName || 'Xerox B1025 Multifunction Printer PCL6';
-        if (document.getElementById('inpShopId')) document.getElementById('inpShopId').value = shop.shopId || 'pilot';
+        document.getElementById('lblActiveQueueTop').textContent = shop.activeQueueName || 'Xerox B1025 Multifunction Printer';
+        if (document.getElementById('inpShopId')) document.getElementById('inpShopId').value = shop.shopId || activeShop;
         if (document.getElementById('inpShopName')) document.getElementById('inpShopName').value = shop.shopName || '';
-        if (document.getElementById('lblAdminShopBadge')) document.getElementById('lblAdminShopBadge').textContent = '🏪 Shop: ' + (shop.shopId || getActiveShopId());
-        if (document.getElementById('lblShopQrUrl')) document.getElementById('lblShopQrUrl').textContent = `https://printitaway.netlify.app/?shop=${shop.shopId || 'pilot'}`;
+        if (document.getElementById('lblAdminShopBadge')) document.getElementById('lblAdminShopBadge').textContent = (shop.shopId || activeShop);
+        if (document.getElementById('lblShopQrUrl')) document.getElementById('lblShopQrUrl').textContent = `https://printitaway.netlify.app/?shop=${shop.shopId || activeShop}`;
         if (document.getElementById('selBwQueueSwitch') && shop.bwQueueName !== undefined) document.getElementById('selBwQueueSwitch').value = shop.bwQueueName || '';
         if (document.getElementById('selColorQueueSwitch') && shop.colorQueueName !== undefined) document.getElementById('selColorQueueSwitch').value = shop.colorQueueName || '';
 
@@ -996,7 +1519,7 @@
         document.getElementById('chkSupportsPageRange').checked = !!shop.supportsPageRange;
         if (shop.allowedPaperSizes) document.getElementById('inpAllowedPapers').value = shop.allowedPaperSizes;
 
-        // Populate Razorpay Live/Test Mode & Store Settlement fields (without overwriting if user is typing)
+        // Populate Razorpay Live/Test Mode & Store Settlement fields
         const rzpBadge = document.getElementById('lblRazorpayModeBadge');
         if (rzpBadge) {
           if (shop.razorpayMode === 'live') {
@@ -1033,16 +1556,24 @@
         const isPhysical = (shop.dispatchMode !== 'simulation');
         const txtDisp = document.getElementById('lblDispatchModeText');
         if (txtDisp) {
-          txtDisp.textContent = isPhysical ? `● LIVE PHYSICAL PRINT (${shop.activeQueueName})` : '○ SAFE SIMULATION MODE (No physical paper)';
+          txtDisp.textContent = isPhysical ? `● LIVE PHYSICAL PRINT (${shop.activeQueueName || 'Default'})` : '○ SAFE SIMULATION MODE (No physical paper)';
           txtDisp.style.color = isPhysical ? '#15803d' : '#b45309';
         }
 
         cachedOrders = data.orders || [];
         renderOrdersTable(cachedOrders);
+        renderOrdersMobileCards(cachedOrders);
         renderAuditTable(data.recentAuditEvents || []);
 
-        // Trigger audible chime and browser tab badge if new orders require approval
+        // Pending approval badge count
         const currentApprovalIds = new Set((data.orders || []).filter(o => o.state === 'paid_awaiting_approval').map(o => o.id));
+        const pendingCount = currentApprovalIds.size;
+        const tabBadge = document.getElementById('tabBadgeOrders');
+        if (tabBadge) {
+          tabBadge.textContent = pendingCount;
+          tabBadge.style.display = pendingCount > 0 ? 'inline-block' : 'none';
+        }
+
         if (knownPaidApprovalIds !== null) {
           let hasNew = false;
           currentApprovalIds.forEach(id => {
@@ -1052,8 +1583,7 @@
         }
         knownPaidApprovalIds = currentApprovalIds;
 
-        const pendingCount = currentApprovalIds.size;
-        document.title = (pendingCount > 0 ? `(${pendingCount}) 🔔 ` : '') + 'PrintAway Admin — Operations & Hardware Hub';
+        document.title = (pendingCount > 0 ? `(${pendingCount}) 🔔 ` : '') + 'PrintAway Admin — Operations Hub';
       } catch (e) {
         console.error(e);
       }
@@ -1067,10 +1597,49 @@
       return 'badge';
     }
 
+    function getOrderRowColor(o) {
+      const isCashPending = (o.paymentStatus === 'cash_at_counter');
+      const isOnlinePaid = (o.paymentStatus === 'verified' || o.paymentStatus === 'paid') && (o.gatewayProvider !== 'CASH_COUNTER');
+
+      if (isCashPending) {
+        return {
+          rowStyle: 'background-color: #fef9c3 !important; border-left: 6px solid #eab308;',
+          cardStyle: 'background-color: #fef9c3; border-left: 6px solid #eab308; border-color: #fde047;'
+        };
+      } else if (o.state === 'paid_awaiting_approval' && isOnlinePaid) {
+        return {
+          rowStyle: 'background-color: #fefce8 !important; border-left: 6px solid #facc15;',
+          cardStyle: 'background-color: #fefce8; border-left: 6px solid #facc15; border-color: #fef08a;'
+        };
+      } else if (o.state === 'queued' || o.state === 'submitted_to_spooler' || o.state === 'rendering') {
+        return {
+          rowStyle: 'background-color: #eff6ff !important; border-left: 6px solid #3b82f6;',
+          cardStyle: 'background-color: #eff6ff; border-left: 6px solid #3b82f6; border-color: #bfdbfe;'
+        };
+      } else if (o.state === 'ready_for_pickup') {
+        return {
+          rowStyle: 'background-color: #f0fdf4 !important; border-left: 6px solid #22c55e;',
+          cardStyle: 'background-color: #f0fdf4; border-left: 6px solid #22c55e; border-color: #bbf7d0;'
+        };
+      } else if (o.state === 'collected') {
+        return {
+          rowStyle: 'background-color: #ffffff; border-left: 4px solid #cbd5e1; opacity: 0.92;',
+          cardStyle: 'background-color: #ffffff; border-left: 4px solid #cbd5e1;'
+        };
+      } else if (o.state === 'reconciliation_required' || o.state === 'failed' || o.state === 'on_hold') {
+        return {
+          rowStyle: 'background-color: #fef2f2 !important; border-left: 6px solid #ef4444;',
+          cardStyle: 'background-color: #fef2f2; border-left: 6px solid #ef4444; border-color: #fecaca;'
+        };
+      }
+      return { rowStyle: '', cardStyle: '' };
+    }
+
     function renderOrdersTable(orders) {
       const tbody = document.getElementById('ordersTableBody');
+      if (!tbody) return;
       if (!orders.length) {
-        tbody.innerHTML = '<tr><td colspan="6" style="text-align:center;color:var(--muted);padding:20px;">No orders matching filter.</td></tr>';
+        tbody.innerHTML = '<tr><td colspan="6" style="text-align:center;color:var(--muted);padding:24px;">No orders matching filter.</td></tr>';
         return;
       }
       tbody.innerHTML = orders.map(o => {
@@ -1080,50 +1649,8 @@
         const nUp = (o.pagesPerSheet && o.pagesPerSheet > 1) ? ` | ${o.pagesPerSheet}-Up` : '';
         const isCashPending = (o.paymentStatus === 'cash_at_counter');
         const isCashVerified = (o.gatewayProvider === 'CASH_COUNTER' && o.paymentStatus === 'verified');
-        const isOnlinePaid = (o.paymentStatus === 'verified' || o.paymentStatus === 'paid') && (o.gatewayProvider !== 'CASH_COUNTER');
         const amtFormatted = Number(o.totalAmountInr).toFixed(2);
-
-        // Strip / Row background coloring as requested:
-        // Light yellow for Razorpay or Online Payment, and light yellow for Cash at Counter!
-        let rowClass = '';
-        let rowStyle = '';
-        if (isCashPending || o.paymentMethod === 'cash' || o.gatewayProvider === 'CASH_COUNTER') {
-          // Cash at Counter (opted for cash method) -> warm light yellow with amber strip
-          if (o.state === 'collected') {
-            rowClass = 'row-category-collected';
-            rowStyle = 'background-color: #ffffff; border-left: 4px solid #cbd5e1; opacity: 0.92;';
-          } else {
-            rowClass = 'row-category-cash';
-            rowStyle = 'background-color: #fef9c3 !important; border-left: 6px solid #f59e0b;';
-          }
-        } else if (isOnlinePaid || o.state === 'paid_awaiting_approval' || (o.gatewayProvider && o.gatewayProvider.startsWith('RAZORPAY'))) {
-          // Razorpay / Online Payment -> light yellow with gold strip
-          if (o.state === 'collected') {
-            rowClass = 'row-category-collected';
-            rowStyle = 'background-color: #ffffff; border-left: 4px solid #cbd5e1; opacity: 0.92;';
-          } else if (o.state === 'queued' || o.state === 'submitted_to_spooler' || o.state === 'rendering') {
-            rowClass = 'row-category-printing';
-            rowStyle = 'background-color: #eff6ff !important; border-left: 6px solid #3b82f6;';
-          } else if (o.state === 'ready_for_pickup') {
-            rowClass = 'row-category-ready';
-            rowStyle = 'background-color: #f0fdf4 !important; border-left: 6px solid #22c55e;';
-          } else {
-            rowClass = 'row-category-online';
-            rowStyle = 'background-color: #fefce8 !important; border-left: 6px solid #eab308;';
-          }
-        } else if (o.state === 'queued' || o.state === 'submitted_to_spooler' || o.state === 'rendering') {
-          rowClass = 'row-category-printing';
-          rowStyle = 'background-color: #eff6ff !important; border-left: 6px solid #3b82f6;';
-        } else if (o.state === 'ready_for_pickup') {
-          rowClass = 'row-category-ready';
-          rowStyle = 'background-color: #f0fdf4 !important; border-left: 6px solid #22c55e;';
-        } else if (o.state === 'collected') {
-          rowClass = 'row-category-collected';
-          rowStyle = 'background-color: #ffffff; border-left: 4px solid #cbd5e1; opacity: 0.92;';
-        } else if (o.state === 'reconciliation_required' || o.state === 'failed' || o.state === 'on_hold') {
-          rowClass = 'row-category-danger';
-          rowStyle = 'background-color: #fef2f2 !important; border-left: 6px solid #ef4444;';
-        }
+        const { rowStyle } = getOrderRowColor(o);
 
         if (o.state === 'paid_awaiting_approval' || o.state === 'on_hold' || o.state === 'awaiting_payment') {
           if (isCashPending || o.state === 'awaiting_payment') {
@@ -1163,16 +1690,16 @@
           payBadgeHtml = `<span class="badge">${o.paymentStatus}</span>`;
         }
 
-        return `<tr class="${rowClass}" style="${rowStyle}">
+        return `<tr style="${rowStyle}">
           <td>
             <div style="display:flex;align-items:center;gap:5px;">
               <strong>${o.orderCode}</strong>
-              <span class="badge" style="background:#f1f5f9;color:#475569;font-size:0.68rem;padding:1px 5px;">${o.shopSlug || 'pilot'}</span>
+              <span class="badge" style="background:#f1f5f9;color:#475569;font-size:0.68rem;padding:1px 5px;">${o.shopSlug || 'midtownstationary'}</span>
             </div>
             <span style="font-size:0.75rem;color:var(--muted);">${o.createdAtIst}</span>
           </td>
           <td>
-            <strong>${o.customerName || 'Walk-in'}</strong><br/>
+            <strong>${o.customerName || 'Walk-in Customer'}</strong><br/>
             <span style="font-size:0.78rem;color:var(--muted);">File: ${o.fileName} ${o.fileDeleted ? '[Deleted]' : ''}</span><br/>
             <span style="font-size:0.74rem;color:var(--muted);">SHA256: <code>${o.sha256Prefix}</code></span>
           </td>
@@ -1200,10 +1727,103 @@
       }).join('');
     }
 
+    function renderOrdersMobileCards(orders) {
+      const container = document.getElementById('ordersCardsMobile');
+      if (!container) return;
+      if (!orders.length) {
+        container.innerHTML = '<div style="text-align:center;color:var(--muted);padding:24px;background:#fff;border-radius:10px;border:1px solid #cbd5e1;">No orders matching filter.</div>';
+        return;
+      }
+      container.innerHTML = orders.map(o => {
+        let actions = '';
+        const isColor = o.colorMode === 'color';
+        const colorBadge = isColor ? '<span class="badge badge-color">🎨 Color</span>' : '<span class="badge badge-bw">⚫ B&amp;W</span>';
+        const nUp = (o.pagesPerSheet && o.pagesPerSheet > 1) ? ` | ${o.pagesPerSheet}-Up` : '';
+        const isCashPending = (o.paymentStatus === 'cash_at_counter');
+        const isCashVerified = (o.gatewayProvider === 'CASH_COUNTER' && o.paymentStatus === 'verified');
+        const amtFormatted = Number(o.totalAmountInr).toFixed(2);
+        const { cardStyle } = getOrderRowColor(o);
+
+        if (o.state === 'paid_awaiting_approval' || o.state === 'on_hold' || o.state === 'awaiting_payment') {
+          if (isCashPending || o.state === 'awaiting_payment') {
+            actions += `<button class="btn btn-success" style="background:#059669;padding:12px;" onclick="approveCashOrder(${o.id}, '${amtFormatted}', '${o.orderCode}')">💵 Cash Received (₹${amtFormatted}) — Approve &amp; Print</button>`;
+          } else {
+            actions += `<button class="btn btn-success" style="padding:12px;" onclick="orderAction(${o.id}, 'approve', {reason:'Approved at counter'})">✓ Approve &amp; Print</button>`;
+          }
+          actions += `<button class="btn btn-secondary" onclick="openOverrideModal(${o.id})">⚙️ Edit Print Settings</button>`;
+          if (o.state === 'paid_awaiting_approval') {
+            actions += `<button class="btn btn-warn" onclick="orderAction(${o.id}, 'hold', {reason:'Pending customer check'})">Hold</button>`;
+          }
+          if (o.state !== 'awaiting_payment') {
+            actions += `<button class="btn btn-danger" onclick="orderAction(${o.id}, 'reject', {reason:'Rejected by admin; refund issued'})">Reject / Cancel</button>`;
+          } else {
+            actions += `<button class="btn btn-danger" onclick="orderAction(${o.id}, 'cancel', {reason:'Cancelled unpaid order'})">Cancel</button>`;
+          }
+        } else if (o.state === 'queued') {
+          actions += `<button class="btn btn-danger" onclick="orderAction(${o.id}, 'cancel', {reason:'Cancelled before print'})">Cancel Job</button>`;
+        } else if (o.state === 'submitted_to_spooler') {
+          actions += `<button class="btn btn-success" style="padding:12px;" onclick="orderAction(${o.id}, 'ready', {})">✓ Confirm Physical Pages Ready</button>`;
+        } else if (o.state === 'ready_for_pickup') {
+          actions += `<button class="btn btn-primary" style="padding:12px;" onclick="orderAction(${o.id}, 'collected', {pickupCode: ''})">✓ Hand Over &amp; Purge PDF</button>`;
+        } else if (o.state === 'reconciliation_required' || o.state === 'failed') {
+          actions += `<button class="btn btn-success" onclick="orderAction(${o.id}, 'reconcile', {resolutionAction:'confirm_printed', reason:'Spooler output verified on tray'})">Confirm Printed</button>`;
+          actions += `<button class="btn btn-warn" onclick="orderAction(${o.id}, 'reconcile', {resolutionAction:'authorize_reprint', reason:'Tray empty; safe reprint authorized'})">Authorize Reprint</button>`;
+          actions += `<button class="btn btn-secondary" onclick="openOverrideModal(${o.id})">⚙️ Adjust Settings</button>`;
+        }
+
+        let payBadgeHtml = '';
+        if (isCashPending) {
+          payBadgeHtml = `<span class="badge" style="background:#fef3c7;color:#92400e;font-weight:800;border:1px solid #f59e0b;">💵 Cash at Counter (Collect ₹${amtFormatted})</span>`;
+        } else if (isCashVerified) {
+          payBadgeHtml = `<span class="badge" style="background:#dcfce7;color:#15803d;font-weight:700;">💵 Cash Received (₹${amtFormatted})</span>`;
+        } else if (o.paymentStatus === 'verified' || o.paymentStatus === 'paid') {
+          payBadgeHtml = `<span class="badge" style="background:#dcfce7;color:#15803d;font-weight:700;">💳 Paid Online (₹${amtFormatted})</span>`;
+        } else {
+          payBadgeHtml = `<span class="badge">${o.paymentStatus}</span>`;
+        }
+
+        return `<div class="mobile-order-card" style="${cardStyle}">
+          <div class="moc-top">
+            <div class="moc-code-wrap">
+              <span class="moc-code">${o.orderCode}</span>
+              <span class="moc-shop-badge">${o.shopSlug || 'midtownstationary'}</span>
+            </div>
+            <span class="${badgeClass(o.state)}">${o.state}</span>
+          </div>
+          <div class="moc-time">${o.createdAtIst}</div>
+
+          <div class="moc-customer">
+            <strong>${o.customerName || 'Walk-in Customer'}</strong>
+            <span class="moc-file">📄 ${o.fileName} ${o.fileDeleted ? '[Deleted]' : ''}</span>
+          </div>
+
+          <div class="moc-spec">
+            ${colorBadge} <strong>${o.paperSize || 'A4'}</strong>${nUp} | <strong>${o.duplexMode}</strong>
+            <div class="moc-pages">Pages: <strong>${o.pageRange}</strong> (${o.selectedPages}/${o.documentPages}p) × <strong>${o.copies} copy</strong></div>
+            <div class="moc-cost"><strong>${o.printedSides} sides / ${o.physicalSheets} sheets</strong> &rarr; <span class="moc-amount">₹${amtFormatted}</span></div>
+            <div class="moc-queue">🖨️ Queue: <strong>${o.targetQueueName || 'Auto-Route'}</strong></div>
+          </div>
+
+          <div class="moc-payment">
+            ${payBadgeHtml}
+            ${o.gatewayPaymentId ? `<div class="moc-pay-id">${o.gatewayPaymentId}</div>` : ''}
+          </div>
+
+          ${o.windowsSpoolerJobId ? `<div class="moc-spooler">WinSpooler Job #${o.windowsSpoolerJobId}</div>` : ''}
+          ${o.holdOrRejectReason ? `<div class="moc-reject-reason">⚠️ Note: ${o.holdOrRejectReason}</div>` : ''}
+
+          <div class="moc-actions">
+            ${actions || '<div style="color:var(--muted);font-size:0.8rem;text-align:center;">No action needed</div>'}
+          </div>
+        </div>`;
+      }).join('');
+    }
+
     function renderAuditTable(events) {
       const tbody = document.getElementById('auditTableBody');
+      if (!tbody) return;
       tbody.innerHTML = events.map(e => `<tr>
-        <td style="white-space:nowrap;font-family:monospace;font-size:0.76rem;">${e.created_at_utc}</td>
+        <td style="white-space:nowrap;font-family:monospace;font-size:0.75rem;">${e.created_at_utc}</td>
         <td>${e.order_id || '-'}</td>
         <td>${e.actor_type}:${e.actor_name}</td>
         <td><strong>${e.event_type}</strong></td>
@@ -1307,6 +1927,77 @@
       });
     }
 
+    async function printBlankTestPage() {
+      const btn = document.getElementById('btnTestBlank');
+      const origText = btn ? btn.innerHTML : '';
+      if (btn) {
+        btn.disabled = true;
+        btn.innerHTML = '⏳ Dispatching 1 Blank Test Page...';
+      }
+      showNotice(null);
+      try {
+        const res = await fetch(apiUrl('/api/admin/printers/test-blank'), {
+          method: 'POST',
+          headers: adminHeaders(),
+          body: JSON.stringify({})
+        });
+        const data = await res.json();
+        if (res.ok && data.success) {
+          showNotice(data.message, false);
+        } else {
+          showNotice(data.message || data.errorMessage || 'Failed to print blank test page', true);
+        }
+        await loadDashboard();
+      } catch (err) {
+        showNotice('Blank test print error: ' + err.message, true);
+      } finally {
+        if (btn) {
+          btn.disabled = false;
+          btn.innerHTML = origText;
+        }
+      }
+    }
+
+    async function submitChangePassword() {
+      const cur = document.getElementById('inpCurPass').value;
+      const next = document.getElementById('inpNewPass').value;
+      const conf = document.getElementById('inpConfPass').value;
+
+      if (!cur || !next) {
+        alert('Please enter your current and new password.');
+        return;
+      }
+      if (next !== conf) {
+        alert('New passwords do not match.');
+        return;
+      }
+      if (next.length < 6) {
+        alert('New password must be at least 6 characters.');
+        return;
+      }
+
+      showNotice(null);
+      try {
+        const res = await fetch(apiUrl('/api/admin/change-password'), {
+          method: 'POST',
+          headers: adminHeaders(),
+          body: JSON.stringify({ currentPassword: cur, newPassword: next })
+        });
+        const data = await res.json();
+        if (res.ok && data.success) {
+          alert('Store password updated successfully! Please note down your new password.');
+          document.getElementById('inpCurPass').value = '';
+          document.getElementById('inpNewPass').value = '';
+          document.getElementById('inpConfPass').value = '';
+          showNotice('Store counter password updated successfully.', false);
+        } else {
+          alert('Password update failed: ' + (data.message || 'Unknown error'));
+        }
+      } catch (e) {
+        alert('Error changing password: ' + e.message);
+      }
+    }
+
     async function savePaymentSettlementConfig() {
       showNotice(null);
       const razorpayKeyId = document.getElementById('inpRzpKeyId') ? document.getElementById('inpRzpKeyId').value.trim() : '';
@@ -1392,18 +2083,22 @@
         if (selColor) selColor.innerHTML = optHtml;
         if (selOvTarget) selOvTarget.innerHTML = optHtml;
 
-        selSwitch.innerHTML = (data.liveWindowsQueues || []).map(q => {
-          const isAct = (q.QueueName === data.activeVerifiedQueue);
-          return `<option value="${q.QueueName}" ${isAct ? 'selected' : ''}>${q.QueueName} [${q.PortName}]</option>`;
-        }).join('');
+        if (selSwitch) {
+          selSwitch.innerHTML = (data.liveWindowsQueues || []).map(q => {
+            const isAct = (q.QueueName === data.activeVerifiedQueue);
+            return `<option value="${q.QueueName}" ${isAct ? 'selected' : ''}>${q.QueueName} [${q.PortName}]</option>`;
+          }).join('');
+        }
 
-        const list = (data.liveWindowsQueues || []).map(q =>
-          `<div style="padding:4px 0;border-bottom:1px dashed #cbd5e1;">
-            <strong>${q.QueueName}</strong> [${q.PortName}] — Paper: <strong>${q.DefaultPaperSize}</strong> | DuplexCapable: ${q.SupportsDuplex} |
-            ${q.IsVirtualExcluded ? '<span style="color:#b91c1c;">Excluded (Virtual)</span>' : (q.QueueName === data.activeVerifiedQueue ? '<span style="color:#15803d;font-weight:700;">★ ACTIVE SELECTED QUEUE</span>' : '<span style="color:#b45309;">Alternative Hardware Queue</span>')}
-          </div>`
-        ).join('');
-        box.innerHTML = list;
+        if (box) {
+          const list = (data.liveWindowsQueues || []).map(q =>
+            `<div style="padding:4px 0;border-bottom:1px dashed #cbd5e1;">
+              <strong>${q.QueueName}</strong> [${q.PortName}] — Paper: <strong>${q.DefaultPaperSize}</strong> | DuplexCapable: ${q.SupportsDuplex} |
+              ${q.IsVirtualExcluded ? '<span style="color:#b91c1c;">Excluded (Virtual)</span>' : (q.QueueName === data.activeVerifiedQueue ? '<span style="color:#15803d;font-weight:700;">★ ACTIVE SELECTED QUEUE</span>' : '<span style="color:#b45309;">Alternative Hardware Queue</span>')}
+            </div>`
+          ).join('');
+          box.innerHTML = list;
+        }
       } catch (e) {
         console.error(e);
       }
@@ -1539,70 +2234,34 @@
       alert(`Thank you! Your ${plan === 'annual' ? 'Annual (₹149/mo)' : 'Monthly (₹249/mo)'} Pro activation request (UTR: ${utr}) has been submitted to the PrintAway founder. Your account will be upgraded shortly.`);
       closeProUpgradeModal();
     }
-  </script>
 
-  <!-- Pro Upgrade Modal -->
-  <div id="modalProUpgrade" style="display:none;position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,0.65);z-index:9999;align-items:center;justify-content:center;padding:16px;">
-    <div style="background:#fff;border-radius:14px;max-width:480px;width:100%;padding:24px;box-shadow:0 20px 25px -5px rgba(0,0,0,0.3);position:relative;">
-      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px;">
-        <h3 style="margin:0;font-size:1.15rem;display:flex;align-items:center;gap:8px;">
-          <span>⚡ Upgrade to PrintAway Pro</span>
-        </h3>
-        <button onclick="closeProUpgradeModal()" style="background:none;border:none;font-size:1.3rem;cursor:pointer;color:#64748b;">&times;</button>
-      </div>
-
-      <p style="font-size:0.85rem;color:#475569;margin-bottom:16px;line-height:1.4;">
-        Unlock unlimited daily printing, automated Smart Color Routing, and multi-printer queue balancing.
-      </p>
-
-      <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:18px;">
-        <label style="border:2px solid #4f46e5;border-radius:10px;padding:12px;cursor:pointer;background:#eef2ff;display:block;">
-          <input type="radio" name="proPlan" value="annual" checked style="margin-right:6px;" />
-          <strong style="font-size:0.9rem;color:#1e1b4b;">Annual Plan</strong>
-          <div style="font-size:1.15rem;font-weight:800;color:#4338ca;margin-top:4px;">₹149 <span style="font-size:0.75rem;font-weight:600;">/ mo</span></div>
-          <div style="font-size:0.72rem;color:#6366f1;font-weight:700;margin-top:2px;">Billed as ₹1,788/yr (Save 40%)</div>
-        </label>
-
-        <label style="border:1px solid #cbd5e1;border-radius:10px;padding:12px;cursor:pointer;display:block;">
-          <input type="radio" name="proPlan" value="monthly" style="margin-right:6px;" />
-          <strong style="font-size:0.9rem;color:#1e293b;">Monthly Plan</strong>
-          <div style="font-size:1.15rem;font-weight:800;color:#0f172a;margin-top:4px;">₹249 <span style="font-size:0.75rem;font-weight:600;">/ mo</span></div>
-          <div style="font-size:0.72rem;color:#64748b;margin-top:2px;">Billed monthly</div>
-        </label>
-      </div>
-
-      <!-- DIRECT RAZORPAY 1-CLICK INSTANT UPGRADE -->
-      <div style="margin-bottom:16px;">
-        <button id="btnPayProRzp" class="btn" style="width:100%;background:linear-gradient(135deg, #4f46e5 0%, #7c3aed 100%);color:#fff;border:none;padding:12px 18px;border-radius:10px;font-weight:800;font-size:0.95rem;display:flex;align-items:center;justify-content:center;gap:8px;box-shadow:0 4px 15px rgba(79, 70, 229, 0.35);cursor:pointer;" onclick="payProWithRazorpay()">
-          <span>⚡ Pay via Razorpay &amp; Upgrade Instantly</span>
-        </button>
-        <p style="font-size:0.75rem;color:#64748b;text-align:center;margin-top:6px;">
-          ✓ Instant automated activation via UPI (GPay, PhonePe, Paytm, QR), Cards &amp; NetBanking.
-        </p>
-      </div>
-
-      <div style="text-align:center;margin:12px 0 10px;font-size:0.72rem;font-weight:700;color:#94a3b8;letter-spacing:0.05em;">
-        — OR PAY DIRECTLY VIA UPI VPA —
-      </div>
-
-      <div style="background:#f1f5f9;border-radius:10px;padding:10px 12px;font-size:0.8rem;color:#334155;margin-bottom:12px;">
-        <div>Pay via any UPI app (GPay / PhonePe / Paytm / BHIM) to:</div>
-        <div style="font-family:monospace;font-weight:bold;color:#4338ca;margin-top:2px;font-size:0.92rem;">shivam@upi</div>
-      </div>
-
-      <div style="margin-bottom:14px;">
-        <label style="display:block;font-size:0.78rem;font-weight:600;margin-bottom:4px;color:#1e293b;">UPI Transaction Reference (UTR / Txn ID)</label>
-        <div style="display:flex;gap:8px;">
-          <input type="text" id="inpProUtr" placeholder="e.g. 334156789012" style="flex:1;padding:8px 10px;border:1px solid #cbd5e1;border-radius:8px;font-size:0.82rem;" />
-          <button class="btn btn-secondary" style="font-size:0.8rem;padding:6px 12px;" onclick="submitProRequest()">Submit UTR</button>
-        </div>
-      </div>
-
-      <div style="display:flex;justify-content:flex-end;">
-        <button class="btn btn-secondary" style="font-size:0.8rem;" onclick="closeProUpgradeModal()">Close</button>
-      </div>
-    </div>
-  </div>
+    // Auto-resume admin session on startup if valid token stored
+    window.addEventListener('DOMContentLoaded', async () => {
+      await loadShopListForLogin();
+      if (adminSessionToken) {
+        try {
+          await autoDiscoverLiveStation();
+          const testRes = await fetch(apiUrl('/api/admin/dashboard?shop=' + encodeURIComponent(getActiveShopId())), {
+            headers: adminHeaders()
+          });
+          if (testRes.ok) {
+            document.getElementById('loginCard').classList.add('hidden');
+            document.getElementById('dashboardContent').classList.remove('hidden');
+            document.getElementById('btnRefreshTop').classList.remove('hidden');
+            document.getElementById('btnLogoutTop').classList.remove('hidden');
+            switchAdminTab(currentAdminTab);
+            await loadLiveWindowsQueues();
+            await loadDashboard();
+            dashTimer = setInterval(loadDashboard, 3000);
+            return;
+          } else {
+            doAdminLogout();
+          }
+        } catch (e) {
+          console.warn('Session resume check skipped:', e);
+        }
+      }
+    });
   </script>
 </body>
 </html>

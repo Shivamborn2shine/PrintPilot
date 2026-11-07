@@ -746,8 +746,9 @@ namespace PrintAway.Web
                     var body = ReadJsonBody(req);
                     string username = GetString(body, "username", "");
                     string password = GetString(body, "password", "");
+                    string shopId = GetString(body, "shopId", "");
                     string errMsg;
-                    var sess = _repo.AuthenticateAdmin(username, password, out errMsg);
+                    var sess = _repo.AuthenticateAdmin(username, password, out errMsg, shopId);
                     if (sess == null)
                     {
                         WriteError(res, 401, "AUTH_FAILED", errMsg);
@@ -825,6 +826,49 @@ namespace PrintAway.Web
                         WriteJson(res, 200, new Dictionary<string, object>
                         {
                             { "dispatchMode", _repo.GetDispatchMode() }
+                        });
+                        return;
+                    }
+
+                    if (method == "POST" && path == "/api/admin/printers/test-blank")
+                    {
+                        var status = _repo.GetShopAndAvailabilityStatus();
+                        string queue = (status != null && status.ContainsKey("activeQueueName") && !string.IsNullOrWhiteSpace(Convert.ToString(status["activeQueueName"])))
+                            ? Convert.ToString(status["activeQueueName"])
+                            : "Xerox B1025 Multifunction Printer";
+                        string dispMode = _repo.GetDispatchMode();
+                        bool simulate = string.Equals(dispMode, "simulation", StringComparison.OrdinalIgnoreCase);
+
+                        byte[] blankPdf = PdfAndPrinterEngine.GenerateSamplePdfBytes(1, "PrintAway 1 Blank Page Test");
+                        var dispatch = PdfAndPrinterEngine.DispatchPrintJob(
+                            queue,
+                            "TEST-BLANK",
+                            blankPdf,
+                            new List<int> { 1 },
+                            1,
+                            "OneSided",
+                            simulate,
+                            "bw",
+                            "A4",
+                            "portrait",
+                            1,
+                            false
+                        );
+
+                        _repo.LogAudit(null, "ADMIN", Convert.ToString(adminSess["username"]), "PRINT_TEST_BLANK_PAGE", null, null,
+                            string.Format(CultureInfo.InvariantCulture, "Queue: {0}, JobId: {1}, Simulated: {2}, Error: {3}",
+                                queue, dispatch.WindowsSpoolerJobId, dispatch.SimulatedMode, dispatch.ErrorMessage));
+
+                        WriteJson(res, 200, new Dictionary<string, object>
+                        {
+                            { "success", dispatch.Dispatched },
+                            { "targetQueue", queue },
+                            { "windowsSpoolerJobId", dispatch.WindowsSpoolerJobId },
+                            { "simulatedMode", dispatch.SimulatedMode },
+                            { "errorMessage", dispatch.ErrorMessage },
+                            { "message", dispatch.Dispatched
+                                ? string.Format(CultureInfo.InvariantCulture, "1 blank test page successfully sent to {0} (Spooler Job #{1})", queue, dispatch.WindowsSpoolerJobId)
+                                : ("Test print failed: " + dispatch.ErrorMessage) }
                         });
                         return;
                     }
@@ -973,6 +1017,26 @@ namespace PrintAway.Web
                                 return;
                             }
                         }
+                    }
+
+                    if (method == "POST" && path == "/api/admin/change-password")
+                    {
+                        var body = ReadJsonBody(req);
+                        string curPass = GetString(body, "currentPassword", "");
+                        string newPass = GetString(body, "newPassword", "");
+                        string uName = Convert.ToString(adminSess["username"]);
+                        string err;
+                        if (!_repo.ChangeAdminPassword(uName, curPass, newPass, out err))
+                        {
+                            WriteError(res, 400, "PASSWORD_CHANGE_FAILED", err);
+                            return;
+                        }
+                        WriteJson(res, 200, new Dictionary<string, object>
+                        {
+                            { "success", true },
+                            { "message", "Store password updated successfully." }
+                        });
+                        return;
                     }
                 }
 
