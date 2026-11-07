@@ -835,7 +835,6 @@
       </a>
       <div class="nav-links">
         <a href="/" onclick="resetToNewOrder(); return false;">➕ New Print</a>
-        <a href="/admin">Staff Admin</a>
         <a href="#" onclick="switchShopPrompt(); return false;" id="btnShopSwitch" class="pill-shop">
           🏪 <span id="lblActiveShopBadge">midtownstationary</span>
         </a>
@@ -925,13 +924,11 @@
           </div>
         </div>
 
-        <div style="margin-top:14px;display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px;">
-          <span style="font-size:0.8rem;font-weight:600;color:var(--muted);">⚡ Quick test presets:</span>
-          <div style="display:flex;gap:6px;flex-wrap:wrap;">
-            <button type="button" class="btn btn-secondary" style="font-size:0.78rem;padding:6px 11px;" onclick="loadFounderPdf()">📄 First Successful Doc (2p)</button>
-            <button type="button" class="btn btn-secondary" style="font-size:0.78rem;padding:6px 11px;" onclick="generateSamplePdf(5)">5-Page Sample</button>
-            <button type="button" class="btn btn-secondary" style="font-size:0.78rem;padding:6px 11px;" onclick="generateSamplePdf(10)">10-Page Sample</button>
-          </div>
+        <div style="margin-top:14px;display:flex;justify-content:center;align-items:center;">
+          <button type="button" class="btn btn-secondary" style="font-size:0.82rem;padding:7px 16px;display:inline-flex;align-items:center;gap:6px;border-radius:10px;" onclick="printBlankPagePdf()">
+            <span>📄</span>
+            <span>Print 1 Blank Page PDF</span>
+          </button>
         </div>
 
         <!-- Validated File Preview Box -->
@@ -1173,9 +1170,6 @@
           <button id="btnPayRazorpay" class="btn" style="background:#2563eb;color:#fff;font-weight:800;padding:13px 24px;font-size:1.02rem;" onclick="launchRazorpayCheckout()">
             💳 Pay via Razorpay (GPay, PhonePe, Paytm, Cards)
           </button>
-          <button class="btn btn-secondary" style="font-size:0.82rem;padding:10px 16px;" onclick="simulateVerifiedUpiWebhook()">
-            🧪 Demo Simulation (Instant Verify)
-          </button>
         </div>
         <p style="font-size:0.8rem;color:var(--muted);margin-top:12px;">
           ✓ Fully automated instant verification. Your order immediately moves to <code>paid_awaiting_approval</code> upon payment.
@@ -1207,10 +1201,9 @@
         <div class="quote-row"><span style="color:var(--muted);">Tracking Token:</span><code id="trkPubToken" style="font-size:0.78rem;font-family:var(--font-mono);"></code></div>
       </div>
 
-      <div style="margin-top:16px;display:flex;gap:10px;flex-wrap:wrap;">
+      <div style="margin-top:16px;display:flex;gap:10px;flex-wrap:wrap;align-items:center;">
         <button class="btn btn-secondary" onclick="refreshCurrentOrder()">🔄 Refresh Status</button>
-        <button class="btn btn-secondary" onclick="resetToNewOrder()">➕ Print Another File</button>
-        <a href="/admin" target="_blank" class="btn" style="margin-left:auto;">Staff Counter Admin &rarr;</a>
+        <button class="btn btn-primary" onclick="resetToNewOrder()">➕ Print Another File</button>
       </div>
     </div>
   </div>
@@ -1545,47 +1538,47 @@
       }
     }
 
-    async function loadFounderPdf() {
+    async function printBlankPagePdf() {
       showError(null);
-      showMascotLoader('Loading Test Document...', 'Fetching verified 2-page test document');
+      showMascotLoader('Preparing 1 Blank Page PDF...', 'Generating 1 blank test page');
       try {
-        const res = await fetch(apiUrl('/api/uploads/sample'), {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ preset: 'first-successful-document' })
-        });
-        const data = await res.json();
-        hideMascotLoader();
-        if (!res.ok || data.error) {
-          showError(data.message || 'Could not load FIRST SUCCESSFUL DOCUMENT.pdf.');
-          return;
-        }
-        onFileValidated(data);
-      } catch (e) {
-        hideMascotLoader();
-        showError('Error: ' + e.message);
-      }
-    }
+        let saved = null;
+        try {
+          const res = await fetch(apiUrl('/api/uploads/sample'), {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ pages: 1, title: 'Blank_Test_Page' })
+          });
+          if (res.ok) {
+            saved = await res.json();
+          }
+        } catch (e) { }
 
-    async function generateSamplePdf(pages) {
-      showError(null);
-      showMascotLoader('Generating Sample Document...', `Synthesizing ${pages}-page test PDF`);
-      try {
-        const res = await fetch(apiUrl('/api/uploads/sample'), {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ pages: pages, title: 'Sample_A4_PrintAway_Test' })
-        });
-        const data = await res.json();
+        if (!saved || !saved.fileToken) {
+          // Client fallback: Synthesize minimal valid 1-page PDF
+          const rawPdf = `%PDF-1.4\n1 0 obj<</Type/Catalog/Pages 2 0 R>>endobj\n2 0 obj<</Type/Pages/Count 1/Kids[3 0 R]>>endobj\n3 0 obj<</Type/Page/MediaBox[0 0 595 842]/Parent 2 0 R/Resources<<>>>>endobj\nxref\n0 4\n0000000000 65535 f \n0000000009 00000 n \n0000000052 00000 n \n0000000101 00000 n \ntrailer<</Size 4/Root 1 0 R>>\nstartxref\n178\n%%EOF`;
+          const blob = new Blob([rawPdf], { type: 'application/pdf' });
+          const uploadRes = await fetch(apiUrl('/api/uploads?filename=Blank_Test_Page.pdf'), {
+            method: 'POST',
+            headers: { 'X-File-Name': 'Blank_Test_Page.pdf' },
+            body: blob
+          });
+          if (uploadRes.ok) {
+            saved = await uploadRes.json();
+          }
+        }
+
         hideMascotLoader();
-        if (!res.ok || data.error) {
-          showError(data.message || 'Could not generate sample PDF.');
+        if (!saved || !saved.fileToken) {
+          showError('Could not prepare 1-page blank document. Please upload a PDF file.');
           return;
         }
-        onFileValidated(data);
-      } catch (e) {
+
+        onFileValidated(saved);
+        calculateQuote();
+      } catch (err) {
         hideMascotLoader();
-        showError('Error: ' + e.message);
+        showError('Error preparing blank test page: ' + err.message);
       }
     }
 
