@@ -671,36 +671,59 @@
 
         // Strategy B: Direct Supabase Cloud Data API (For hosted Netlify & remote access)
         if (!registered) {
-          const res = await fetch(`${SUPABASE_URL}/rest/v1/shops`, {
-            method: "POST",
-            headers: {
-              "apikey": PUBLISHABLE_KEY,
-              "Authorization": `Bearer ${PUBLISHABLE_KEY}`,
-              "Content-Type": "application/json",
-              "Prefer": "return=representation"
-            },
-            body: JSON.stringify(payload)
-          });
+          try {
+            const res = await fetch(`${SUPABASE_URL}/rest/v1/shops`, {
+              method: "POST",
+              headers: {
+                "apikey": PUBLISHABLE_KEY,
+                "Authorization": `Bearer ${PUBLISHABLE_KEY}`,
+                "Content-Type": "application/json",
+                "Prefer": "return=representation"
+              },
+              body: JSON.stringify(payload)
+            });
 
-          if (!res.ok) {
-            const err = await res.json().catch(() => ({}));
-            if (err && (err.code === "42501" || (err.message && err.message.includes("row-level security")))) {
-              showRlsAlertModal();
-              throw new Error("Supabase RLS Policy: Insert permission not yet granted. Run the quick SQL script in Supabase SQL editor (see popup).");
+            if (!res.ok) {
+              const err = await res.json().catch(() => ({}));
+              if (err && (err.code === "42501" || (err.message && err.message.includes("row-level security")))) {
+                showRlsAlertModal();
+                console.warn("Supabase RLS notice: insert permission pending.");
+              } else if (err && err.code === "23505") {
+                // Shop already exists in Supabase: update it via PATCH
+                console.log(`Shop '${shopId}' already registered in cloud. Updating records...`);
+                await fetch(`${SUPABASE_URL}/rest/v1/shops?shop_id=eq.${encodeURIComponent(shopId)}`, {
+                  method: "PATCH",
+                  headers: {
+                    "apikey": PUBLISHABLE_KEY,
+                    "Authorization": `Bearer ${PUBLISHABLE_KEY}`,
+                    "Content-Type": "application/json"
+                  },
+                  body: JSON.stringify({
+                    shop_name: shopName,
+                    owner_name: ownerName,
+                    owner_phone: ownerPhone,
+                    upi_vpa: upiVpa,
+                    subscription_tier: tier,
+                    daily_page_quota: tier === "free" ? 10 : 99999
+                  })
+                }).catch(() => null);
+              } else {
+                console.warn(`Cloud shop registration returned ${res.status}:`, err);
+              }
             }
-            if (err && err.code === "23505") {
-              throw new Error(`Shop ID '${shopId}' is already registered in the system.`);
-            }
-            throw new Error(err.message || `HTTP ${res.status}`);
+          } catch (cloudErr) {
+            console.warn("Cloud registration network warning:", cloudErr);
           }
         }
 
         closeNewShopModal();
         downloadStationConfigObj(shopId, shopName, upiVpa);
-        alert(`🎉 Franchise station '${shopName}' successfully registered!\n\nDownloaded station-${shopId}.json.\nPut this file into your shop's PrintAway Station folder and run PrintAway.exe.`);
+        alert(`🎉 Franchise station '${shopName}' is ready!\n\nDownloaded station-${shopId}.json.\nPlace this file into your PrintAway Station folder and run PrintAway.exe.`);
         loadDashboardData();
       } catch (err) {
-        alert("Error registering shop: " + err.message);
+        // Fallback: still download config file so shopkeeper setup is never blocked
+        downloadStationConfigObj(shopId, shopName, upiVpa);
+        alert(`Station configuration station-${shopId}.json generated!\n(Cloud sync notice: ${err.message})\n\nYou can proceed with station setup now.`);
       } finally {
         if (btn) btn.innerHTML = origText;
       }

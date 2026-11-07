@@ -754,7 +754,9 @@ namespace PrintAway.Web
                     {
                         string stateFilter = req.QueryString["state"] ?? "all";
                         string search = req.QueryString["q"] ?? "";
-                        WriteJson(res, 200, _repo.GetAdminDashboardSummary(stateFilter, search));
+                        string dateFilter = req.QueryString["date"] ?? "today";
+                        string shopFilter = req.QueryString["shop"] ?? null;
+                        WriteJson(res, 200, _repo.GetAdminDashboardSummary(stateFilter, search, dateFilter, shopFilter));
                         return;
                     }
 

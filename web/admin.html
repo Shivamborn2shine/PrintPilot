@@ -197,38 +197,112 @@
         </div>
       </div>
 
+      <!-- Date Period & Day-Wise Filter Bar -->
+      <div class="card" style="margin-bottom:14px;padding:12px 16px;background:#f8fafc;border:1px solid #e2e8f0;display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:12px;">
+        <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;">
+          <div style="font-size:0.85rem;font-weight:700;color:#0f172a;display:flex;align-items:center;gap:6px;">
+            <i class="fa-solid fa-calendar-day" style="color:var(--primary);"></i>
+            <span>Date Filter (IST):</span>
+          </div>
+          <div style="display:flex;gap:6px;flex-wrap:wrap;" id="periodBtnGroup">
+            <button class="btn btn-primary" id="btnPeriodToday" onclick="setPeriodFilter('today')" style="padding:5px 12px;font-size:0.8rem;">📅 Today</button>
+            <button class="btn btn-secondary" id="btnPeriodYesterday" onclick="setPeriodFilter('yesterday')" style="padding:5px 12px;font-size:0.8rem;">Yesterday</button>
+            <button class="btn btn-secondary" id="btnPeriod7Days" onclick="setPeriodFilter('last7days')" style="padding:5px 12px;font-size:0.8rem;">Last 7 Days</button>
+            <button class="btn btn-secondary" id="btnPeriodAll" onclick="setPeriodFilter('all')" style="padding:5px 12px;font-size:0.8rem;">All Time</button>
+          </div>
+          <div style="display:flex;align-items:center;gap:6px;">
+            <span style="font-size:0.75rem;color:var(--muted);font-weight:600;">Specific:</span>
+            <input type="date" id="inpSpecificDate" onchange="setCustomDateFilter(this.value)" style="padding:4px 8px;font-size:0.8rem;border:1px solid #cbd5e1;border-radius:6px;" />
+          </div>
+        </div>
+
+        <div style="display:flex;align-items:center;gap:8px;">
+          <span class="badge" id="lblPeriodScopeBadge" style="background:#e0e7ff;color:#4338ca;font-weight:700;padding:4px 10px;font-size:0.8rem;">
+            Viewing: Today (IST)
+          </span>
+          <span class="badge" id="lblActiveShopFilterBadge" style="background:#f1f5f9;color:#334155;font-weight:700;padding:4px 10px;font-size:0.8rem;">
+            🏪 Station: <span id="lblActiveShopSlug">pilot</span>
+          </span>
+        </div>
+      </div>
+
       <!-- KPI Row -->
       <div class="kpi-grid">
         <div class="kpi-box" style="border-left:4px solid #f59e0b;">
           <div class="kpi-label">Awaiting Admin Approval</div>
           <div class="kpi-val" id="kpiApproval">0</div>
+          <div style="font-size:0.7rem;color:var(--muted);margin-top:2px;" id="kpiSubApproval">For selected period</div>
         </div>
         <div class="kpi-box" style="border-left:4px solid #3b82f6;">
           <div class="kpi-label">Active Print / Spooler</div>
           <div class="kpi-val" id="kpiActiveQueue">0</div>
+          <div style="font-size:0.7rem;color:var(--muted);margin-top:2px;" id="kpiSubActive">In spooler / printing</div>
         </div>
         <div class="kpi-box" style="border-left:4px solid #16a34a;">
           <div class="kpi-label">Ready for Counter Pickup</div>
           <div class="kpi-val" id="kpiReady">0</div>
+          <div style="font-size:0.7rem;color:var(--muted);margin-top:2px;" id="kpiSubReady">Printed & awaiting customer</div>
         </div>
         <div class="kpi-box">
           <div class="kpi-label">Collected (PDF Purged)</div>
           <div class="kpi-val" id="kpiCollected">0</div>
+          <div style="font-size:0.7rem;color:var(--muted);margin-top:2px;" id="kpiSubCollected">Handed over to customer</div>
         </div>
         <div class="kpi-box">
           <div class="kpi-label">Verified Revenue</div>
           <div class="kpi-val">₹<span id="kpiRevenue">0.00</span></div>
+          <div style="font-size:0.7rem;color:var(--muted);margin-top:2px;" id="kpiSubRevenue">Selected period revenue</div>
         </div>
         <div class="kpi-box">
           <div class="kpi-label">Printed Sides / Sheets</div>
           <div class="kpi-val"><span id="kpiSides">0</span> / <span id="kpiSheets">0</span></div>
+          <div style="font-size:0.7rem;color:var(--muted);margin-top:2px;" id="kpiSubSides">Sides / Physical paper</div>
+        </div>
+      </div>
+
+      <!-- Day-Wise Counter Breakdown & Historical Audit Card -->
+      <div class="card" style="margin-bottom:16px;">
+        <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:10px;margin-bottom:10px;">
+          <div>
+            <h3 style="font-size:1.05rem;display:flex;align-items:center;gap:6px;">
+              <span>📊 Day-Wise Prints Performance &amp; Counter Ledger</span>
+              <span class="badge" style="background:#e0f2fe;color:#0369a1;font-size:0.72rem;">IST Daily Breakdown</span>
+            </h3>
+            <p style="font-size:0.78rem;color:var(--muted);margin-top:2px;">Individual day records for this shop station. Click "View Day Orders" to inspect past day jobs.</p>
+          </div>
+          <button class="btn btn-secondary" onclick="loadDashboard()" style="font-size:0.78rem;padding:4px 10px;">
+            <i class="fa-solid fa-arrows-rotate"></i> Refresh Ledger
+          </button>
+        </div>
+
+        <div style="overflow-x:auto;">
+          <table style="width:100%;font-size:0.82rem;">
+            <thead>
+              <tr style="background:#f8fafc;">
+                <th>Date (IST)</th>
+                <th>Total Orders</th>
+                <th>Completed / Pending</th>
+                <th>B&amp;W Sides</th>
+                <th>Color Sides</th>
+                <th>Total Sides / Sheets</th>
+                <th>Daily Revenue (₹)</th>
+                <th style="text-align:right;">Action</th>
+              </tr>
+            </thead>
+            <tbody id="dailyBreakdownBody">
+              <tr><td colspan="8" style="text-align:center;color:var(--muted);padding:14px;">Loading day-wise ledger...</td></tr>
+            </tbody>
+          </table>
         </div>
       </div>
 
       <!-- Orders & Approval Queue Card -->
-      <div class="card">
+      <div class="card" id="ordersCard">
         <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:10px;margin-bottom:12px;">
-          <h3 style="font-size:1.05rem;">Orders &amp; Mandatory Admin Approval Gate</h3>
+          <div>
+            <h3 style="font-size:1.05rem;">Orders &amp; Mandatory Admin Approval Gate</h3>
+            <p style="font-size:0.78rem;color:var(--muted);margin-top:2px;" id="lblOrdersScopeNote">Showing orders matching current filter.</p>
+          </div>
           <div style="display:flex;gap:8px;flex-wrap:wrap;">
             <select id="filterState" onchange="loadDashboard()">
               <option value="all">All Order States</option>
@@ -644,12 +718,98 @@
       } catch (e) { }
     }
 
+    let currentPeriodFilter = 'today';
+
+    function setPeriodFilter(period) {
+      currentPeriodFilter = period;
+      const inp = document.getElementById('inpSpecificDate');
+      if (inp) inp.value = '';
+      updatePeriodButtons();
+      loadDashboard();
+    }
+
+    function setCustomDateFilter(dt) {
+      if (!dt) return;
+      currentPeriodFilter = dt;
+      updatePeriodButtons();
+      loadDashboard();
+    }
+
+    function inspectDateOrders(dt) {
+      currentPeriodFilter = dt;
+      const inp = document.getElementById('inpSpecificDate');
+      if (inp) inp.value = dt;
+      updatePeriodButtons();
+      loadDashboard();
+      const el = document.getElementById('ordersCard');
+      if (el) el.scrollIntoView({ behavior: 'smooth' });
+    }
+
+    function updatePeriodButtons() {
+      const btns = {
+        'today': document.getElementById('btnPeriodToday'),
+        'yesterday': document.getElementById('btnPeriodYesterday'),
+        'last7days': document.getElementById('btnPeriod7Days'),
+        'all': document.getElementById('btnPeriodAll')
+      };
+      for (const k in btns) {
+        if (btns[k]) {
+          btns[k].className = (currentPeriodFilter === k) ? 'btn btn-primary' : 'btn btn-secondary';
+        }
+      }
+      const lbl = document.getElementById('lblPeriodScopeBadge');
+      if (lbl) {
+        if (currentPeriodFilter === 'today') lbl.textContent = 'Viewing: Today (IST)';
+        else if (currentPeriodFilter === 'yesterday') lbl.textContent = 'Viewing: Yesterday (IST)';
+        else if (currentPeriodFilter === 'last7days') lbl.textContent = 'Viewing: Last 7 Days (IST)';
+        else if (currentPeriodFilter === 'all') lbl.textContent = 'Viewing: All Time';
+        else lbl.textContent = 'Viewing: ' + currentPeriodFilter;
+      }
+    }
+
+    function renderDailyBreakdownTable(list) {
+      const tbody = document.getElementById('dailyBreakdownBody');
+      if (!tbody) return;
+      if (!list || !list.length) {
+        tbody.innerHTML = '<tr><td colspan="8" style="text-align:center;color:var(--muted);padding:14px;">No prints recorded yet for this station.</td></tr>';
+        return;
+      }
+      tbody.innerHTML = list.map(item => {
+        const isCurrent = (currentPeriodFilter === item.date || (currentPeriodFilter === 'today' && item.isToday));
+        const rowBg = isCurrent ? 'background:#f0fdf4;' : '';
+        const todayTag = item.isToday ? '<span class="badge badge-ready" style="font-size:0.65rem;margin-left:4px;">TODAY</span>' : '';
+
+        return `<tr style="${rowBg}">
+          <td><strong>${item.date}</strong>${todayTag}</td>
+          <td><strong>${item.totalOrders}</strong> orders</td>
+          <td>
+            <span style="color:#15803d;font-weight:700;">${item.completedOrders} done</span> / 
+            <span style="color:#b45309;font-weight:700;">${item.pendingApproval} pending</span>
+          </td>
+          <td><span class="badge badge-bw">${item.bwSides || 0} sides</span></td>
+          <td><span class="badge badge-color">${item.colorSides || 0} sides</span></td>
+          <td><strong>${item.printedSides} sides</strong> / ${item.physicalSheets} sheets</td>
+          <td><strong style="color:var(--primary);font-size:0.88rem;">₹${Number(item.revenueInr).toFixed(2)}</strong></td>
+          <td style="text-align:right;">
+            <button class="btn btn-secondary" onclick="inspectDateOrders('${item.date}')" style="font-size:0.72rem;padding:3px 8px;">
+              🔍 View Day
+            </button>
+          </td>
+        </tr>`;
+      }).join('');
+    }
+
     async function loadDashboard() {
       if (!adminSessionToken) return;
       const st = document.getElementById('filterState').value;
       const q = document.getElementById('searchBox').value;
+      const activeShop = getActiveShopId();
       try {
-        const res = await fetch(apiUrl('/api/admin/dashboard?state=' + encodeURIComponent(st) + '&q=' + encodeURIComponent(q)), {
+        const queryUrl = apiUrl('/api/admin/dashboard?state=' + encodeURIComponent(st) + 
+          '&q=' + encodeURIComponent(q) + 
+          '&date=' + encodeURIComponent(currentPeriodFilter) + 
+          '&shop=' + encodeURIComponent(activeShop));
+        const res = await fetch(queryUrl, {
           headers: adminHeaders()
         });
         const data = await res.json();
@@ -663,6 +823,12 @@
         document.getElementById('kpiRevenue').textContent = Number(m.verifiedRevenueInr).toFixed(2);
         document.getElementById('kpiSides').textContent = m.totalPrintedSides;
         document.getElementById('kpiSheets').textContent = m.totalPhysicalSheets;
+
+        if (document.getElementById('lblActiveShopSlug')) {
+          document.getElementById('lblActiveShopSlug').textContent = activeShop;
+        }
+
+        renderDailyBreakdownTable(data.dailyBreakdown || []);
 
         const shop = data.shopStatus;
         document.getElementById('lblStationStatus').textContent = shop.statusReason;
@@ -788,7 +954,10 @@
 
         return `<tr>
           <td>
-            <strong>${o.orderCode}</strong><br/>
+            <div style="display:flex;align-items:center;gap:5px;">
+              <strong>${o.orderCode}</strong>
+              <span class="badge" style="background:#f1f5f9;color:#475569;font-size:0.68rem;padding:1px 5px;">${o.shopSlug || 'pilot'}</span>
+            </div>
             <span style="font-size:0.75rem;color:var(--muted);">${o.createdAtIst}</span>
           </td>
           <td>

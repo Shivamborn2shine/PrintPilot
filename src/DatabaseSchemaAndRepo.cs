@@ -426,6 +426,10 @@ CREATE TABLE IF NOT EXISTS audit_events (
             try { _db.ExecuteNonQuery("ALTER TABLE quotes ADD COLUMN is_collated INTEGER NOT NULL DEFAULT 1;"); } catch { }
             try { _db.ExecuteNonQuery("ALTER TABLE printers ADD COLUMN bw_queue_name TEXT;"); } catch { }
             try { _db.ExecuteNonQuery("ALTER TABLE printers ADD COLUMN color_queue_name TEXT;"); } catch { }
+            try { _db.ExecuteNonQuery("ALTER TABLE orders ADD COLUMN shop_slug TEXT NOT NULL DEFAULT 'pilot';"); } catch { }
+            try { _db.ExecuteNonQuery("CREATE INDEX IF NOT EXISTS idx_orders_shop_slug ON orders(shop_slug);"); } catch { }
+            try { _db.ExecuteNonQuery("CREATE INDEX IF NOT EXISTS idx_orders_shop_date_state ON orders(shop_slug, created_at_utc, state);"); } catch { }
+            try { _db.ExecuteNonQuery("CREATE INDEX IF NOT EXISTS idx_orders_shop_pickup ON orders(shop_slug, pickup_code);"); } catch { }
 
             string now = UtcNowIso();
             long shopCount = _db.ExecuteScalarLong("SELECT COUNT(*) FROM shops;");
@@ -939,6 +943,7 @@ CREATE TABLE IF NOT EXISTS audit_events (
             }
             string targetQueue = Convert.ToString(status["activeQueueName"]);
             string now = UtcNowIso();
+            string activeShopSlug = status.ContainsKey("shopId") && status["shopId"] != null ? Convert.ToString(status["shopId"]).Trim() : "pilot";
 
             long orderId = 0;
             _db.RunInTransaction(() =>
@@ -947,11 +952,11 @@ CREATE TABLE IF NOT EXISTS audit_events (
                     @"INSERT INTO orders (
                         order_code, public_token, pickup_code, shop_id, file_id, quote_id,
                         customer_name, customer_phone, consent_accepted, state, payment_status,
-                        target_printer_id, target_queue_name, created_at_utc, updated_at_utc
+                        target_printer_id, target_queue_name, created_at_utc, updated_at_utc, shop_slug
                       ) VALUES (
                         @ocode, @ptoken, @pcode, 1, @fid, @qid,
                         @cname, @cphone, 1, 'awaiting_payment', 'pending',
-                        1, @tqueue, @now, @now
+                        1, @tqueue, @now, @now, @shop_slug
                       );",
                     new Dictionary<string, object>
                     {
@@ -963,7 +968,8 @@ CREATE TABLE IF NOT EXISTS audit_events (
                         { "cname", SanitizeText(customerName, 40) },
                         { "cphone", SanitizeText(customerPhone, 20) },
                         { "tqueue", targetQueue },
-                        { "now", now }
+                        { "now", now },
+                        { "shop_slug", activeShopSlug }
                     });
 
                 _db.ExecuteInsert(
@@ -2389,32 +2395,167 @@ CREATE TABLE IF NOT EXISTS audit_events (
             LogAudit(null, "admin", adminUser, "DISPATCH_MODE_CHANGED", null, val, "Print dispatch mode set to " + val);
         }
 
-        public Dictionary<string, object> GetAdminDashboardSummary(string stateFilter, string searchQuery)
+        public Dictionary<string, object> GetAdminDashboardSummary(string stateFilter = "all", string searchQuery = "", string dateFilter = "today", string shopFilter = null)
         {
             var status = GetShopAndAvailabilityStatus();
-            long totalOrders = _db.ExecuteScalarLong("SELECT COUNT(*) FROM orders;");
-            long awaitingApproval = _db.ExecuteScalarLong("SELECT COUNT(*) FROM orders WHERE state = 'paid_awaiting_approval';");
-            long activeQueueCount = _db.ExecuteScalarLong("SELECT COUNT(*) FROM orders WHERE state IN ('queued', 'leased', 'downloading', 'rendering', 'submitted_to_spooler');");
-            long readyForPickup = _db.ExecuteScalarLong("SELECT COUNT(*) FROM orders WHERE state = 'ready_for_pickup';");
-            long collectedCount = _db.ExecuteScalarLong("SELECT COUNT(*) FROM orders WHERE state = 'collected';");
-            long reconciliationCount = _db.ExecuteScalarLong("SELECT COUNT(*) FROM orders WHERE state IN ('reconciliation_required', 'failed', 'on_hold');");
-            long refundedCount = _db.ExecuteScalarLong("SELECT COUNT(*) FROM orders WHERE payment_status = 'refunded';");
+            string activeShopSlug = status.ContainsKey("shopId") && status["shopId"] != null ? Convert.ToString(status["shopId"]).Trim() : "pilot";
+            string targetShop = !string.IsNullOrWhiteSpace(shopFilter) ? shopFilter.Trim() : activeShopSlug;
+            bool isAllShops = string.Equals(targetShop, "all", StringComparison.OrdinalIgnoreCase);
 
-            double verifiedRevenueInr = _db.ExecuteScalarDouble(
+            // IST Date computation (UTC+5:30)
+            DateTime istNow = DateTime.UtcNow.AddHours(5).AddMinutes(30);
+            string todayIst = istNow.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture);
+            string yesterdayIst = istNow.AddDays(-1).ToString("yyyy-MM-dd", CultureInfo.InvariantCulture);
+            string sevenDaysAgoIst = istNow.AddDays(-7).ToString("yyyy-MM-dd", CultureInfo.InvariantCulture);
+
+            string shopClause = isAllShops ? "" : " AND (o.shop_slug = @targetShop OR (@targetShop = 'pilot' AND (o.shop_slug IS NULL OR o.shop_slug = ''))) ";
+
+            // 1. Calculate Real-Time TODAY metrics for this shop (in IST)
+            var todayPrms = new Dictionary<string, object> { { "todayIst", todayIst } };
+            if (!isAllShops) todayPrms["targetShop"] = targetShop;
+
+            long todayOrders = _db.ExecuteScalarLong(
+                "SELECT COUNT(*) FROM orders o WHERE date(datetime(o.created_at_utc, '+330 minutes')) = @todayIst " + shopClause + ";", todayPrms);
+            long todayPending = _db.ExecuteScalarLong(
+                "SELECT COUNT(*) FROM orders o WHERE date(datetime(o.created_at_utc, '+330 minutes')) = @todayIst AND o.state = 'paid_awaiting_approval' " + shopClause + ";", todayPrms);
+            long todayActiveQueue = _db.ExecuteScalarLong(
+                "SELECT COUNT(*) FROM orders o WHERE date(datetime(o.created_at_utc, '+330 minutes')) = @todayIst AND o.state IN ('queued', 'leased', 'downloading', 'rendering', 'submitted_to_spooler') " + shopClause + ";", todayPrms);
+            long todayReadyForPickup = _db.ExecuteScalarLong(
+                "SELECT COUNT(*) FROM orders o WHERE date(datetime(o.created_at_utc, '+330 minutes')) = @todayIst AND o.state = 'ready_for_pickup' " + shopClause + ";", todayPrms);
+            long todayCompleted = _db.ExecuteScalarLong(
+                "SELECT COUNT(*) FROM orders o WHERE date(datetime(o.created_at_utc, '+330 minutes')) = @todayIst AND o.state = 'collected' " + shopClause + ";", todayPrms);
+            long todayRefunded = _db.ExecuteScalarLong(
+                "SELECT COUNT(*) FROM orders o WHERE date(datetime(o.created_at_utc, '+330 minutes')) = @todayIst AND o.payment_status = 'refunded' " + shopClause + ";", todayPrms);
+
+            double todayRevenueInr = _db.ExecuteScalarDouble(
                 @"SELECT COALESCE(SUM(q.total_amount_inr), 0)
                   FROM orders o JOIN quotes q ON o.quote_id = q.id
-                  WHERE o.payment_status = 'verified';");
+                  WHERE date(datetime(o.created_at_utc, '+330 minutes')) = @todayIst AND o.payment_status = 'verified' " + shopClause + ";", todayPrms);
 
-            long totalPrintedSides = _db.ExecuteScalarLong(
+            long todayPrintedSides = _db.ExecuteScalarLong(
                 @"SELECT COALESCE(SUM(q.printed_sides), 0)
                   FROM orders o JOIN quotes q ON o.quote_id = q.id
-                  WHERE o.state IN ('submitted_to_spooler', 'ready_for_pickup', 'collected');");
+                  WHERE date(datetime(o.created_at_utc, '+330 minutes')) = @todayIst AND o.state IN ('submitted_to_spooler', 'ready_for_pickup', 'collected') " + shopClause + ";", todayPrms);
 
-            long totalPhysicalSheets = _db.ExecuteScalarLong(
+            long todayPhysicalSheets = _db.ExecuteScalarLong(
                 @"SELECT COALESCE(SUM(q.physical_sheets), 0)
                   FROM orders o JOIN quotes q ON o.quote_id = q.id
-                  WHERE o.state IN ('submitted_to_spooler', 'ready_for_pickup', 'collected');");
+                  WHERE date(datetime(o.created_at_utc, '+330 minutes')) = @todayIst AND o.state IN ('submitted_to_spooler', 'ready_for_pickup', 'collected') " + shopClause + ";", todayPrms);
 
+            // 2. Resolve Selected Period Date Filter
+            string activeDateFilter = !string.IsNullOrWhiteSpace(dateFilter) ? dateFilter.Trim() : "today";
+            string periodDateClause = "";
+            var periodPrms = new Dictionary<string, object>();
+            if (!isAllShops) periodPrms["targetShop"] = targetShop;
+
+            if (string.Equals(activeDateFilter, "today", StringComparison.OrdinalIgnoreCase))
+            {
+                periodDateClause = " AND date(datetime(o.created_at_utc, '+330 minutes')) = @periodDate ";
+                periodPrms["periodDate"] = todayIst;
+            }
+            else if (string.Equals(activeDateFilter, "yesterday", StringComparison.OrdinalIgnoreCase))
+            {
+                periodDateClause = " AND date(datetime(o.created_at_utc, '+330 minutes')) = @periodDate ";
+                periodPrms["periodDate"] = yesterdayIst;
+            }
+            else if (string.Equals(activeDateFilter, "last7days", StringComparison.OrdinalIgnoreCase))
+            {
+                periodDateClause = " AND date(datetime(o.created_at_utc, '+330 minutes')) >= @periodStartDate ";
+                periodPrms["periodStartDate"] = sevenDaysAgoIst;
+            }
+            else if (!string.Equals(activeDateFilter, "all", StringComparison.OrdinalIgnoreCase))
+            {
+                // Custom YYYY-MM-DD
+                periodDateClause = " AND date(datetime(o.created_at_utc, '+330 minutes')) = @periodDate ";
+                periodPrms["periodDate"] = activeDateFilter;
+            }
+
+            // 3. Calculate Selected Period Metrics
+            long periodTotalOrders = _db.ExecuteScalarLong("SELECT COUNT(*) FROM orders o WHERE 1=1 " + periodDateClause + shopClause + ";", periodPrms);
+            long periodAwaitingApproval = _db.ExecuteScalarLong("SELECT COUNT(*) FROM orders o WHERE o.state = 'paid_awaiting_approval' " + periodDateClause + shopClause + ";", periodPrms);
+            long periodActiveQueue = _db.ExecuteScalarLong("SELECT COUNT(*) FROM orders o WHERE o.state IN ('queued', 'leased', 'downloading', 'rendering', 'submitted_to_spooler') " + periodDateClause + shopClause + ";", periodPrms);
+            long periodReadyForPickup = _db.ExecuteScalarLong("SELECT COUNT(*) FROM orders o WHERE o.state = 'ready_for_pickup' " + periodDateClause + shopClause + ";", periodPrms);
+            long periodCollected = _db.ExecuteScalarLong("SELECT COUNT(*) FROM orders o WHERE o.state = 'collected' " + periodDateClause + shopClause + ";", periodPrms);
+            long periodReconciliation = _db.ExecuteScalarLong("SELECT COUNT(*) FROM orders o WHERE o.state IN ('reconciliation_required', 'failed', 'on_hold') " + periodDateClause + shopClause + ";", periodPrms);
+            long periodRefunded = _db.ExecuteScalarLong("SELECT COUNT(*) FROM orders o WHERE o.payment_status = 'refunded' " + periodDateClause + shopClause + ";", periodPrms);
+
+            double periodRevenueInr = _db.ExecuteScalarDouble(
+                @"SELECT COALESCE(SUM(q.total_amount_inr), 0)
+                  FROM orders o JOIN quotes q ON o.quote_id = q.id
+                  WHERE o.payment_status = 'verified' " + periodDateClause + shopClause + ";", periodPrms);
+
+            long periodPrintedSides = _db.ExecuteScalarLong(
+                @"SELECT COALESCE(SUM(q.printed_sides), 0)
+                  FROM orders o JOIN quotes q ON o.quote_id = q.id
+                  WHERE o.state IN ('submitted_to_spooler', 'ready_for_pickup', 'collected') " + periodDateClause + shopClause + ";", periodPrms);
+
+            long periodPhysicalSheets = _db.ExecuteScalarLong(
+                @"SELECT COALESCE(SUM(q.physical_sheets), 0)
+                  FROM orders o JOIN quotes q ON o.quote_id = q.id
+                  WHERE o.state IN ('submitted_to_spooler', 'ready_for_pickup', 'collected') " + periodDateClause + shopClause + ";", periodPrms);
+
+            // 4. Day-Wise Breakdown History (Past 30 Days)
+            var dailyPrms = new Dictionary<string, object>();
+            if (!isAllShops) dailyPrms["targetShop"] = targetShop;
+
+            string dailySql = @"
+                SELECT 
+                    date(datetime(o.created_at_utc, '+330 minutes')) AS day_ist,
+                    COUNT(*) AS total_orders,
+                    SUM(CASE WHEN o.state = 'collected' THEN 1 ELSE 0 END) AS completed_orders,
+                    SUM(CASE WHEN o.state = 'paid_awaiting_approval' THEN 1 ELSE 0 END) AS pending_approval,
+                    COALESCE(SUM(CASE WHEN o.payment_status = 'verified' THEN q.total_amount_inr ELSE 0 END), 0) AS revenue_inr,
+                    COALESCE(SUM(CASE WHEN o.state IN ('submitted_to_spooler', 'ready_for_pickup', 'collected') THEN q.printed_sides ELSE 0 END), 0) AS printed_sides,
+                    COALESCE(SUM(CASE WHEN o.state IN ('submitted_to_spooler', 'ready_for_pickup', 'collected') THEN q.physical_sheets ELSE 0 END), 0) AS physical_sheets,
+                    COALESCE(SUM(CASE WHEN o.state IN ('submitted_to_spooler', 'ready_for_pickup', 'collected') AND q.color_mode = 'color' THEN q.printed_sides ELSE 0 END), 0) AS color_sides,
+                    COALESCE(SUM(CASE WHEN o.state IN ('submitted_to_spooler', 'ready_for_pickup', 'collected') AND (q.color_mode = 'bw' OR q.color_mode IS NULL) THEN q.printed_sides ELSE 0 END), 0) AS bw_sides
+                FROM orders o
+                LEFT JOIN quotes q ON o.quote_id = q.id
+                WHERE 1=1 " + shopClause + @"
+                GROUP BY day_ist
+                ORDER BY day_ist DESC
+                LIMIT 30;";
+
+            var dailyRows = _db.Query(dailySql, dailyPrms);
+            var dailyList = new List<Dictionary<string, object>>();
+            bool hasTodayInList = false;
+            foreach (var row in dailyRows)
+            {
+                string d = Convert.ToString(row["day_ist"]);
+                bool isToday = (d == todayIst);
+                if (isToday) hasTodayInList = true;
+                dailyList.Add(new Dictionary<string, object>
+                {
+                    { "date", d },
+                    { "isToday", isToday },
+                    { "totalOrders", Convert.ToInt64(row["total_orders"]) },
+                    { "completedOrders", Convert.ToInt64(row["completed_orders"]) },
+                    { "pendingApproval", Convert.ToInt64(row["pending_approval"]) },
+                    { "revenueInr", Math.Round(Convert.ToDouble(row["revenue_inr"]), 2) },
+                    { "printedSides", Convert.ToInt64(row["printed_sides"]) },
+                    { "physicalSheets", Convert.ToInt64(row["physical_sheets"]) },
+                    { "colorSides", Convert.ToInt64(row["color_sides"]) },
+                    { "bwSides", Convert.ToInt64(row["bw_sides"]) }
+                });
+            }
+            if (!hasTodayInList)
+            {
+                dailyList.Insert(0, new Dictionary<string, object>
+                {
+                    { "date", todayIst },
+                    { "isToday", true },
+                    { "totalOrders", 0 },
+                    { "completedOrders", 0 },
+                    { "pendingApproval", 0 },
+                    { "revenueInr", 0.0 },
+                    { "printedSides", 0 },
+                    { "physicalSheets", 0 },
+                    { "colorSides", 0 },
+                    { "bwSides", 0 }
+                });
+            }
+
+            // 5. Query Individual Orders (Scoped by Shop, Period & State)
             var sql = new StringBuilder(@"
                 SELECT o.*, q.document_pages, q.selected_pages, q.page_range_spec, q.copies, q.duplex_mode,
                        q.color_mode, q.paper_size, q.orientation, q.pages_per_sheet, q.is_collated,
@@ -2430,6 +2571,19 @@ CREATE TABLE IF NOT EXISTS audit_events (
                 WHERE 1=1 ");
 
             var prms = new Dictionary<string, object>();
+            if (!isAllShops)
+            {
+                sql.Append(shopClause);
+                prms["targetShop"] = targetShop;
+            }
+            if (!string.IsNullOrEmpty(periodDateClause))
+            {
+                sql.Append(periodDateClause);
+                foreach (var kvp in periodPrms)
+                {
+                    if (kvp.Key != "targetShop") prms[kvp.Key] = kvp.Value;
+                }
+            }
             if (!string.IsNullOrWhiteSpace(stateFilter) && !string.Equals(stateFilter, "all", StringComparison.OrdinalIgnoreCase))
             {
                 sql.Append(" AND o.state = @sf ");
@@ -2437,10 +2591,10 @@ CREATE TABLE IF NOT EXISTS audit_events (
             }
             if (!string.IsNullOrWhiteSpace(searchQuery))
             {
-                sql.Append(" AND (o.order_code LIKE @sq OR o.pickup_code LIKE @sq OR o.customer_name LIKE @sq) ");
+                sql.Append(" AND (o.order_code LIKE @sq OR o.pickup_code LIKE @sq OR o.customer_name LIKE @sq OR o.customer_phone LIKE @sq) ");
                 prms["sq"] = "%" + searchQuery.Trim() + "%";
             }
-            sql.Append(" ORDER BY o.id DESC LIMIT 100;");
+            sql.Append(" ORDER BY o.id DESC LIMIT 150;");
 
             var orderRows = _db.Query(sql.ToString(), prms);
             var formattedOrders = new List<Dictionary<string, object>>();
@@ -2449,6 +2603,7 @@ CREATE TABLE IF NOT EXISTS audit_events (
                 formattedOrders.Add(new Dictionary<string, object>
                 {
                     { "id", r["id"] },
+                    { "shopSlug", r.ContainsKey("shop_slug") && r["shop_slug"] != null ? r["shop_slug"] : "pilot" },
                     { "orderCode", r["order_code"] },
                     { "publicToken", r["public_token"] },
                     { "pickupCode", r["pickup_code"] },
@@ -2496,19 +2651,34 @@ CREATE TABLE IF NOT EXISTS audit_events (
                 { "shopStatus", status },
                 { "metrics", new Dictionary<string, object>
                     {
-                        { "totalOrders", totalOrders },
-                        { "paidAwaitingApproval", awaitingApproval },
-                        { "activePrintQueue", activeQueueCount },
-                        { "readyForPickup", readyForPickup },
-                        { "collectedOrders", collectedCount },
-                        { "reconciliationOrHold", reconciliationCount },
-                        { "refundedOrders", refundedCount },
-                        { "verifiedRevenueInr", Math.Round(verifiedRevenueInr, 2) },
-                        { "totalPrintedSides", totalPrintedSides },
-                        { "totalPhysicalSheets", totalPhysicalSheets },
-                        { "freeDiskMb", GetAvailableDiskMegabytes() }
+                        // Selected period metrics (used for dashboard cards based on date filter)
+                        { "totalOrders", periodTotalOrders },
+                        { "paidAwaitingApproval", periodAwaitingApproval },
+                        { "activePrintQueue", periodActiveQueue },
+                        { "readyForPickup", periodReadyForPickup },
+                        { "collectedOrders", periodCollected },
+                        { "reconciliationOrHold", periodReconciliation },
+                        { "refundedOrders", periodRefunded },
+                        { "verifiedRevenueInr", Math.Round(periodRevenueInr, 2) },
+                        { "totalPrintedSides", periodPrintedSides },
+                        { "totalPhysicalSheets", periodPhysicalSheets },
+                        { "freeDiskMb", GetAvailableDiskMegabytes() },
+                        // Explicit Real-time TODAY in IST metrics
+                        { "todayOrders", todayOrders },
+                        { "todayPending", todayPending },
+                        { "todayActiveQueue", todayActiveQueue },
+                        { "todayReadyForPickup", todayReadyForPickup },
+                        { "todayCompleted", todayCompleted },
+                        { "todayRefunded", todayRefunded },
+                        { "todayRevenueInr", Math.Round(todayRevenueInr, 2) },
+                        { "todayPrintedSides", todayPrintedSides },
+                        { "todayPhysicalSheets", todayPhysicalSheets },
+                        { "activeDateFilter", activeDateFilter },
+                        { "activeShopFilter", targetShop },
+                        { "todayDateIst", todayIst }
                     }
                 },
+                { "dailyBreakdown", dailyList },
                 { "orders", formattedOrders },
                 { "recentAuditEvents", recentAudits }
             };

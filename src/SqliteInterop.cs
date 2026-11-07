@@ -103,6 +103,9 @@ namespace PrintAway.Storage
             ExecuteNonQuery("PRAGMA journal_mode=WAL;");
             ExecuteNonQuery("PRAGMA synchronous=NORMAL;");
             ExecuteNonQuery("PRAGMA foreign_keys=ON;");
+            ExecuteNonQuery("PRAGMA cache_size=-64000;"); // 64 MB host memory page cache
+            ExecuteNonQuery("PRAGMA temp_store=MEMORY;"); // In-memory temp tables and sorting
+            ExecuteNonQuery("PRAGMA mmap_size=268435456;"); // 256 MB memory-mapped I/O for lightning-fast reads
         }
 
         public object SyncRoot { get { return _syncRoot; } }

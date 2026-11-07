@@ -683,13 +683,19 @@ namespace PrintAway.Gui
                 bool isAccepting = (bool)status["acceptingOrders"];
                 UpdateIntakeButtonState(isAccepting);
 
-                var dash = _repo.GetAdminDashboardSummary("all", "");
+                string currentShop = GetCurrentShopId();
+                var dash = _repo.GetAdminDashboardSummary("all", "", "today", currentShop);
                 if (dash != null && dash.ContainsKey("metrics") && dash["metrics"] is Dictionary<string, object>)
                 {
                     var dbMetrics = (Dictionary<string, object>)dash["metrics"];
-                    _lblMetricOrders.Text = Convert.ToString(dbMetrics["paidAwaitingApproval"]) + " pending / " + Convert.ToString(dbMetrics["collectedOrders"]) + " done";
-                    _lblMetricSides.Text = Convert.ToString(dbMetrics["totalPrintedSides"]) + " sides";
-                    _lblMetricRevenue.Text = string.Format(CultureInfo.InvariantCulture, "₹{0:0.00}", Convert.ToDouble(dbMetrics["verifiedRevenueInr"]));
+                    long pending = dbMetrics.ContainsKey("todayPending") ? Convert.ToInt64(dbMetrics["todayPending"]) : 0;
+                    long done = dbMetrics.ContainsKey("todayCompleted") ? Convert.ToInt64(dbMetrics["todayCompleted"]) : 0;
+                    long sides = dbMetrics.ContainsKey("todayPrintedSides") ? Convert.ToInt64(dbMetrics["todayPrintedSides"]) : 0;
+                    double rev = dbMetrics.ContainsKey("todayRevenueInr") ? Convert.ToDouble(dbMetrics["todayRevenueInr"]) : 0.0;
+
+                    _lblMetricOrders.Text = pending + " pending / " + done + " done";
+                    _lblMetricSides.Text = sides + " sides";
+                    _lblMetricRevenue.Text = string.Format(CultureInfo.InvariantCulture, "₹{0:0.00}", rev);
                 }
 
                 if (_supabaseSync != null && _supabaseSync.CurrentQuota != null)

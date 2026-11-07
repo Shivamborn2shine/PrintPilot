@@ -187,10 +187,12 @@ namespace PrintAway.SaaS
             {
                 ServicePointManager.SecurityProtocol = SecurityProtocolType.Tls12 | SecurityProtocolType.Tls11 | SecurityProtocolType.Tls;
 
-                string todayDate = DateTime.Now.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture);
+                // IST Date string (UTC+5:30)
+                DateTime istNow = DateTime.UtcNow.AddHours(5).AddMinutes(30);
+                string todayDate = istNow.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture);
 
-                // 1. Fetch local performance counters from SQLite
-                var dash = _repo.GetAdminDashboardSummary("all", "");
+                // 1. Fetch local performance counters from SQLite strictly for today in IST for this shop
+                var dash = _repo.GetAdminDashboardSummary("all", "", "today", _shopId);
                 int todayPages = 0;
                 int todaySheets = 0;
                 int todayOrders = 0;
@@ -199,10 +201,17 @@ namespace PrintAway.SaaS
                 if (dash != null && dash.ContainsKey("metrics") && dash["metrics"] is Dictionary<string, object>)
                 {
                     var m = (Dictionary<string, object>)dash["metrics"];
-                    if (m.ContainsKey("totalPrintedSides")) todayPages = Convert.ToInt32(m["totalPrintedSides"]);
-                    if (m.ContainsKey("totalPhysicalSheets")) todaySheets = Convert.ToInt32(m["totalPhysicalSheets"]);
-                    if (m.ContainsKey("collectedOrders")) todayOrders = Convert.ToInt32(m["collectedOrders"]);
-                    if (m.ContainsKey("verifiedRevenueInr")) todayRevenue = Convert.ToDouble(m["verifiedRevenueInr"]);
+                    if (m.ContainsKey("todayPrintedSides")) todayPages = Convert.ToInt32(m["todayPrintedSides"]);
+                    else if (m.ContainsKey("totalPrintedSides")) todayPages = Convert.ToInt32(m["totalPrintedSides"]);
+
+                    if (m.ContainsKey("todayPhysicalSheets")) todaySheets = Convert.ToInt32(m["todayPhysicalSheets"]);
+                    else if (m.ContainsKey("totalPhysicalSheets")) todaySheets = Convert.ToInt32(m["totalPhysicalSheets"]);
+
+                    if (m.ContainsKey("todayCompleted")) todayOrders = Convert.ToInt32(m["todayCompleted"]);
+                    else if (m.ContainsKey("collectedOrders")) todayOrders = Convert.ToInt32(m["collectedOrders"]);
+
+                    if (m.ContainsKey("todayRevenueInr")) todayRevenue = Convert.ToDouble(m["todayRevenueInr"]);
+                    else if (m.ContainsKey("verifiedRevenueInr")) todayRevenue = Convert.ToDouble(m["verifiedRevenueInr"]);
                 }
 
                 // Get active printer & tunnel info
