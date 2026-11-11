@@ -74,10 +74,23 @@ try {
 }
 
 if (-not $serverRunning) {
-    $serverExe = Join-Path $rootDir "bin\PrintAway.exe"
-    if (-not (Test-Path $serverExe)) {
-        Write-Host "  Compiling PrintAway.exe using built-in Windows .NET compiler..." -ForegroundColor Yellow
-        powershell -NoProfile -ExecutionPolicy Bypass -File (Join-Path $rootDir "scripts\build-and-test.ps1")
+    $serverExe = if (Test-Path (Join-Path $rootDir "bin\PrintAway.exe")) {
+        Join-Path $rootDir "bin\PrintAway.exe"
+    } elseif (Test-Path (Join-Path $rootDir "PrintAway.exe")) {
+        Join-Path $rootDir "PrintAway.exe"
+    } else {
+        $null
+    }
+
+    if (-not $serverExe) {
+        if (Test-Path (Join-Path $rootDir "src\Program.cs")) {
+            Write-Host "  Compiling PrintAway.exe using built-in Windows .NET compiler..." -ForegroundColor Yellow
+            powershell -NoProfile -ExecutionPolicy Bypass -File (Join-Path $rootDir "scripts\build-and-test.ps1")
+            $serverExe = Join-Path $rootDir "bin\PrintAway.exe"
+        } else {
+            Write-Host "  [ERROR] PrintAway.exe not found in directory." -ForegroundColor Red
+            exit 1
+        }
     }
     $argList = "--port $LocalPort"
     if ($PrinterQueue) {
@@ -106,18 +119,26 @@ if (-not $serverRunning) {
 }
 
 # 2. Check cloudflared binary
-$cloudflared = Join-Path $rootDir "bin\cloudflared.exe"
+$cloudflared = if (Test-Path (Join-Path $rootDir "bin\cloudflared.exe")) {
+    Join-Path $rootDir "bin\cloudflared.exe"
+} elseif (Test-Path (Join-Path $rootDir "cloudflared.exe")) {
+    Join-Path $rootDir "cloudflared.exe"
+} else {
+    Join-Path $rootDir "bin\cloudflared.exe"
+}
+
 if (-not (Test-Path $cloudflared)) {
     Write-Host "[2/4] Downloading cloudflared.exe from Cloudflare official GitHub releases..." -ForegroundColor Yellow
-    if (-not (Test-Path (Join-Path $rootDir "bin"))) {
-        New-Item -ItemType Directory -Path (Join-Path $rootDir "bin") -Force | Out-Null
+    $parentBin = Split-Path -Parent $cloudflared
+    if (-not (Test-Path $parentBin)) {
+        New-Item -ItemType Directory -Path $parentBin -Force | Out-Null
     }
     $ProgressPreference = 'SilentlyContinue'
     [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12
     Invoke-WebRequest -Uri "https://github.com/cloudflare/cloudflared/releases/latest/download/cloudflared-windows-amd64.exe" -OutFile $cloudflared
     Write-Host "  [OK] Downloaded cloudflared.exe." -ForegroundColor Green
 } else {
-    Write-Host "[2/4] Found cloudflared.exe in bin\." -ForegroundColor Green
+    Write-Host "[2/4] Found cloudflared.exe ($cloudflared)." -ForegroundColor Green
 }
 
 # 3. Launch tunnel (HTTP/2 over TCP for zero UDP packet loss)

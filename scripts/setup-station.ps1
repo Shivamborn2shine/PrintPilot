@@ -50,11 +50,23 @@ if ($spooler -and $spooler.Status -ne 'Running') {
 }
 Write-Host "  [OK] Windows Print Spooler service is running." -ForegroundColor Green
 
-# Step 2: Compile & Run Self-Tests
-Write-Host "`n[Step 2/4] Compiling PrintAway.exe & Running Verification Suite..." -ForegroundColor Yellow
-powershell -NoProfile -ExecutionPolicy Bypass -File (Join-Path $rootDir "scripts\build-and-test.ps1")
-if ($LASTEXITCODE -ne 0) {
-    Write-Host "  [ERROR] Build or self-test failed." -ForegroundColor Red
+# Step 2: Verify or Compile PrintAway.exe & Run Self-Tests
+Write-Host "`n[Step 2/4] Verifying PrintAway Engine..." -ForegroundColor Yellow
+$srcProgram = Join-Path $rootDir "src\Program.cs"
+$binExe = Join-Path $rootDir "bin\PrintAway.exe"
+$rootExe = Join-Path $rootDir "PrintAway.exe"
+
+if (Test-Path $srcProgram) {
+    # Developer environment: Compile & run verification test matrix
+    powershell -NoProfile -ExecutionPolicy Bypass -File (Join-Path $rootDir "scripts\build-and-test.ps1")
+    if ($LASTEXITCODE -ne 0) {
+        Write-Host "  [ERROR] Build or self-test failed." -ForegroundColor Red
+        exit 1
+    }
+} elseif ((Test-Path $binExe) -or (Test-Path $rootExe)) {
+    Write-Host "  [OK] Standalone pre-compiled PrintAway.exe present and ready." -ForegroundColor Green
+} else {
+    Write-Host "  [ERROR] Neither source code nor pre-compiled PrintAway.exe found in directory." -ForegroundColor Red
     exit 1
 }
 
@@ -199,7 +211,11 @@ Write-Host "====================================================================
 if (-not $NonInteractive) {
     $launchNow = Read-Host "Would you like to start the PrintAway Station now? (Y/n)"
     if ($launchNow -eq "" -or $launchNow -match "^[Yy]") {
-        $serverExe = Join-Path $rootDir "bin\PrintAway.exe"
+        $serverExe = if (Test-Path (Join-Path $rootDir "bin\PrintAway.exe")) {
+            Join-Path $rootDir "bin\PrintAway.exe"
+        } else {
+            Join-Path $rootDir "PrintAway.exe"
+        }
         Start-Process -FilePath $serverExe
         Write-Host "`n  [OK] PrintAway Station launched successfully!" -ForegroundColor Green
     }

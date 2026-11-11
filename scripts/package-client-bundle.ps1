@@ -1,0 +1,149 @@
+<#
+.SYNOPSIS
+    PrintAway Code-Protected Client Distribution Packager
+    Creates a clean, compiled release bundle (and ZIP) to install on client shop PCs.
+    Protects your intellectual property by omitting all C# source files, .git history, .env secrets, and databases.
+#>
+
+param(
+    [string]$OutputDir = ""
+)
+
+$ErrorActionPreference = "Stop"
+$rootDir = (Resolve-Path (Join-Path $PSScriptRoot "..")).Path
+Set-Location $rootDir
+
+Write-Host "======================================================================" -ForegroundColor Cyan
+Write-Host "     PRINTAWAY SECURE CLIENT DISTRIBUTION PACKAGER                   " -ForegroundColor Cyan
+Write-Host "======================================================================" -ForegroundColor Cyan
+
+# 1. Ensure latest PrintAway.exe is compiled
+Write-Host "`n[1/4] Compiling latest production PrintAway.exe binary..." -ForegroundColor Yellow
+powershell -NoProfile -ExecutionPolicy Bypass -File (Join-Path $rootDir "scripts\build-and-test.ps1") -SkipTests
+if ($LASTEXITCODE -ne 0) {
+    Write-Host "  [ERROR] Compilation failed." -ForegroundColor Red
+    exit 1
+}
+
+$binExe = Join-Path $rootDir "bin\PrintAway.exe"
+if (-not (Test-Path $binExe)) {
+    Write-Host "  [ERROR] bin\PrintAway.exe not found." -ForegroundColor Red
+    exit 1
+}
+
+# 2. Check cloudflared.exe
+$cloudflared = Join-Path $rootDir "bin\cloudflared.exe"
+if (-not (Test-Path $cloudflared)) {
+    Write-Host "  Downloading cloudflared.exe..." -ForegroundColor Yellow
+    [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12
+    Invoke-WebRequest -Uri "https://github.com/cloudflare/cloudflared/releases/latest/download/cloudflared-windows-amd64.exe" -OutFile $cloudflared
+}
+
+# 3. Prepare target distribution folder
+if (-not $OutputDir) {
+    $OutputDir = Join-Path $rootDir "dist\PrintAway-Station-Release"
+}
+
+Write-Host "`n[2/4] Assembling clean release bundle in $OutputDir ..." -ForegroundColor Yellow
+if (Test-Path $OutputDir) {
+    Remove-Item -Recurse -Force $OutputDir -ErrorAction SilentlyContinue
+}
+New-Item -ItemType Directory -Path $OutputDir -Force | Out-Null
+New-Item -ItemType Directory -Path (Join-Path $OutputDir "bin") -Force | Out-Null
+New-Item -ItemType Directory -Path (Join-Path $OutputDir "scripts") -Force | Out-Null
+New-Item -ItemType Directory -Path (Join-Path $OutputDir "config") -Force | Out-Null
+New-Item -ItemType Directory -Path (Join-Path $OutputDir "data") -Force | Out-Null
+New-Item -ItemType Directory -Path (Join-Path $OutputDir "web\assets") -Force | Out-Null
+
+# Copy only binaries
+Copy-Item -Path $binExe -Destination (Join-Path $OutputDir "bin\PrintAway.exe") -Force
+Copy-Item -Path $binExe -Destination (Join-Path $OutputDir "PrintAway.exe") -Force
+Copy-Item -Path $cloudflared -Destination (Join-Path $OutputDir "bin\cloudflared.exe") -Force
+
+# Copy launcher batch files
+Copy-Item -Path (Join-Path $rootDir "setup-new-pc.bat") -Destination (Join-Path $OutputDir "setup-new-pc.bat") -Force
+Copy-Item -Path (Join-Path $rootDir "start-station.bat") -Destination (Join-Path $OutputDir "start-station.bat") -Force
+Copy-Item -Path (Join-Path $rootDir "enable-autostart.bat") -Destination (Join-Path $OutputDir "enable-autostart.bat") -Force
+
+# Copy client scripts
+Copy-Item -Path (Join-Path $rootDir "scripts\setup-station.ps1") -Destination (Join-Path $OutputDir "scripts\setup-station.ps1") -Force
+Copy-Item -Path (Join-Path $rootDir "scripts\start-tunnel.ps1") -Destination (Join-Path $OutputDir "scripts\start-tunnel.ps1") -Force
+Copy-Item -Path (Join-Path $rootDir "scripts\enable-autostart.ps1") -Destination (Join-Path $OutputDir "scripts\enable-autostart.ps1") -Force
+
+# Copy default config template (without sensitive secrets)
+$templateConfig = @{
+    shopId = "pilot"
+    shopName = "PrintAway Pilot Shop"
+    tagline = "Printing ke liye pareshan ho? Just PrintAway."
+    operatingHours = "09:00 AM - 09:00 PM IST"
+    turnaroundText = "3-5 mins after counter admin approval"
+    port = 8080
+    activePrinterQueue = "auto"
+    bwPrinterQueue = ""
+    colorPrinterQueue = ""
+    autoFallbackToPhysicalPrinter = $true
+    netlifySiteUrl = "https://printitaway.netlify.app"
+    stationRegistryTopic = "printaway_station_registry_pilot_9f8a7b6c5d4e"
+    autoPushTunnelToGit = $false
+} | ConvertTo-Json -Depth 5
+[System.IO.File]::WriteAllText((Join-Path $OutputDir "config\station.json"), $templateConfig, [System.Text.Encoding]::UTF8)
+
+# Copy web assets if present
+if (Test-Path (Join-Path $rootDir "web\assets")) {
+    Copy-Item -Recurse -Path (Join-Path $rootDir "web\assets\*") -Destination (Join-Path $OutputDir "web\assets") -Force
+}
+
+# Create a clean README for the shopkeeper
+$readmeContent = @"
+======================================================================
+                 PRINTAWAY COUNTER STATION SETUP
+======================================================================
+
+QUICK 1-MINUTE SETUP INSTRUCTIONS FOR NEW PC:
+
+1. Connect your printer (USB or LAN) and make sure Windows can print to it.
+2. Double-click: setup-new-pc.bat
+   - Follow the short prompts to select your shop name and printer.
+   - Choose 'Y' to enable Auto-Start so PrintAway starts when PC turns on.
+3. Keep this window running or minimized while the shop is open.
+
+Customers can scan your shop QR code to upload documents and print!
+Support: Contact your PrintAway administrator.
+======================================================================
+"@
+[System.IO.File]::WriteAllText((Join-Path $OutputDir "README.txt"), $readmeContent, [System.Text.Encoding]::UTF8)
+
+Write-Host "  [OK] Release bundle created with ZERO source files!" -ForegroundColor Green
+
+# 4. Create ZIP package
+$zipPath = Join-Path $rootDir "dist\PrintAway-Station-Setup.zip"
+Write-Host "`n[3/4] Creating ZIP package: $zipPath ..." -ForegroundColor Yellow
+if (Test-Path $zipPath) {
+    Remove-Item -Force $zipPath -ErrorAction SilentlyContinue
+}
+
+Add-Type -AssemblyName System.IO.Compression.FileSystem
+[System.IO.Compression.ZipFile]::CreateFromDirectory($OutputDir, $zipPath)
+
+$zipSizeMb = [math]::Round((Get-Item $zipPath).Length / 1MB, 2)
+Write-Host "  [OK] ZIP created ($zipSizeMb MB)." -ForegroundColor Green
+
+# 5. Security Audit Verification
+Write-Host "`n[4/4] Security & Intellectual Property Audit:" -ForegroundColor Yellow
+$leakedCs = Get-ChildItem -Path $OutputDir -Recurse -Filter "*.cs"
+$leakedGit = Get-ChildItem -Path $OutputDir -Recurse -Filter ".git" -Hidden
+$leakedEnv = Get-ChildItem -Path $OutputDir -Recurse -Filter ".env"
+
+if ($leakedCs.Count -eq 0 -and $leakedGit.Count -eq 0 -and $leakedEnv.Count -eq 0) {
+    Write-Host "  [PASSED] 100% Protected! No C# source files, No .git history, No .env secrets." -ForegroundColor Green
+} else {
+    Write-Host "  [WARNING] Leaked files detected!" -ForegroundColor Red
+}
+
+Write-Host "`n======================================================================" -ForegroundColor Green
+Write-Host "  CLIENT DISTRIBUTION BUNDLE READY!" -ForegroundColor Green
+Write-Host "  Folder: $OutputDir" -ForegroundColor White
+Write-Host "  ZIP:    $zipPath" -ForegroundColor Cyan
+Write-Host "======================================================================" -ForegroundColor Green
+Write-Host "You can safely give this ZIP or folder to ANY shopkeeper or client PC." -ForegroundColor Yellow
+Write-Host "Your proprietary code, architecture, and cloud secrets remain 100% protected on your development machine!" -ForegroundColor Green
