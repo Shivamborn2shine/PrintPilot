@@ -1,7 +1,7 @@
 {
-  "version": "2.2.4",
+  "version": "2.2.5",
   "releaseDate": "2026-11-11",
-  "releaseNotes": "Zero-latency PrintAway.exe and start-station.bat tunnel sync, Midtown Stationary automatic identity binding, and 1-click cloud dashboard linking.",
+  "releaseNotes": "Official PrintAway brand icon embedded into PrintAway.exe, instant Super-Admin tier upgrade reflection in Counter Admin, and rapid 30s SaaS control plane telemetry sync.",
   "downloadUrl": "https://raw.githubusercontent.com/Shivamborn2shine/PrintPilot/main/bin/PrintAway.exe",
   "fallbackUrl": "https://printitaway.netlify.app/downloads/PrintAway.exe"
 }

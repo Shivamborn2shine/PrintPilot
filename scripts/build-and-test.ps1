@@ -57,15 +57,29 @@ $sources = @(
     Join-Path $repoRoot "src\Program.cs"
 )
 
+$icoPath = Join-Path $repoRoot "app.ico"
+$icoArg = if (Test-Path $icoPath) { "/win32icon:$icoPath" } else { "" }
+
 Write-Host "=== Compiling PrintAway.exe (64-bit Native Windows GUI & Host Engine) ===" -ForegroundColor Cyan
-& $csc /nologo /target:winexe /platform:x64 /optimize+ /out:$outExe `
-    /r:System.dll `
-    /r:System.Core.dll `
-    /r:System.Drawing.dll `
-    /r:System.Management.dll `
-    /r:System.Web.Extensions.dll `
-    /r:System.Windows.Forms.dll `
-    $sources
+if ($icoArg) {
+    & $csc /nologo /target:winexe /platform:x64 /optimize+ $icoArg /out:$outExe `
+        /r:System.dll `
+        /r:System.Core.dll `
+        /r:System.Drawing.dll `
+        /r:System.Management.dll `
+        /r:System.Web.Extensions.dll `
+        /r:System.Windows.Forms.dll `
+        $sources
+} else {
+    & $csc /nologo /target:winexe /platform:x64 /optimize+ /out:$outExe `
+        /r:System.dll `
+        /r:System.Core.dll `
+        /r:System.Drawing.dll `
+        /r:System.Management.dll `
+        /r:System.Web.Extensions.dll `
+        /r:System.Windows.Forms.dll `
+        $sources
+}
 
 if ($LASTEXITCODE -ne 0) {
     throw "Compilation failed with exit code $LASTEXITCODE"

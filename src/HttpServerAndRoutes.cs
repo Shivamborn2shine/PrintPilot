@@ -162,9 +162,26 @@ namespace PrintAway.Web
                 // SaaS Quota Telemetry Status
                 if (method == "GET" && path == "/api/saas/quota")
                 {
+                    string targetShop = req.QueryString["shop"];
+                    bool forceRefresh = req.QueryString["refresh"] == "1";
+
+                    if (string.IsNullOrWhiteSpace(targetShop))
+                    {
+                        try
+                        {
+                            var shopInfo = _repo.GetShopAndAvailabilityStatus();
+                            if (shopInfo.ContainsKey("shopId") && shopInfo["shopId"] != null)
+                            {
+                                targetShop = Convert.ToString(shopInfo["shopId"]);
+                            }
+                        }
+                        catch { }
+                    }
+                    if (string.IsNullOrWhiteSpace(targetShop)) targetShop = "midtownstationary";
+
                     if (_supabaseSync != null)
                     {
-                        var q = _supabaseSync.CurrentQuota;
+                        var q = forceRefresh ? _supabaseSync.RefreshQuotaForShop(targetShop) : _supabaseSync.GetQuotaForShop(targetShop);
                         WriteJson(res, 200, new Dictionary<string, object>
                         {
                             { "shopId", q.ShopId },
@@ -183,6 +200,7 @@ namespace PrintAway.Web
                     {
                         WriteJson(res, 200, new Dictionary<string, object>
                         {
+                            { "shopId", targetShop },
                             { "tier", "free" },
                             { "status", "active" },
                             { "dailyQuota", 10 },

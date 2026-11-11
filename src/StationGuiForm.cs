@@ -48,6 +48,7 @@ namespace PrintAway.Gui
         private Label _lblCustomerLink;
         private Label _lblTunnelUrl;
         private Label _lblQuotaBadge;
+        private Button _btnUpgradePro;
         private ComboBox _cmbPrinters;
         private RadioButton _rbPhysical;
         private RadioButton _rbSimulation;
@@ -129,7 +130,21 @@ namespace PrintAway.Gui
             this.StartPosition = FormStartPosition.CenterScreen;
             this.FormBorderStyle = FormBorderStyle.FixedSingle;
             this.MaximizeBox = false;
-            this.Icon = SystemIcons.Application;
+            Icon appIcon = null;
+            try
+            {
+                string iconPath = Path.Combine(_repoRoot, "app.ico");
+                if (File.Exists(iconPath))
+                {
+                    appIcon = new Icon(iconPath);
+                }
+                else
+                {
+                    appIcon = Icon.ExtractAssociatedIcon(Application.ExecutablePath);
+                }
+            }
+            catch { }
+            this.Icon = appIcon ?? SystemIcons.Application;
             this.BackColor = Color.FromArgb(248, 250, 252);
             this.Font = new Font("Segoe UI", 9f, FontStyle.Regular);
 
@@ -380,7 +395,7 @@ namespace PrintAway.Gui
             };
             _lblQuotaBadge.Click += (s, e) => LaunchBrowser("http://127.0.0.1:" + _port + "/admin#pro-upgrade");
 
-            var btnUpgradePro = new Button
+            _btnUpgradePro = new Button
             {
                 Text = "⚡ Pro Upgrade",
                 Size = new Size(115, 26),
@@ -391,7 +406,7 @@ namespace PrintAway.Gui
                 FlatStyle = FlatStyle.System,
                 Cursor = Cursors.Hand
             };
-            btnUpgradePro.Click += (s, e) => LaunchBrowser("http://127.0.0.1:" + _port + "/admin#pro-upgrade");
+            _btnUpgradePro.Click += (s, e) => LaunchBrowser("http://127.0.0.1:" + _port + "/admin#pro-upgrade");
 
             grpShop.Controls.Add(_lblShopTitle);
             grpShop.Controls.Add(btnEditShop);
@@ -403,7 +418,7 @@ namespace PrintAway.Gui
             grpShop.Controls.Add(btnRestartTunnel);
             grpShop.Controls.Add(btnTunnelConfig);
             grpShop.Controls.Add(_lblQuotaBadge);
-            grpShop.Controls.Add(btnUpgradePro);
+            grpShop.Controls.Add(_btnUpgradePro);
             pnlBody.Controls.Add(grpShop);
 
             // 4. Card: Printer Fleet & Dispatch Control
@@ -662,7 +677,7 @@ namespace PrintAway.Gui
             _trayIcon = new NotifyIcon
             {
                 Text = "PrintAway Station - Online",
-                Icon = SystemIcons.Application,
+                Icon = this.Icon ?? SystemIcons.Application,
                 ContextMenuStrip = _trayMenu,
                 Visible = true
             };
@@ -834,6 +849,24 @@ namespace PrintAway.Gui
                 if (_lblQuotaBadge == null || quota == null) return;
 
                 bool isPro = !string.IsNullOrEmpty(quota.Tier) && quota.Tier.StartsWith("pro", StringComparison.OrdinalIgnoreCase);
+                if (_btnUpgradePro != null)
+                {
+                    if (isPro)
+                    {
+                        _btnUpgradePro.Text = "✨ Pro Active";
+                        _btnUpgradePro.BackColor = Color.FromArgb(220, 252, 231);
+                        _btnUpgradePro.ForeColor = Color.FromArgb(21, 128, 61);
+                        _btnUpgradePro.Enabled = false;
+                    }
+                    else
+                    {
+                        _btnUpgradePro.Text = "⚡ Pro Upgrade";
+                        _btnUpgradePro.BackColor = Color.FromArgb(238, 242, 255);
+                        _btnUpgradePro.ForeColor = Color.FromArgb(67, 56, 202);
+                        _btnUpgradePro.Enabled = true;
+                    }
+                }
+
                 if (isPro)
                 {
                     _lblQuotaBadge.Text = string.Format(CultureInfo.InvariantCulture, "✨ Pro Tier Active ({0}) • Unlimited Daily Printing", quota.Tier == "pro_annual" ? "₹149/mo Annual" : "₹249/mo Monthly");

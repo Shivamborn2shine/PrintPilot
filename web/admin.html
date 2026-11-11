@@ -496,7 +496,7 @@
           </div>
         </div>
         <div>
-          <button class="btn" style="background:linear-gradient(135deg,#4f46e5,#7c3aed);color:#fff;font-size:0.78rem;padding:5px 12px;border:none;border-radius:6px;cursor:pointer;font-weight:700;" onclick="openProUpgradeModal()">
+          <button class="btn" id="btnUpgradeProTop" style="background:linear-gradient(135deg,#4f46e5,#7c3aed);color:#fff;font-size:0.78rem;padding:5px 12px;border:none;border-radius:6px;cursor:pointer;font-weight:700;" onclick="openProUpgradeModal()">
             ⚡ Upgrade to Pro (₹149/mo)
           </button>
         </div>
@@ -1537,28 +1537,70 @@
 
         // Fetch SaaS Daily Quota telemetry
         try {
-          const qRes = await fetch(apiUrl('/api/saas/quota'));
-          if (qRes.ok) {
-            const q = await qRes.json();
-            const isPro = q.tier && q.tier.startsWith('pro');
-            if (isPro) {
-              document.getElementById('saasPlanTitle').textContent = `PrintAway Pro Active (${q.tier === 'pro_annual' ? '₹149/mo Annual' : '₹249/mo Monthly'})`;
-              document.getElementById('saasTierBadge').textContent = 'PRO UNLIMITED';
-              document.getElementById('saasTierBadge').style.background = '#dcfce7';
-              document.getElementById('saasTierBadge').style.color = '#15803d';
-              document.getElementById('saasQuotaSub').textContent = 'Unlimited daily printing, Smart Color Routing & multi-printer balancing active.';
-            } else {
-              document.getElementById('saasPlanTitle').textContent = `Daily Printing Quota: ${q.pagesPrintedToday || 0} / 10 Pages (Free Tier)`;
-              document.getElementById('saasTierBadge').textContent = 'FREE';
-              document.getElementById('saasTierBadge').style.background = '#e0e7ff';
-              document.getElementById('saasTierBadge').style.color = '#4338ca';
-              if (q.isHardBlocked) {
-                document.getElementById('saasQuotaSub').innerHTML = '<span style="color:#dc2626;font-weight:bold;">🚫 Limit reached (10/10). Order creation blocked until tomorrow or upgrade to Pro.</span>';
-              } else if (q.isQuotaExceeded) {
-                document.getElementById('saasQuotaSub').innerHTML = '<span style="color:#d97706;font-weight:bold;">⚠️ Daily limit (10/10) reached. Grace buffer active. Upgrade to Pro for unlimited printing.</span>';
-              } else {
-                document.getElementById('saasQuotaSub').textContent = `Remaining today: ${q.remainingPagesToday || 0} pages. Resets at midnight IST.`;
+          let currentTier = 'free';
+          let pagesToday = 0;
+          let remainingPages = 10;
+          let isHardBlocked = false;
+          let isQuotaExceeded = false;
+
+          // Check station API
+          try {
+            const qRes = await fetch(apiUrl('/api/saas/quota?shop=' + encodeURIComponent(activeShop) + '&refresh=1'));
+            if (qRes.ok) {
+              const q = await qRes.json();
+              if (q.tier) currentTier = q.tier;
+              if (q.pagesPrintedToday !== undefined) pagesToday = q.pagesPrintedToday;
+              if (q.remainingPagesToday !== undefined) remainingPages = q.remainingPagesToday;
+              isHardBlocked = !!q.isHardBlocked;
+              isQuotaExceeded = !!q.isQuotaExceeded;
+            }
+          } catch (err) { }
+
+          // Directly verify with Supabase Cloud Control Plane (instant reflection of Super-Admin tier changes)
+          try {
+            const sbRes = await fetch(`https://zduoifzakiojfqbtxqqm.supabase.co/rest/v1/shops?shop_id=eq.${encodeURIComponent(activeShop)}&select=subscription_tier,daily_page_quota`, {
+              headers: {
+                'apikey': 'sb_publishable_rhmUZZbKhXiJxrChcPTbsg_gFIH9FdO',
+                'Accept': 'application/json'
               }
+            });
+            if (sbRes.ok) {
+              const sbList = await sbRes.json();
+              if (sbList && sbList.length > 0 && sbList[0].subscription_tier) {
+                currentTier = sbList[0].subscription_tier;
+              }
+            }
+          } catch (err) { }
+
+          const isPro = currentTier && currentTier.startsWith('pro');
+          const btnUpgrade = document.getElementById('btnUpgradeProTop');
+          if (isPro) {
+            document.getElementById('saasPlanTitle').textContent = `PrintAway Pro Active (${currentTier === 'pro_annual' ? '₹149/mo Annual' : '₹249/mo Monthly'})`;
+            document.getElementById('saasTierBadge').textContent = 'PRO UNLIMITED';
+            document.getElementById('saasTierBadge').style.background = '#dcfce7';
+            document.getElementById('saasTierBadge').style.color = '#15803d';
+            document.getElementById('saasQuotaSub').textContent = 'Unlimited daily printing, Smart Color Routing & multi-printer balancing active.';
+            if (btnUpgrade) {
+              btnUpgrade.textContent = '✨ Pro Active';
+              btnUpgrade.style.background = '#15803d';
+              btnUpgrade.disabled = true;
+            }
+          } else {
+            document.getElementById('saasPlanTitle').textContent = `Daily Printing Quota: ${pagesToday} / 10 Pages (Free Tier)`;
+            document.getElementById('saasTierBadge').textContent = 'FREE';
+            document.getElementById('saasTierBadge').style.background = '#e0e7ff';
+            document.getElementById('saasTierBadge').style.color = '#4338ca';
+            if (btnUpgrade) {
+              btnUpgrade.textContent = '⚡ Upgrade to Pro (₹149/mo)';
+              btnUpgrade.style.background = 'linear-gradient(135deg,#4f46e5,#7c3aed)';
+              btnUpgrade.disabled = false;
+            }
+            if (isHardBlocked) {
+              document.getElementById('saasQuotaSub').innerHTML = '<span style="color:#dc2626;font-weight:bold;">🚫 Limit reached (10/10). Order creation blocked until tomorrow or upgrade to Pro.</span>';
+            } else if (isQuotaExceeded) {
+              document.getElementById('saasQuotaSub').innerHTML = '<span style="color:#d97706;font-weight:bold;">⚠️ Daily limit (10/10) reached. Grace buffer active. Upgrade to Pro for unlimited printing.</span>';
+            } else {
+              document.getElementById('saasQuotaSub').textContent = `Remaining today: ${remainingPages} pages. Resets at midnight IST.`;
             }
           }
         } catch (e) { }

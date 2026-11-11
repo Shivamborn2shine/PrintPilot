@@ -102,8 +102,8 @@ namespace PrintAway.SaaS
                     };
                 }
 
-                // Run initial sync after 3 seconds, then every 15 minutes
-                _syncTimer = new Timer(state => PerformSync(), null, TimeSpan.FromSeconds(3), TimeSpan.FromMinutes(15));
+                // Run initial sync after 3 seconds, then every 30 seconds
+                _syncTimer = new Timer(state => PerformSync(), null, TimeSpan.FromSeconds(3), TimeSpan.FromSeconds(30));
             }
         }
 
@@ -115,6 +115,88 @@ namespace PrintAway.SaaS
         public QuotaStatus CurrentQuota
         {
             get { return _currentQuota; }
+        }
+
+        public QuotaStatus GetQuotaForShop(string shopId)
+        {
+            if (string.IsNullOrWhiteSpace(shopId) || string.Equals(shopId, ShopId, StringComparison.OrdinalIgnoreCase))
+            {
+                return _currentQuota;
+            }
+            return RefreshQuotaForShop(shopId);
+        }
+
+        public QuotaStatus RefreshQuotaForShop(string shopId)
+        {
+            if (!IsConfigured) return _currentQuota;
+            string targetShop = !string.IsNullOrWhiteSpace(shopId) ? shopId.Trim() : ShopId;
+            try
+            {
+                string getUrl = string.Format(CultureInfo.InvariantCulture, "{0}/rest/v1/shops?shop_id=eq.{1}&select=*", _supabaseUrl, Uri.EscapeDataString(targetShop));
+                string jsonResp = ExecuteHttpRequest(getUrl, "GET", null, null);
+
+                if (!string.IsNullOrWhiteSpace(jsonResp))
+                {
+                    var items = _serializer.Deserialize<List<Dictionary<string, object>>>(jsonResp);
+                    if (items != null && items.Count > 0)
+                    {
+                        var row = items[0];
+                        string tier = row.ContainsKey("subscription_tier") && row["subscription_tier"] != null ? Convert.ToString(row["subscription_tier"]).Trim() : "free";
+                        string status = row.ContainsKey("subscription_status") && row["subscription_status"] != null ? Convert.ToString(row["subscription_status"]).Trim() : "active";
+                        int quota = row.ContainsKey("daily_page_quota") && row["daily_page_quota"] != null ? Convert.ToInt32(row["daily_page_quota"]) : 10;
+                        bool remotePause = row.ContainsKey("emergency_remote_pause") && row["emergency_remote_pause"] != null && Convert.ToBoolean(row["emergency_remote_pause"]);
+
+                        bool isPro = tier.StartsWith("pro", StringComparison.OrdinalIgnoreCase);
+                        int effectiveQuota = isPro ? 999999 : quota;
+
+                        int todayPages = 0;
+                        if (_repo != null)
+                        {
+                            var dash = _repo.GetAdminDashboardSummary("all", "", "today", targetShop);
+                            if (dash != null && dash.ContainsKey("metrics") && dash["metrics"] is Dictionary<string, object>)
+                            {
+                                var m = (Dictionary<string, object>)dash["metrics"];
+                                if (m.ContainsKey("todayPrintedSides")) todayPages = Convert.ToInt32(m["todayPrintedSides"]);
+                                else if (m.ContainsKey("totalPrintedSides")) todayPages = Convert.ToInt32(m["totalPrintedSides"]);
+                            }
+                        }
+
+                        bool isExceeded = !isPro && (todayPages >= effectiveQuota);
+                        const int softGracePages = 3;
+                        bool isHardBlocked = !isPro && (todayPages >= (effectiveQuota + softGracePages));
+
+                        var newQuota = new QuotaStatus
+                        {
+                            ShopId = targetShop,
+                            Tier = tier,
+                            Status = status,
+                            DailyQuota = effectiveQuota,
+                            PagesPrintedToday = todayPages,
+                            RemainingPagesToday = Math.Max(0, effectiveQuota - todayPages),
+                            IsQuotaExceeded = isExceeded,
+                            IsHardBlocked = isHardBlocked,
+                            RemotePaused = remotePause,
+                            LastSyncUtc = DateTime.UtcNow.ToString("o")
+                        };
+
+                        if (string.Equals(targetShop, ShopId, StringComparison.OrdinalIgnoreCase))
+                        {
+                            _currentQuota = newQuota;
+                            Action<QuotaStatus> handler = OnQuotaStatusChanged;
+                            if (handler != null)
+                            {
+                                try { handler(newQuota); } catch { }
+                            }
+                        }
+                        return newQuota;
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine("[SaaS Sync] Refresh quota warning: " + ex.Message);
+            }
+            return _currentQuota;
         }
 
         public string GetFleetShopsJson()

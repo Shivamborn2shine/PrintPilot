@@ -55,10 +55,14 @@ New-Item -ItemType Directory -Path (Join-Path $OutputDir "config") -Force | Out-
 New-Item -ItemType Directory -Path (Join-Path $OutputDir "data") -Force | Out-Null
 New-Item -ItemType Directory -Path (Join-Path $OutputDir "web\assets") -Force | Out-Null
 
-# Copy only binaries
+# Copy only binaries & branding icons
 Copy-Item -Path $binExe -Destination (Join-Path $OutputDir "bin\PrintAway.exe") -Force
 Copy-Item -Path $binExe -Destination (Join-Path $OutputDir "PrintAway.exe") -Force
 Copy-Item -Path $cloudflared -Destination (Join-Path $OutputDir "bin\cloudflared.exe") -Force
+if (Test-Path (Join-Path $rootDir "app.ico")) {
+    Copy-Item -Path (Join-Path $rootDir "app.ico") -Destination (Join-Path $OutputDir "app.ico") -Force
+    Copy-Item -Path (Join-Path $rootDir "app.ico") -Destination (Join-Path $OutputDir "bin\app.ico") -Force
+}
 
 # Copy launcher batch files
 Copy-Item -Path (Join-Path $rootDir "setup-new-pc.bat") -Destination (Join-Path $OutputDir "setup-new-pc.bat") -Force
