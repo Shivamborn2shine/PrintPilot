@@ -18,7 +18,9 @@ namespace PrintAway.Tunnel
 
         private readonly string _rootDir;
         private readonly int _localPort;
-        private readonly string _registryTopic;
+        private string _shopId;
+        private string _shopName;
+        private string _registryTopic;
         private readonly object _lock = new object();
 
         private Process _tunnelProcess;
@@ -31,12 +33,35 @@ namespace PrintAway.Tunnel
         public event Action<string> OnTunnelUrlCaptured;
         public event Action<string> OnStatusMessage;
 
-        public TunnelManager(string rootDir, int localPort = 8080, string registryTopic = "printaway_station_registry_pilot_9f8a7b6c5d4e")
+        public static string GetRegistryTopicForShop(string shopId)
+        {
+            string clean = Regex.Replace(shopId ?? "pilot", @"[^a-zA-Z0-9_-]", "").ToLowerInvariant();
+            if (string.IsNullOrEmpty(clean) || clean == "pilot")
+            {
+                return "printaway_station_registry_pilot_9f8a7b6c5d4e";
+            }
+            return "printaway_station_registry_" + clean + "_9f8a7b";
+        }
+
+        public TunnelManager(string rootDir, int localPort = 8080, string shopId = "midtownstationary", string shopName = "Midtown Stationary")
         {
             _rootDir = rootDir;
             _localPort = localPort;
-            _registryTopic = registryTopic;
+            _shopId = !string.IsNullOrWhiteSpace(shopId) ? shopId.Trim() : "midtownstationary";
+            _shopName = !string.IsNullOrWhiteSpace(shopName) ? shopName.Trim() : "Midtown Stationary";
+            _registryTopic = GetRegistryTopicForShop(_shopId);
             _activeProviderName = "Initializing";
+        }
+
+        public void UpdateShopIdentity(string newShopId, string newShopName)
+        {
+            if (!string.IsNullOrWhiteSpace(newShopId)) _shopId = newShopId.Trim();
+            if (!string.IsNullOrWhiteSpace(newShopName)) _shopName = newShopName.Trim();
+            _registryTopic = GetRegistryTopicForShop(_shopId);
+            if (!string.IsNullOrEmpty(_liveTunnelUrl))
+            {
+                PublishToRegistry(_liveTunnelUrl);
+            }
         }
 
         public string LiveTunnelUrl { get { return _liveTunnelUrl; } }
@@ -438,15 +463,29 @@ namespace PrintAway.Tunnel
 
         private void PublishToRegistry(string url)
         {
-            if (string.IsNullOrWhiteSpace(_registryTopic) || string.IsNullOrWhiteSpace(url)) return;
+            if (string.IsNullOrWhiteSpace(url)) return;
+            string cleanUrl = url.Trim();
+
+            // 1. Write to data/tunnel.url for instant zero-latency file sync
+            try
+            {
+                string dataDir = Path.Combine(_rootDir, "data");
+                if (!Directory.Exists(dataDir)) Directory.CreateDirectory(dataDir);
+                File.WriteAllText(Path.Combine(dataDir, "tunnel.url"), cleanUrl, Encoding.UTF8);
+            }
+            catch { }
+
+            // 2. Broadcast to ntfy.sh Cloud Registry Topic
+            string topic = !string.IsNullOrWhiteSpace(_registryTopic) ? _registryTopic : GetRegistryTopicForShop(_shopId);
             try
             {
                 ServicePointManager.SecurityProtocol = SecurityProtocolType.Tls12 | SecurityProtocolType.Tls11 | SecurityProtocolType.Tls;
-                string target = "https://ntfy.sh/" + _registryTopic;
+                string target = "https://ntfy.sh/" + topic;
                 var req = (HttpWebRequest)WebRequest.Create(target);
                 req.Method = "POST";
                 req.ContentType = "text/plain";
-                byte[] bytes = Encoding.UTF8.GetBytes(url);
+                req.Timeout = 8000;
+                byte[] bytes = Encoding.UTF8.GetBytes(cleanUrl);
                 req.ContentLength = bytes.Length;
                 using (var s = req.GetRequestStream())
                 {
@@ -454,12 +493,99 @@ namespace PrintAway.Tunnel
                 }
                 using (var resp = (HttpWebResponse)req.GetResponse())
                 {
-                    Log(string.Format(CultureInfo.InvariantCulture, "Broadcasted tunnel to Cloud Registry ({0}) -> Status: {1}", _registryTopic, (int)resp.StatusCode));
+                    Log(string.Format(CultureInfo.InvariantCulture, "Broadcasted tunnel to Cloud Registry ({0}) -> Status: {1}", topic, (int)resp.StatusCode));
                 }
             }
             catch (Exception ex)
             {
                 Log("Warning broadcasting to registry: " + ex.Message);
+            }
+
+            // 3. Directly patch & auto-insert into Supabase Cloud Control Plane
+            try
+            {
+                string sbUrl = "https://zduoifzakiojfqbtxqqm.supabase.co";
+                string sbKey = "sb_publishable_rhmUZZbKhXiJxrChcPTbsg_gFIH9FdO";
+                string now = DateTime.UtcNow.ToString("o");
+
+                // Step A: PATCH existing shop
+                string patchTarget = string.Format(CultureInfo.InvariantCulture, "{0}/rest/v1/shops?shop_id=eq.{1}", sbUrl, Uri.EscapeDataString(_shopId));
+                var patchReq = (HttpWebRequest)WebRequest.Create(patchTarget);
+                patchReq.Method = "PATCH";
+                patchReq.Headers.Add("apikey", sbKey);
+                patchReq.Headers.Add("Authorization", "Bearer " + sbKey);
+                patchReq.Headers.Add("Prefer", "return=representation");
+                patchReq.ContentType = "application/json";
+                patchReq.Timeout = 8000;
+
+                var patchDict = new Dictionary<string, object>
+                {
+                    { "live_tunnel_url", cleanUrl },
+                    { "last_heartbeat_utc", now }
+                };
+                byte[] patchBytes = Encoding.UTF8.GetBytes(new JavaScriptSerializer().Serialize(patchDict));
+                patchReq.ContentLength = patchBytes.Length;
+                using (var s = patchReq.GetRequestStream()) { s.Write(patchBytes, 0, patchBytes.Length); }
+
+                string respBody = "";
+                using (var resp = (HttpWebResponse)patchReq.GetResponse())
+                using (var r = new StreamReader(resp.GetResponseStream()))
+                {
+                    respBody = r.ReadToEnd();
+                }
+
+                // Step B: If shop did not exist in Supabase (empty array "[]"), auto-insert it!
+                if (string.IsNullOrWhiteSpace(respBody) || respBody.Trim() == "[]")
+                {
+                    string postTarget = string.Format(CultureInfo.InvariantCulture, "{0}/rest/v1/shops", sbUrl);
+                    var postReq = (HttpWebRequest)WebRequest.Create(postTarget);
+                    postReq.Method = "POST";
+                    postReq.Headers.Add("apikey", sbKey);
+                    postReq.Headers.Add("Authorization", "Bearer " + sbKey);
+                    postReq.Headers.Add("Prefer", "resolution=merge-duplicates");
+                    postReq.ContentType = "application/json";
+                    postReq.Timeout = 8000;
+
+                    var postDict = new Dictionary<string, object>
+                    {
+                        { "shop_id", _shopId },
+                        { "shop_name", _shopName ?? _shopId },
+                        { "owner_name", _shopId },
+                        { "owner_phone", "9999999999" },
+                        { "upi_vpa", _shopId + "@upi" },
+                        { "live_tunnel_url", cleanUrl },
+                        { "last_heartbeat_utc", now }
+                    };
+                    byte[] postBytes = Encoding.UTF8.GetBytes(new JavaScriptSerializer().Serialize(postDict));
+                    postReq.ContentLength = postBytes.Length;
+                    using (var s = postReq.GetRequestStream()) { s.Write(postBytes, 0, postBytes.Length); }
+                    using (var postResp = (HttpWebResponse)postReq.GetResponse()) { }
+                }
+
+                // Step C: If shop is not pilot, also update pilot row as fallback bridge
+                if (_shopId != "pilot")
+                {
+                    try
+                    {
+                        string pilotPatchTarget = string.Format(CultureInfo.InvariantCulture, "{0}/rest/v1/shops?shop_id=eq.pilot", sbUrl);
+                        var pilotReq = (HttpWebRequest)WebRequest.Create(pilotPatchTarget);
+                        pilotReq.Method = "PATCH";
+                        pilotReq.Headers.Add("apikey", sbKey);
+                        pilotReq.Headers.Add("Authorization", "Bearer " + sbKey);
+                        pilotReq.ContentType = "application/json";
+                        pilotReq.Timeout = 5000;
+                        pilotReq.ContentLength = patchBytes.Length;
+                        using (var s = pilotReq.GetRequestStream()) { s.Write(patchBytes, 0, patchBytes.Length); }
+                        using (var pResp = (HttpWebResponse)pilotReq.GetResponse()) { }
+                    }
+                    catch { }
+                }
+
+                Log("Supabase SaaS Control Plane updated with live tunnel: " + cleanUrl);
+            }
+            catch (Exception ex)
+            {
+                Log("Warning updating Supabase control plane: " + ex.Message);
             }
         }
 

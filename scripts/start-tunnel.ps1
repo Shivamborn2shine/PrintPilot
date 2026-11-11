@@ -291,8 +291,24 @@ if ($tunnelUrl) {
         $sbUrl = "https://zduoifzakiojfqbtxqqm.supabase.co/rest/v1/shops?shop_id=eq.$activeShopId"
         $sbKey = "sb_publishable_rhmUZZbKhXiJxrChcPTbsg_gFIH9FdO"
         $body = @{ live_tunnel_url = $tunnelUrl; last_heartbeat_utc = (Get-Date).ToUniversalTime().ToString("o") } | ConvertTo-Json
-        $sbHeaders = @{ "apikey" = $sbKey; "Authorization" = "Bearer $sbKey"; "Content-Type" = "application/json" }
-        $null = Invoke-RestMethod -Uri $sbUrl -Method Patch -Headers $sbHeaders -Body $body -TimeoutSec 5
+        $sbHeaders = @{ "apikey" = $sbKey; "Authorization" = "Bearer $sbKey"; "Content-Type" = "application/json"; "Prefer" = "return=representation" }
+        $resp = Invoke-RestMethod -Uri $sbUrl -Method Patch -Headers $sbHeaders -Body $body -TimeoutSec 5
+
+        # If shop did not exist in Supabase (returned empty array or 0 rows), auto-insert it!
+        if (-not $resp -or $resp.Count -eq 0) {
+            $postUrl = "https://zduoifzakiojfqbtxqqm.supabase.co/rest/v1/shops"
+            $postBody = @{
+                shop_id = $activeShopId
+                shop_name = $activeShopId
+                owner_name = $activeShopId
+                owner_phone = "9999999999"
+                upi_vpa = "$($activeShopId)@upi"
+                live_tunnel_url = $tunnelUrl
+                last_heartbeat_utc = (Get-Date).ToUniversalTime().ToString("o")
+            } | ConvertTo-Json
+            $postHeaders = @{ "apikey" = $sbKey; "Authorization" = "Bearer $sbKey"; "Content-Type" = "application/json"; "Prefer" = "resolution=merge-duplicates" }
+            $null = Invoke-RestMethod -Uri $postUrl -Method Post -Headers $postHeaders -Body $postBody -TimeoutSec 5
+        }
         Write-Host "  [OK] Supabase Control Plane updated with live tunnel URL!" -ForegroundColor Green
 
         if ($activeShopId -ne "pilot") {

@@ -37,7 +37,7 @@ namespace PrintAway.Gui
         private readonly PrintAwayRepository _repo;
         private readonly LocalPrintWorker _worker;
         private readonly PrintAwayHttpServer _server;
-        private readonly TunnelManager _tunnel;
+        private TunnelManager _tunnel;
         private readonly string _repoRoot;
         private readonly int _port;
         private readonly SupabaseSyncClient _supabaseSync;
@@ -343,6 +343,13 @@ namespace PrintAway.Gui
                             {
                                 try { p.Kill(); } catch { }
                             }
+                            string sId = GetCurrentShopId();
+                            var status = _repo.GetShopAndAvailabilityStatus();
+                            string sName = status.ContainsKey("shopName") && status["shopName"] != null ? Convert.ToString(status["shopName"]) : sId;
+                            _tunnel = new TunnelManager(_repoRoot, _port, sId, sName);
+                            _tunnel.OnTunnelUrlCaptured += OnTunnelCaptured;
+                            _tunnel.OnStatusMessage += OnTunnelStatusMessage;
+                            _tunnel.Start();
                         }
                         catch { }
                     });
@@ -492,13 +499,7 @@ namespace PrintAway.Gui
             btnOpenAdmin.Click += (s, e) =>
             {
                 string shopId = GetCurrentShopId();
-                string liveTunnel = (_tunnel != null && !string.IsNullOrEmpty(_tunnel.LiveTunnelUrl))
-                    ? _tunnel.LiveTunnelUrl
-                    : _repo.GetLiveTunnelUrl();
-
-                string adminUrl = !string.IsNullOrEmpty(liveTunnel)
-                    ? string.Format(CultureInfo.InvariantCulture, "https://printitaway.netlify.app/admin?shop={0}&station={1}", shopId, Uri.EscapeDataString(liveTunnel))
-                    : ("http://127.0.0.1:" + _port + "/admin");
+                string adminUrl = "https://printitaway.netlify.app/admin?shop=" + Uri.EscapeDataString(shopId);
                 LaunchBrowser(adminUrl);
             };
 
@@ -517,13 +518,7 @@ namespace PrintAway.Gui
             btnOpenQr.Click += (s, e) =>
             {
                 string shopId = GetCurrentShopId();
-                string liveTunnel = (_tunnel != null && !string.IsNullOrEmpty(_tunnel.LiveTunnelUrl))
-                    ? _tunnel.LiveTunnelUrl
-                    : _repo.GetLiveTunnelUrl();
-
-                string qrUrl = !string.IsNullOrEmpty(liveTunnel)
-                    ? string.Format(CultureInfo.InvariantCulture, "https://printitaway.netlify.app/?shop={0}&station={1}", shopId, Uri.EscapeDataString(liveTunnel))
-                    : ("https://printitaway.netlify.app/?shop=" + shopId);
+                string qrUrl = "https://printitaway.netlify.app/?shop=" + Uri.EscapeDataString(shopId);
                 LaunchBrowser(qrUrl);
             };
 
