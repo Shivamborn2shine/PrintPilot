@@ -754,25 +754,37 @@ namespace PrintAway.Engine
                     int drawY = destSlot.Y + (destSlot.Height - drawH) / 2;
                     var fitRect = new Rectangle(drawX, drawY, drawW, drawH);
 
-                    if (isColor)
+                    // Always composite onto an opaque white RGB canvas to eliminate alpha-channel/transparency
+                    // which causes Windows V4 PCL6 print filter pipelines (such as Xerox B1025) to drop or fail jobs
+                    using (var opaqueBmp = new Bitmap(drawW, drawH, PixelFormat.Format32bppRgb))
                     {
-                        g.DrawImage(img, fitRect);
-                    }
-                    else
-                    {
-                        // Apply ITU-R BT.601 luminance grayscale matrix when Black & White is selected
-                        using (var attrs = new ImageAttributes())
+                        using (var bg = Graphics.FromImage(opaqueBmp))
                         {
-                            var grayMatrix = new ColorMatrix(new float[][]
+                            bg.Clear(Color.White);
+                            bg.InterpolationMode = System.Drawing.Drawing2D.InterpolationMode.HighQualityBicubic;
+                            bg.DrawImage(img, new Rectangle(0, 0, drawW, drawH));
+                        }
+
+                        if (isColor)
+                        {
+                            g.DrawImage(opaqueBmp, fitRect);
+                        }
+                        else
+                        {
+                            // Apply ITU-R BT.601 luminance grayscale matrix when Black & White is selected
+                            using (var attrs = new ImageAttributes())
                             {
-                                new float[] { 0.299f, 0.299f, 0.299f, 0, 0 },
-                                new float[] { 0.587f, 0.587f, 0.587f, 0, 0 },
-                                new float[] { 0.114f, 0.114f, 0.114f, 0, 0 },
-                                new float[] { 0,      0,      0,      1, 0 },
-                                new float[] { 0,      0,      0,      0, 1 }
-                            });
-                            attrs.SetColorMatrix(grayMatrix);
-                            g.DrawImage(img, fitRect, 0, 0, img.Width, img.Height, GraphicsUnit.Pixel, attrs);
+                                var grayMatrix = new ColorMatrix(new float[][]
+                                {
+                                    new float[] { 0.299f, 0.299f, 0.299f, 0, 0 },
+                                    new float[] { 0.587f, 0.587f, 0.587f, 0, 0 },
+                                    new float[] { 0.114f, 0.114f, 0.114f, 0, 0 },
+                                    new float[] { 0,      0,      0,      1, 0 },
+                                    new float[] { 0,      0,      0,      0, 1 }
+                                });
+                                attrs.SetColorMatrix(grayMatrix);
+                                g.DrawImage(opaqueBmp, fitRect, 0, 0, drawW, drawH, GraphicsUnit.Pixel, attrs);
+                            }
                         }
                     }
                 }
@@ -796,7 +808,11 @@ namespace PrintAway.Engine
             {
                 if (!Directory.Exists(outDir)) Directory.CreateDirectory(outDir);
                 string repoRoot = AppDomain.CurrentDomain.BaseDirectory;
-                string scriptPath = Path.Combine(repoRoot, "..", "scripts", "render-pdf.ps1");
+                string scriptPath = Path.Combine(repoRoot, "scripts", "render-pdf.ps1");
+                if (!File.Exists(scriptPath))
+                {
+                    scriptPath = Path.Combine(repoRoot, "..", "scripts", "render-pdf.ps1");
+                }
                 if (!File.Exists(scriptPath))
                 {
                     scriptPath = Path.Combine(Directory.GetCurrentDirectory(), "scripts", "render-pdf.ps1");
