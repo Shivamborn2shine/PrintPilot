@@ -263,14 +263,14 @@ namespace PrintAway.Gui
             {
                 try
                 {
-                    if (!string.IsNullOrEmpty(_tunnel.LiveTunnelUrl))
+                    if (_tunnel != null && !string.IsNullOrEmpty(_tunnel.LiveTunnelUrl))
                     {
                         Clipboard.SetText(_tunnel.LiveTunnelUrl);
                         MessageBox.Show("Active tunnel URL copied to clipboard:\n" + _tunnel.LiveTunnelUrl, "PrintAway", MessageBoxButtons.OK, MessageBoxIcon.Information);
                     }
                     else
                     {
-                        MessageBox.Show("Tunnel is not connected yet.", "PrintAway", MessageBoxButtons.OK, MessageBoxIcon.Information);
+                        MessageBox.Show("Tunnel is managed externally or not connected yet.", "PrintAway", MessageBoxButtons.OK, MessageBoxIcon.Information);
                     }
                 }
                 catch { }
@@ -291,7 +291,10 @@ namespace PrintAway.Gui
             {
                 _lblTunnelUrl.Text = "Tunnel: Restarting connection...";
                 _lblTunnelUrl.ForeColor = Color.FromArgb(180, 83, 9);
-                ThreadPool.QueueUserWorkItem(state => _tunnel.Restart());
+                if (_tunnel != null)
+                {
+                    ThreadPool.QueueUserWorkItem(state => _tunnel.Restart());
+                }
             };
 
             var btnTunnelConfig = new Button
@@ -766,7 +769,7 @@ namespace PrintAway.Gui
                     this.BeginInvoke(new Action<string>(OnTunnelStatusMessage), msg);
                     return;
                 }
-                if (_lblTunnelUrl != null && string.IsNullOrEmpty(_tunnel.LiveTunnelUrl))
+                if (_lblTunnelUrl != null && (_tunnel == null || string.IsNullOrEmpty(_tunnel.LiveTunnelUrl)))
                 {
                     _lblTunnelUrl.Text = "Tunnel: " + msg;
                     _lblTunnelUrl.ForeColor = Color.FromArgb(180, 83, 9);

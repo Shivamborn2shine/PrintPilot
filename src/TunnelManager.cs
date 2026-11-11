@@ -488,22 +488,13 @@ namespace PrintAway.Tunnel
         {
             try
             {
-                string expectedBin = Path.Combine(_rootDir, "bin", "cloudflared.exe");
-                string expectedRoot = Path.Combine(_rootDir, "cloudflared.exe");
                 foreach (var p in Process.GetProcessesByName("cloudflared"))
                 {
-                    try
-                    {
-                        string path = null;
-                        try { path = p.MainModule != null ? p.MainModule.FileName : null; } catch { }
-                        if (!string.IsNullOrEmpty(path) &&
-                            (string.Equals(path, expectedBin, StringComparison.OrdinalIgnoreCase) ||
-                             string.Equals(path, expectedRoot, StringComparison.OrdinalIgnoreCase)))
-                        {
-                            p.Kill();
-                        }
-                    }
-                    catch { }
+                    try { p.Kill(); } catch { }
+                }
+                foreach (var p in Process.GetProcessesByName("ssh"))
+                {
+                    try { p.Kill(); } catch { }
                 }
             }
             catch { }

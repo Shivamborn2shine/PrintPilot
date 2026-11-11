@@ -127,6 +127,8 @@ namespace PrintAway
                 }
             }
 
+            bool disableInternalTunnel = false;
+
             if (args != null)
             {
                 for (int i = 0; i < args.Length; i++)
@@ -147,6 +149,10 @@ namespace PrintAway
                     else if (string.Equals(a, "--cli", StringComparison.OrdinalIgnoreCase) || string.Equals(a, "--headless", StringComparison.OrdinalIgnoreCase))
                     {
                         cliMode = true;
+                    }
+                    else if (string.Equals(a, "--no-tunnel", StringComparison.OrdinalIgnoreCase))
+                    {
+                        disableInternalTunnel = true;
                     }
                 }
             }
@@ -292,9 +298,13 @@ namespace PrintAway
                     var worker = new LocalPrintWorker(repo, simulateSpoolerOnly: forceSimulation);
                     worker.StartBackground(1500);
 
-                    string registryTopic = "printaway_station_registry_" + (configShopId ?? "pilot") + "_9f8a7b6c5d4e";
-                    var tunnel = new TunnelManager(repoRoot, port, registryTopic);
-                    tunnel.Start();
+                    TunnelManager tunnel = null;
+                    if (!disableInternalTunnel)
+                    {
+                        string registryTopic = "printaway_station_registry_" + (configShopId ?? "pilot") + "_9f8a7b6c5d4e";
+                        tunnel = new TunnelManager(repoRoot, port, registryTopic);
+                        tunnel.Start();
+                    }
 
                     string sbUrl = Environment.GetEnvironmentVariable("SUPABASE_URL");
                     string sbKey = Environment.GetEnvironmentVariable("SUPABASE_SERVICE_ROLE_KEY");

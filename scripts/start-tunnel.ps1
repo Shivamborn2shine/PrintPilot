@@ -55,6 +55,14 @@ Write-Host "==========================================================" -Foregro
 Write-Host "       PRINTAWAY 1-CLICK STATION & TUNNEL LAUNCHER        " -ForegroundColor Cyan
 Write-Host "==========================================================" -ForegroundColor Cyan
 
+# Terminate any duplicate orphan tunnel processes so they don't collide or cause HTTP 429 rate-limits
+$orphans = Get-Process -Name cloudflared, ssh -ErrorAction SilentlyContinue
+if ($orphans) {
+    Write-Host "[!] Cleaning up $($orphans.Count) orphan background tunnel process(es)..." -ForegroundColor DarkYellow
+    $orphans | Stop-Process -Force -ErrorAction SilentlyContinue
+    Start-Sleep -Milliseconds 600
+}
+
 # 1. Check if local PrintAway server is running
 $localApiUrl = "http://127.0.0.1:$LocalPort/api/shop/status"
 Write-Host "[1/4] Checking local PrintAway server at $localApiUrl ..." -ForegroundColor Yellow
@@ -92,7 +100,7 @@ if (-not $serverRunning) {
             exit 1
         }
     }
-    $argList = "--port $LocalPort"
+    $argList = "--port $LocalPort --no-tunnel"
     if ($PrinterQueue) {
         $argList += " --printer `"$PrinterQueue`""
     }
