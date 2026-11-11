@@ -69,6 +69,7 @@ Copy-Item -Path (Join-Path $rootDir "enable-autostart.bat") -Destination (Join-P
 Copy-Item -Path (Join-Path $rootDir "scripts\setup-station.ps1") -Destination (Join-Path $OutputDir "scripts\setup-station.ps1") -Force
 Copy-Item -Path (Join-Path $rootDir "scripts\start-tunnel.ps1") -Destination (Join-Path $OutputDir "scripts\start-tunnel.ps1") -Force
 Copy-Item -Path (Join-Path $rootDir "scripts\enable-autostart.ps1") -Destination (Join-Path $OutputDir "scripts\enable-autostart.ps1") -Force
+Copy-Item -Path (Join-Path $rootDir "scripts\render-pdf.ps1") -Destination (Join-Path $OutputDir "scripts\render-pdf.ps1") -Force
 
 # Copy default config template (without sensitive secrets)
 $templateConfig = @{
