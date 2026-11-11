@@ -128,7 +128,20 @@ Add-Type -AssemblyName System.IO.Compression.FileSystem
 $zipSizeMb = [math]::Round((Get-Item $zipPath).Length / 1MB, 2)
 Write-Host "  [OK] ZIP created ($zipSizeMb MB)." -ForegroundColor Green
 
-# 5. Security Audit Verification
+# 5. Mirror to releases/ and web/downloads/ for global 1-click cloud downloading
+$releaseDir = Join-Path $rootDir "releases"
+if (-not (Test-Path $releaseDir)) { New-Item -ItemType Directory -Path $releaseDir -Force | Out-Null }
+$releaseZip = Join-Path $releaseDir "PrintAway-Station-Setup.zip"
+Copy-Item -Path $zipPath -Destination $releaseZip -Force
+Write-Host "  [OK] Copied to $releaseZip (tracked in Git for direct download)." -ForegroundColor Green
+
+$webDlDir = Join-Path $rootDir "web\downloads"
+if (-not (Test-Path $webDlDir)) { New-Item -ItemType Directory -Path $webDlDir -Force | Out-Null }
+$webDlZip = Join-Path $webDlDir "PrintAway-Station-Setup.zip"
+Copy-Item -Path $zipPath -Destination $webDlZip -Force
+Write-Host "  [OK] Copied to $webDlZip (hosted on Netlify CDN)." -ForegroundColor Green
+
+# 6. Security Audit Verification
 Write-Host "`n[4/4] Security & Intellectual Property Audit:" -ForegroundColor Yellow
 $leakedCs = Get-ChildItem -Path $OutputDir -Recurse -Filter "*.cs"
 $leakedGit = Get-ChildItem -Path $OutputDir -Recurse -Filter ".git" -Hidden
@@ -141,9 +154,12 @@ if ($leakedCs.Count -eq 0 -and $leakedGit.Count -eq 0 -and $leakedEnv.Count -eq 
 }
 
 Write-Host "`n======================================================================" -ForegroundColor Green
-Write-Host "  CLIENT DISTRIBUTION BUNDLE READY!" -ForegroundColor Green
-Write-Host "  Folder: $OutputDir" -ForegroundColor White
-Write-Host "  ZIP:    $zipPath" -ForegroundColor Cyan
+Write-Host "  CLIENT DISTRIBUTION BUNDLE READY & DEPLOYABLE!" -ForegroundColor Green
+Write-Host "  Local Folder: $OutputDir" -ForegroundColor White
+Write-Host "  Git Release:  $releaseZip" -ForegroundColor Cyan
+Write-Host "  Netlify CDN:  https://printitaway.netlify.app/downloads/PrintAway-Station-Setup.zip" -ForegroundColor Yellow
+Write-Host "  GitHub Raw:   https://github.com/Shivamborn2shine/PrintPilot/raw/main/releases/PrintAway-Station-Setup.zip" -ForegroundColor Yellow
 Write-Host "======================================================================" -ForegroundColor Green
-Write-Host "You can safely give this ZIP or folder to ANY shopkeeper or client PC." -ForegroundColor Yellow
-Write-Host "Your proprietary code, architecture, and cloud secrets remain 100% protected on your development machine!" -ForegroundColor Green
+Write-Host "You can safely push to Git and download this ZIP on ANY computer." -ForegroundColor Yellow
+Write-Host "Your proprietary code, architecture, and cloud secrets remain 100% protected!" -ForegroundColor Green
+
