@@ -1,7 +1,7 @@
 {
-  "version": "2.2.3",
+  "version": "2.2.4",
   "releaseDate": "2026-11-11",
-  "releaseNotes": "Zero-lag Midtown Stationary tunnel sync, resilient auto-discovery bridge, and safe auto-redirect eliminating UI_FILE_MISSING.",
+  "releaseNotes": "Zero-latency PrintAway.exe and start-station.bat tunnel sync, Midtown Stationary automatic identity binding, and 1-click cloud dashboard linking.",
   "downloadUrl": "https://raw.githubusercontent.com/Shivamborn2shine/PrintPilot/main/bin/PrintAway.exe",
   "fallbackUrl": "https://printitaway.netlify.app/downloads/PrintAway.exe"
 }

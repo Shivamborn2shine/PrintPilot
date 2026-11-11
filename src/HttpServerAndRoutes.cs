@@ -48,6 +48,7 @@ namespace PrintAway.Web
         }
 
         public int Port { get { return _port; } }
+        public event Action<string> OnTunnelUrlRegistered;
 
         public void Start()
         {
@@ -377,7 +378,13 @@ namespace PrintAway.Web
                         string tUrl = data != null && data.ContainsKey("tunnelUrl") ? Convert.ToString(data["tunnelUrl"]) : null;
                         if (!string.IsNullOrWhiteSpace(tUrl))
                         {
-                            _repo.SetLiveTunnelUrl(tUrl.Trim());
+                            string cleanUrl = tUrl.Trim();
+                            _repo.SetLiveTunnelUrl(cleanUrl);
+                            var handler = OnTunnelUrlRegistered;
+                            if (handler != null)
+                            {
+                                try { handler(cleanUrl); } catch { }
+                            }
                         }
                         WriteJson(res, 200, new Dictionary<string, object>
                         {

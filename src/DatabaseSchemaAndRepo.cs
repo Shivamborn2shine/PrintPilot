@@ -480,7 +480,7 @@ CREATE TABLE IF NOT EXISTS audit_events (
             {
                 _db.ExecuteInsert(
                     @"INSERT INTO shops (slug, name, tagline, intake_paused, operating_hours, turnaround_text, retention_hours, min_free_disk_mb, created_at_utc)
-                      VALUES ('printaway-pilot', 'PrintAway Pilot Shop', 'Printing ke liye pareshan ho? Just PrintAway.', 0, '09:00 AM - 09:00 PM IST', '3-5 mins after counter admin approval', 24, 1024, @now);",
+                      VALUES ('midtownstationary', 'Midtown Stationary', 'Printing ke liye pareshan ho? Just PrintAway.', 0, '09:00 AM - 09:00 PM IST', '3-5 mins after counter admin approval', 24, 1024, @now);",
                     new Dictionary<string, object> { { "now", now } });
             }
             else
@@ -2738,30 +2738,37 @@ CREATE TABLE IF NOT EXISTS audit_events (
         }
 
         private string _liveTunnelUrl;
+        private DateTime _lastTunnelFileReadUtc = DateTime.MinValue;
+
         public string GetLiveTunnelUrl()
         {
-            if (!string.IsNullOrWhiteSpace(_liveTunnelUrl)) return _liveTunnelUrl;
             try
             {
                 string dataDir = Path.GetDirectoryName(_vaultDirectory);
                 string path = Path.Combine(dataDir, "tunnel.url");
                 if (File.Exists(path))
                 {
-                    string content = File.ReadAllText(path).Trim();
-                    if (!string.IsNullOrWhiteSpace(content))
+                    var lastWrite = File.GetLastWriteTimeUtc(path);
+                    if (lastWrite > _lastTunnelFileReadUtc || string.IsNullOrWhiteSpace(_liveTunnelUrl))
                     {
-                        _liveTunnelUrl = content;
-                        return content;
+                        string content = File.ReadAllText(path).Trim();
+                        if (!string.IsNullOrWhiteSpace(content))
+                        {
+                            _liveTunnelUrl = content;
+                            _lastTunnelFileReadUtc = lastWrite;
+                            return content;
+                        }
                     }
                 }
             }
             catch { }
-            return null;
+            return _liveTunnelUrl;
         }
 
         public void SetLiveTunnelUrl(string url)
         {
             _liveTunnelUrl = url;
+            _lastTunnelFileReadUtc = DateTime.UtcNow;
             try
             {
                 string dataDir = Path.GetDirectoryName(_vaultDirectory);

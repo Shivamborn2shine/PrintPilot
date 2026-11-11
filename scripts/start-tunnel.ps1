@@ -29,7 +29,10 @@ function Get-RegistryTopicForShop([string]$sid) {
 
 # Load portable config/station.json if present
 $configPath = Join-Path $rootDir "config\station.json"
-$activeShopId = "pilot"
+if (-not (Test-Path $configPath)) {
+    $configPath = Join-Path $rootDir "station.json"
+}
+$activeShopId = "midtownstationary"
 $registryTopic = ""
 if (Test-Path $configPath) {
     try {
@@ -39,12 +42,12 @@ if (Test-Path $configPath) {
         if ($cfg.shopId) { $activeShopId = [string]$cfg.shopId }
         if ($cfg.stationRegistryTopic) { $registryTopic = [string]$cfg.stationRegistryTopic }
     } catch {
-        Write-Host "[Config] Warning reading config/station.json: $_" -ForegroundColor DarkYellow
+        Write-Host "[Config] Warning reading station config: $_" -ForegroundColor DarkYellow
     }
 }
 if ($ShopId) { $activeShopId = $ShopId }
 $activeShopId = ($activeShopId -replace '[^a-zA-Z0-9_-]', '').ToLower()
-if (-not $activeShopId) { $activeShopId = "pilot" }
+if (-not $activeShopId) { $activeShopId = "midtownstationary" }
 if (-not $registryTopic -or ($activeShopId -ne "pilot" -and $registryTopic -eq "printaway_station_registry_pilot_9f8a7b6c5d4e")) {
     $registryTopic = Get-RegistryTopicForShop $activeShopId
 }
@@ -291,6 +294,13 @@ if ($tunnelUrl) {
         $sbHeaders = @{ "apikey" = $sbKey; "Authorization" = "Bearer $sbKey"; "Content-Type" = "application/json" }
         $null = Invoke-RestMethod -Uri $sbUrl -Method Patch -Headers $sbHeaders -Body $body -TimeoutSec 5
         Write-Host "  [OK] Supabase Control Plane updated with live tunnel URL!" -ForegroundColor Green
+
+        if ($activeShopId -ne "pilot") {
+            try {
+                $sbPilotUrl = "https://zduoifzakiojfqbtxqqm.supabase.co/rest/v1/shops?shop_id=eq.pilot"
+                $null = Invoke-RestMethod -Uri $sbPilotUrl -Method Patch -Headers $sbHeaders -Body $body -TimeoutSec 3 -ErrorAction SilentlyContinue
+            } catch { }
+        }
     } catch { }
 }
 

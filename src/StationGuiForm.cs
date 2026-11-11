@@ -81,6 +81,26 @@ namespace PrintAway.Gui
             InitializeGui();
             LoadInitialData();
 
+            if (_server != null)
+            {
+                _server.OnTunnelUrlRegistered += url =>
+                {
+                    if (this.IsDisposed || !this.IsHandleCreated) return;
+                    try
+                    {
+                        this.BeginInvoke((MethodInvoker)(() =>
+                        {
+                            if (_lblTunnelUrl != null)
+                            {
+                                _lblTunnelUrl.Text = "🟢 Live (Cloudflare Tunnel): " + url;
+                                _lblTunnelUrl.ForeColor = Color.FromArgb(21, 128, 61);
+                            }
+                        }));
+                    }
+                    catch { }
+                };
+            }
+
             if (_tunnel != null)
             {
                 _tunnel.OnTunnelUrlCaptured += OnTunnelCaptured;
@@ -313,6 +333,20 @@ namespace PrintAway.Gui
                 {
                     ThreadPool.QueueUserWorkItem(state => _tunnel.Restart());
                 }
+                else
+                {
+                    ThreadPool.QueueUserWorkItem(state =>
+                    {
+                        try
+                        {
+                            foreach (var p in Process.GetProcessesByName("cloudflared"))
+                            {
+                                try { p.Kill(); } catch { }
+                            }
+                        }
+                        catch { }
+                    });
+                }
             };
 
             var btnTunnelConfig = new Button
@@ -455,7 +489,18 @@ namespace PrintAway.Gui
                 Cursor = Cursors.Hand
             };
             btnOpenAdmin.FlatAppearance.BorderSize = 0;
-            btnOpenAdmin.Click += (s, e) => LaunchBrowser("http://127.0.0.1:" + _port + "/admin");
+            btnOpenAdmin.Click += (s, e) =>
+            {
+                string shopId = GetCurrentShopId();
+                string liveTunnel = (_tunnel != null && !string.IsNullOrEmpty(_tunnel.LiveTunnelUrl))
+                    ? _tunnel.LiveTunnelUrl
+                    : _repo.GetLiveTunnelUrl();
+
+                string adminUrl = !string.IsNullOrEmpty(liveTunnel)
+                    ? string.Format(CultureInfo.InvariantCulture, "https://printitaway.netlify.app/admin?shop={0}&station={1}", shopId, Uri.EscapeDataString(liveTunnel))
+                    : ("http://127.0.0.1:" + _port + "/admin");
+                LaunchBrowser(adminUrl);
+            };
 
             var btnOpenQr = new Button
             {
@@ -469,7 +514,18 @@ namespace PrintAway.Gui
                 Cursor = Cursors.Hand
             };
             btnOpenQr.FlatAppearance.BorderSize = 0;
-            btnOpenQr.Click += (s, e) => LaunchBrowser("https://printitaway.netlify.app/?shop=" + GetCurrentShopId());
+            btnOpenQr.Click += (s, e) =>
+            {
+                string shopId = GetCurrentShopId();
+                string liveTunnel = (_tunnel != null && !string.IsNullOrEmpty(_tunnel.LiveTunnelUrl))
+                    ? _tunnel.LiveTunnelUrl
+                    : _repo.GetLiveTunnelUrl();
+
+                string qrUrl = !string.IsNullOrEmpty(liveTunnel)
+                    ? string.Format(CultureInfo.InvariantCulture, "https://printitaway.netlify.app/?shop={0}&station={1}", shopId, Uri.EscapeDataString(liveTunnel))
+                    : ("https://printitaway.netlify.app/?shop=" + shopId);
+                LaunchBrowser(qrUrl);
+            };
 
             pnlBody.Controls.Add(btnOpenAdmin);
             pnlBody.Controls.Add(btnOpenQr);
@@ -531,8 +587,8 @@ namespace PrintAway.Gui
                 }
             };
 
-            // 10. Metrics Auto-Refresh Timer (every 3 seconds)
-            _metricsTimer = new System.Windows.Forms.Timer { Interval = 3000 };
+            // 10. Metrics Auto-Refresh Timer (every 1 second for instant sync with launcher)
+            _metricsTimer = new System.Windows.Forms.Timer { Interval = 1000 };
             _metricsTimer.Tick += (s, e) => RefreshDashboardMetrics();
             _metricsTimer.Start();
         }
@@ -647,13 +703,31 @@ namespace PrintAway.Gui
             try
             {
                 var status = _repo.GetShopAndAvailabilityStatus();
-                string shopId = status.ContainsKey("shopId") && status["shopId"] != null ? Convert.ToString(status["shopId"]) : "pilot";
-                string shopName = status.ContainsKey("shopName") && status["shopName"] != null ? Convert.ToString(status["shopName"]) : "PrintAway Pilot Shop";
+                string shopId = status.ContainsKey("shopId") && status["shopId"] != null ? Convert.ToString(status["shopId"]) : "midtownstationary";
+                string shopName = status.ContainsKey("shopName") && status["shopName"] != null ? Convert.ToString(status["shopName"]) : "Midtown Stationary";
                 string activeQueue = Convert.ToString(status["activeQueueName"]);
                 bool accepting = (bool)status["acceptingOrders"];
 
                 _lblShopTitle.Text = string.Format(CultureInfo.InvariantCulture, "{0} (ID: {1})", shopName, shopId);
                 _lblCustomerLink.Text = "Customer QR: https://printitaway.netlify.app/?shop=" + shopId;
+
+                string initialTunnel = (_tunnel != null && !string.IsNullOrEmpty(_tunnel.LiveTunnelUrl))
+                    ? _tunnel.LiveTunnelUrl
+                    : _repo.GetLiveTunnelUrl();
+
+                if (!string.IsNullOrEmpty(initialTunnel) && _lblTunnelUrl != null)
+                {
+                    string provider = (_tunnel != null && !string.IsNullOrEmpty(_tunnel.ActiveProviderName))
+                        ? _tunnel.ActiveProviderName
+                        : "Cloudflare Tunnel";
+                    _lblTunnelUrl.Text = "🟢 Live (" + provider + "): " + initialTunnel;
+                    _lblTunnelUrl.ForeColor = Color.FromArgb(21, 128, 61);
+                }
+                else if (_lblTunnelUrl != null)
+                {
+                    _lblTunnelUrl.Text = "Tunnel: Syncing with start-station launcher...";
+                    _lblTunnelUrl.ForeColor = Color.FromArgb(100, 116, 139);
+                }
 
                 UpdateIntakeButtonState(accepting);
 
@@ -1111,7 +1185,7 @@ namespace PrintAway.Gui
                 }
             }
             catch { }
-            return "pilot";
+            return "midtownstationary";
         }
 
         private void ShowEditShopAndAdminPasswordDialog()

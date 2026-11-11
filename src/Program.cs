@@ -127,6 +127,15 @@ namespace PrintAway
                 }
             }
 
+            if (string.IsNullOrWhiteSpace(configShopId))
+            {
+                configShopId = "midtownstationary";
+            }
+            if (string.IsNullOrWhiteSpace(configShopName))
+            {
+                configShopName = "Midtown Stationary";
+            }
+
             bool disableInternalTunnel = false;
 
             if (args != null)
