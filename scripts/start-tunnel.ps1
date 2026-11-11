@@ -266,6 +266,15 @@ if (-not $tunnelUrl) {
 
 # 4. Publish live tunnel URL to Shop's Isolated Cloud Registry Topic & Supabase Control Plane
 if ($tunnelUrl) {
+    # 4a. Sync immediately with local PrintAway GUI Station (Zero Delay / Zero Confusion)
+    try {
+        Set-Content (Join-Path $rootDir "data\tunnel.url") $tunnelUrl -Force
+    } catch { }
+    try {
+        $tunnelSyncBody = @{ tunnelUrl = $tunnelUrl; provider = "Cloudflare Tunnel" } | ConvertTo-Json
+        $null = Invoke-RestMethod -Uri "http://127.0.0.1:$LocalPort/api/station/tunnel" -Method Post -Body $tunnelSyncBody -ContentType "application/json" -TimeoutSec 3 -ErrorAction SilentlyContinue
+    } catch { }
+
     Write-Host "[4/4] Broadcasting live tunnel URL for Shop [$activeShopId] to Cloud Registry..." -ForegroundColor Yellow
     [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12
     try {

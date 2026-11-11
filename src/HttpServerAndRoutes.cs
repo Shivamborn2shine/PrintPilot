@@ -368,6 +368,35 @@ namespace PrintAway.Web
                     return;
                 }
 
+                // Station Tunnel Status & Registration (GET & POST /api/station/tunnel)
+                if (path == "/api/station/tunnel")
+                {
+                    if (method == "POST")
+                    {
+                        var data = ReadJsonBody(req);
+                        string tUrl = data != null && data.ContainsKey("tunnelUrl") ? Convert.ToString(data["tunnelUrl"]) : null;
+                        if (!string.IsNullOrWhiteSpace(tUrl))
+                        {
+                            _repo.SetLiveTunnelUrl(tUrl.Trim());
+                        }
+                        WriteJson(res, 200, new Dictionary<string, object>
+                        {
+                            { "ok", true },
+                            { "liveTunnelUrl", _repo.GetLiveTunnelUrl() }
+                        });
+                        return;
+                    }
+                    else if (method == "GET")
+                    {
+                        WriteJson(res, 200, new Dictionary<string, object>
+                        {
+                            { "ok", true },
+                            { "liveTunnelUrl", _repo.GetLiveTunnelUrl() }
+                        });
+                        return;
+                    }
+                }
+
                 // Customer PDF Upload (POST /api/uploads)
                 if (method == "POST" && path == "/api/uploads")
                 {

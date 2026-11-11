@@ -9,7 +9,7 @@ namespace PrintAway.Updater
 {
     public static class AutoUpdater
     {
-        public const string CurrentVersion = "2.2.0";
+        public const string CurrentVersion = "2.2.1";
         private const string VersionEndpoint = "https://raw.githubusercontent.com/Shivamborn2shine/PrintPilot/main/version.json";
 
         public static bool CheckForUpdate(out string latestVersion, out string downloadUrl, out string releaseNotes)
@@ -72,7 +72,24 @@ namespace PrintAway.Updater
                 ServicePointManager.SecurityProtocol = SecurityProtocolType.Tls12 | SecurityProtocolType.Tls11 | SecurityProtocolType.Tls;
                 using (var client = new WebClient())
                 {
-                    client.DownloadFile(downloadUrl, newExe);
+                    client.Headers.Add("User-Agent", "PrintAway-Station/" + CurrentVersion);
+                    try
+                    {
+                        client.DownloadFile(downloadUrl, newExe);
+                    }
+                    catch
+                    {
+                        // Fallback to GitHub raw or Netlify CDN
+                        string fallback = "https://raw.githubusercontent.com/Shivamborn2shine/PrintPilot/main/bin/PrintAway.exe";
+                        if (!string.Equals(downloadUrl, fallback, StringComparison.OrdinalIgnoreCase))
+                        {
+                            client.DownloadFile(fallback, newExe);
+                        }
+                        else
+                        {
+                            client.DownloadFile("https://printitaway.netlify.app/downloads/PrintAway.exe", newExe);
+                        }
+                    }
                 }
 
                 if (!File.Exists(newExe) || new FileInfo(newExe).Length < 50000)

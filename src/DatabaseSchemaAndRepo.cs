@@ -695,6 +695,7 @@ CREATE TABLE IF NOT EXISTS audit_events (
                 { "diskLow", diskLow },
                 { "printerReady", printerReady },
                 { "dispatchMode", GetDispatchMode() },
+                { "liveTunnelUrl", GetLiveTunnelUrl() },
                 { "statusReason", statusReason },
                 { "printerModel", printer["model_name"] },
                 { "activeQueueName", activeQueue != null ? activeQueue["windows_queue_name"] : VerifiedXeroxQueueName },
@@ -2694,6 +2695,42 @@ CREATE TABLE IF NOT EXISTS audit_events (
             _db.ExecuteNonQuery("UPDATE stations SET dispatch_mode = @m WHERE id = 1;",
                 new Dictionary<string, object> { { "m", val } });
             LogAudit(null, "admin", adminUser, "DISPATCH_MODE_CHANGED", null, val, "Print dispatch mode set to " + val);
+        }
+
+        private string _liveTunnelUrl;
+        public string GetLiveTunnelUrl()
+        {
+            if (!string.IsNullOrWhiteSpace(_liveTunnelUrl)) return _liveTunnelUrl;
+            try
+            {
+                string dataDir = Path.GetDirectoryName(_vaultDirectory);
+                string path = Path.Combine(dataDir, "tunnel.url");
+                if (File.Exists(path))
+                {
+                    string content = File.ReadAllText(path).Trim();
+                    if (!string.IsNullOrWhiteSpace(content))
+                    {
+                        _liveTunnelUrl = content;
+                        return content;
+                    }
+                }
+            }
+            catch { }
+            return null;
+        }
+
+        public void SetLiveTunnelUrl(string url)
+        {
+            _liveTunnelUrl = url;
+            try
+            {
+                string dataDir = Path.GetDirectoryName(_vaultDirectory);
+                if (!Directory.Exists(dataDir)) Directory.CreateDirectory(dataDir);
+                string path = Path.Combine(dataDir, "tunnel.url");
+                if (!string.IsNullOrWhiteSpace(url))
+                    File.WriteAllText(path, url.Trim(), Encoding.UTF8);
+            }
+            catch { }
         }
 
         public Dictionary<string, object> GetAdminDashboardSummary(string stateFilter = "all", string searchQuery = "", string dateFilter = "today", string shopFilter = null)

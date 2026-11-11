@@ -142,12 +142,14 @@ $releaseDir = Join-Path $rootDir "releases"
 if (-not (Test-Path $releaseDir)) { New-Item -ItemType Directory -Path $releaseDir -Force | Out-Null }
 $releaseZip = Join-Path $releaseDir "PrintAway-Station-Setup.zip"
 Copy-Item -Path $zipPath -Destination $releaseZip -Force
+Copy-Item -Path $binExe -Destination (Join-Path $releaseDir "PrintAway.exe") -Force
 Write-Host "  [OK] Copied to $releaseZip (tracked in Git for direct download)." -ForegroundColor Green
 
 $webDlDir = Join-Path $rootDir "web\downloads"
 if (-not (Test-Path $webDlDir)) { New-Item -ItemType Directory -Path $webDlDir -Force | Out-Null }
 $webDlZip = Join-Path $webDlDir "PrintAway-Station-Setup.zip"
 Copy-Item -Path $zipPath -Destination $webDlZip -Force
+Copy-Item -Path $binExe -Destination (Join-Path $webDlDir "PrintAway.exe") -Force
 Write-Host "  [OK] Copied to $webDlZip (hosted on Netlify CDN)." -ForegroundColor Green
 
 # 6. Security Audit Verification

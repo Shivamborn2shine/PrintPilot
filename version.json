@@ -1,7 +1,7 @@
 {
-  "version": "2.2.0",
-  "releaseDate": "2026-11-07",
-  "releaseNotes": "Native Windows GUI Station with System Tray, Cloudflare background manager & Razorpay Dynamic UPI Checkout",
-  "downloadUrl": "https://github.com/Shivamborn2shine/PrintPilot/releases/download/v2.2.0/PrintAway.exe"
+  "version": "2.2.1",
+  "releaseDate": "2026-11-11",
+  "releaseNotes": "Zero-lag tunnel synchronization, in-place 1-click auto-updater, and Xerox monochrome bitmap rasterizer.",
+  "downloadUrl": "https://raw.githubusercontent.com/Shivamborn2shine/PrintPilot/main/bin/PrintAway.exe",
+  "fallbackUrl": "https://printitaway.netlify.app/downloads/PrintAway.exe"
 }
-

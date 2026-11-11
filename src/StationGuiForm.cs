@@ -263,10 +263,14 @@ namespace PrintAway.Gui
             {
                 try
                 {
-                    if (_tunnel != null && !string.IsNullOrEmpty(_tunnel.LiveTunnelUrl))
+                    string liveTunnel = (_tunnel != null && !string.IsNullOrEmpty(_tunnel.LiveTunnelUrl))
+                        ? _tunnel.LiveTunnelUrl
+                        : _repo.GetLiveTunnelUrl();
+
+                    if (!string.IsNullOrEmpty(liveTunnel))
                     {
-                        Clipboard.SetText(_tunnel.LiveTunnelUrl);
-                        MessageBox.Show("Active tunnel URL copied to clipboard:\n" + _tunnel.LiveTunnelUrl, "PrintAway", MessageBoxButtons.OK, MessageBoxIcon.Information);
+                        Clipboard.SetText(liveTunnel);
+                        MessageBox.Show("Active tunnel URL copied to clipboard:\n" + liveTunnel, "PrintAway", MessageBoxButtons.OK, MessageBoxIcon.Information);
                     }
                     else
                     {
@@ -699,6 +703,20 @@ namespace PrintAway.Gui
                     _lblMetricOrders.Text = pending + " pending / " + done + " done";
                     _lblMetricSides.Text = sides + " sides";
                     _lblMetricRevenue.Text = string.Format(CultureInfo.InvariantCulture, "₹{0:0.00}", rev);
+                }
+
+                // Keep tunnel status synced with external tunnel launcher (start-tunnel.ps1 / cloudflared)
+                string liveTunnel = (_tunnel != null && !string.IsNullOrEmpty(_tunnel.LiveTunnelUrl))
+                    ? _tunnel.LiveTunnelUrl
+                    : _repo.GetLiveTunnelUrl();
+
+                if (!string.IsNullOrEmpty(liveTunnel) && _lblTunnelUrl != null)
+                {
+                    string provider = (_tunnel != null && !string.IsNullOrEmpty(_tunnel.ActiveProviderName))
+                        ? _tunnel.ActiveProviderName
+                        : "Cloudflare Tunnel";
+                    _lblTunnelUrl.Text = "🟢 Live (" + provider + "): " + liveTunnel;
+                    _lblTunnelUrl.ForeColor = Color.FromArgb(21, 128, 61);
                 }
 
                 if (_supabaseSync != null && _supabaseSync.CurrentQuota != null)
