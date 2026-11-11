@@ -88,9 +88,17 @@ $templateConfig = @{
 } | ConvertTo-Json -Depth 5
 [System.IO.File]::WriteAllText((Join-Path $OutputDir "config\station.json"), $templateConfig, [System.Text.Encoding]::UTF8)
 
-# Copy web assets if present
+# Copy web frontend UI files (Client HTML/CSS/Assets - ZERO C# backend code)
+$webOutDir = Join-Path $OutputDir "web"
+if (-not (Test-Path $webOutDir)) { New-Item -ItemType Directory -Path $webOutDir -Force | Out-Null }
+if (Test-Path (Join-Path $rootDir "web\index.html")) {
+    Copy-Item -Path (Join-Path $rootDir "web\index.html") -Destination (Join-Path $webOutDir "index.html") -Force
+}
+if (Test-Path (Join-Path $rootDir "web\admin.html")) {
+    Copy-Item -Path (Join-Path $rootDir "web\admin.html") -Destination (Join-Path $webOutDir "admin.html") -Force
+}
 if (Test-Path (Join-Path $rootDir "web\assets")) {
-    Copy-Item -Recurse -Path (Join-Path $rootDir "web\assets\*") -Destination (Join-Path $OutputDir "web\assets") -Force
+    Copy-Item -Recurse -Path (Join-Path $rootDir "web\assets\*") -Destination (Join-Path $webOutDir "assets") -Force
 }
 
 # Create a clean README for the shopkeeper

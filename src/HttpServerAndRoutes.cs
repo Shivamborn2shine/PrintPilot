@@ -152,6 +152,11 @@ namespace PrintAway.Web
                     ServeStaticHtml(res, "superadmin.html");
                     return;
                 }
+                if (method == "GET" && path.StartsWith("/assets/"))
+                {
+                    ServeStaticAsset(res, path);
+                    return;
+                }
 
                 // SaaS Quota Telemetry Status
                 if (method == "GET" && path == "/api/saas/quota")
@@ -1130,11 +1135,73 @@ namespace PrintAway.Web
             string fullPath = Path.Combine(_webRoot, fileName);
             if (!File.Exists(fullPath))
             {
-                WriteError(res, 404, "UI_FILE_MISSING", "Missing UI file: " + fileName);
+                fullPath = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "web", fileName);
+            }
+            if (!File.Exists(fullPath))
+            {
+                fullPath = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, fileName);
+            }
+
+            if (File.Exists(fullPath))
+            {
+                byte[] bytes = File.ReadAllBytes(fullPath);
+                WriteBytes(res, 200, "text/html; charset=utf-8", bytes);
                 return;
             }
+
+            // Graceful fallback: Redirect browser to cloud-hosted frontend on Netlify
+            try
+            {
+                var status = _repo.GetShopAndAvailabilityStatus();
+                string shopId = (status != null && status.ContainsKey("shopId") && status["shopId"] != null)
+                    ? Convert.ToString(status["shopId"])
+                    : "pilot";
+                string targetPath = (fileName == "admin.html") ? "/admin" : "";
+                string targetUrl = string.Format(CultureInfo.InvariantCulture, "https://printitaway.netlify.app{0}?shop={1}", targetPath, shopId);
+                res.StatusCode = 302;
+                res.Headers.Add("Location", targetUrl);
+                byte[] redirectHtml = Encoding.UTF8.GetBytes(string.Format(CultureInfo.InvariantCulture,
+                    "<!DOCTYPE html><html><head><meta http-equiv='refresh' content='0;url={0}'></head><body><p>Redirecting to <a href='{0}'>PrintAway Cloud Portal</a>...</p></body></html>",
+                    targetUrl));
+                WriteBytes(res, 302, "text/html; charset=utf-8", redirectHtml);
+                return;
+            }
+            catch
+            {
+                WriteError(res, 404, "UI_FILE_MISSING", "Missing UI file: " + fileName);
+            }
+        }
+
+        private void ServeStaticAsset(HttpListenerResponse res, string urlPath)
+        {
+            string cleanPath = urlPath.TrimStart('/').Replace('/', Path.DirectorySeparatorChar);
+            string fullPath = Path.Combine(_webRoot, cleanPath);
+            if (!File.Exists(fullPath))
+            {
+                fullPath = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "web", cleanPath);
+            }
+            if (!File.Exists(fullPath))
+            {
+                fullPath = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, cleanPath);
+            }
+
+            if (!File.Exists(fullPath))
+            {
+                WriteError(res, 404, "ASSET_NOT_FOUND", "Asset not found: " + urlPath);
+                return;
+            }
+
+            string ext = Path.GetExtension(fullPath).ToLowerInvariant();
+            string mime = "application/octet-stream";
+            if (ext == ".svg") mime = "image/svg+xml";
+            else if (ext == ".png") mime = "image/png";
+            else if (ext == ".jpg" || ext == ".jpeg") mime = "image/jpeg";
+            else if (ext == ".css") mime = "text/css; charset=utf-8";
+            else if (ext == ".js") mime = "application/javascript; charset=utf-8";
+            else if (ext == ".ico") mime = "image/x-icon";
+
             byte[] bytes = File.ReadAllBytes(fullPath);
-            WriteBytes(res, 200, "text/html; charset=utf-8", bytes);
+            WriteBytes(res, 200, mime, bytes);
         }
 
         private static string ReadRawBody(HttpListenerRequest req)
