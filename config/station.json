@@ -1,6 +1,6 @@
 {
-    "shopId":  "midtownstationary",
-    "shopName":  "Midtown Stationary",
+    "shopId": "midtownstationary",
+    "shopName": "Midtown Stationary",
     "tagline":  "Printing ke liye pareshan ho? Just PrintAway.",
     "operatingHours":  "09:00 AM - 09:00 PM IST",
     "turnaroundText":  "3-5 mins after counter admin approval",
@@ -10,6 +10,6 @@
     "colorPrinterQueue":  "Xerox B1025 Multifunction Printer",
     "autoFallbackToPhysicalPrinter":  true,
     "netlifySiteUrl":  "https://printitaway.netlify.app",
-    "stationRegistryTopic":  "printaway_station_registry_midtownstationary_9f8a7b",
+    "stationRegistryTopic": "printaway_station_registry_midtownstationary_9f8a7b",
     "autoPushTunnelToGit":  false
 }

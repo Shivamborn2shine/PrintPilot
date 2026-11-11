@@ -1,0 +1,431 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>PrintAway SaaS | Automated Stationery Hardware Printing OS & Plans</title>
+  <link rel="icon" type="image/svg+xml" href="/assets/favicon.svg" />
+  <link rel="apple-touch-icon" href="/assets/logo.png" />
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+  <style>
+    @import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800;900&family=JetBrains+Mono:wght@400;500;600&display=swap');
+    body { font-family: 'Plus Jakarta Sans', sans-serif; background-color: #0b0f19; color: #f1f5f9; }
+    .mono { font-family: 'JetBrains Mono', monospace; }
+    .glass { background: rgba(17, 24, 39, 0.75); backdrop-filter: blur(12px); border: 1px solid rgba(255, 255, 255, 0.08); }
+    .glow-indigo { box-shadow: 0 0 35px rgba(99, 102, 241, 0.25); }
+    .glow-purple { box-shadow: 0 0 35px rgba(168, 85, 247, 0.25); }
+    .gradient-text { background: linear-gradient(135deg, #ffffff 0%, #cbd5e1 50%, #93c5fd 100%); -webkit-background-clip: text; -webkit-text-fill-color: transparent; }
+  </style>
+</head>
+<body class="min-h-screen flex flex-col selection:bg-indigo-500 selection:text-white">
+
+  <!-- NAVIGATION HEADER -->
+  <header class="border-b border-gray-800 bg-gray-950/80 sticky top-0 z-50 backdrop-blur-md">
+    <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-18 flex items-center justify-between">
+      <a href="/" class="flex items-center space-x-3 group">
+        <img src="/assets/logo.png" class="w-11 h-11 rounded-full border-2 border-amber-400 p-0.5 shadow-lg shadow-amber-500/20 object-cover group-hover:scale-105 transition" alt="PrintAway Logo" onerror="this.src='/assets/logo.svg'" />
+        <div>
+          <div class="flex items-center space-x-2">
+            <span class="text-xl font-extrabold tracking-tight text-white">PrintAway</span>
+            <span class="text-[11px] font-bold px-2 py-0.5 rounded-full bg-indigo-500/10 text-indigo-400 border border-indigo-500/20">SAAS PLATFORM</span>
+          </div>
+          <p class="text-[11px] text-gray-400">Automated Stationery Hardware Printing Cloud</p>
+        </div>
+      </a>
+
+      <nav class="hidden md:flex items-center space-x-7 text-xs font-semibold text-gray-300">
+        <a href="#features" class="hover:text-white transition">Features</a>
+        <a href="#pricing" class="hover:text-white transition">Pricing &amp; Plans</a>
+        <a href="#hardware" class="hover:text-white transition">Supported Hardware</a>
+        <a href="#download" class="hover:text-white transition">Download Station</a>
+        <a href="#faq" class="hover:text-white transition">FAQ</a>
+      </nav>
+
+      <div class="flex items-center space-x-3">
+        <a href="/admin" class="px-3.5 py-2 rounded-xl bg-gray-800 hover:bg-gray-700 text-gray-200 text-xs font-semibold border border-gray-700 transition flex items-center space-x-1.5">
+          <i class="fa-solid fa-lock text-xs text-indigo-400"></i>
+          <span>Shop Counter Login</span>
+        </a>
+        <a href="#download" class="px-4 py-2 rounded-xl bg-gradient-to-r from-indigo-600 to-violet-600 hover:from-indigo-500 hover:to-violet-500 text-white text-xs font-bold transition flex items-center space-x-1.5 shadow-md shadow-indigo-600/30">
+          <i class="fa-solid fa-download text-xs"></i>
+          <span>Download Station Setup</span>
+        </a>
+      </div>
+    </div>
+  </header>
+
+  <!-- MAIN HERO SECTION -->
+  <section class="relative overflow-hidden py-20 lg:py-28 border-b border-gray-800/60">
+    <div class="absolute inset-0 bg-[radial-gradient(ellipse_80%_80%_at_50%_-20%,rgba(120,119,198,0.18),rgba(255,255,255,0))]"></div>
+    <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 relative z-10 text-center space-y-7">
+      
+      <div class="inline-flex items-center space-x-2 px-3.5 py-1.5 rounded-full bg-indigo-500/10 border border-indigo-500/20 text-indigo-300 text-xs font-bold">
+        <span class="w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></span>
+        <span>Trusted by Xerox &amp; Stationery Shops Across India</span>
+      </div>
+
+      <h1 class="text-4xl sm:text-5xl lg:text-6xl font-black tracking-tight max-w-4xl mx-auto leading-tight">
+        Turn Your Physical Xerox &amp; Canon Printers into a <span class="gradient-text">24/7 Self-Service Cloud Kiosk</span>
+      </h1>
+
+      <p class="text-sm sm:text-base text-gray-400 max-w-2xl mx-auto leading-relaxed">
+        Eliminate walk-in queues, WhatsApp chaos, and pendrive viruses. Customers scan your counter QR, upload documents or photos with A4 visual cropping, pay via UPI or cash, and jobs print to your Windows hardware trays with 1-click counter approval.
+      </p>
+
+      <div class="flex flex-col sm:flex-row items-center justify-center gap-4 pt-3">
+        <a href="#download" class="w-full sm:w-auto px-7 py-3.5 rounded-2xl bg-gradient-to-r from-indigo-600 via-indigo-500 to-violet-600 hover:from-indigo-500 hover:to-violet-500 text-white text-sm font-extrabold shadow-xl shadow-indigo-600/30 flex items-center justify-center space-x-2 transition transform hover:-translate-y-0.5">
+          <i class="fa-brands fa-windows text-base"></i>
+          <span>Download PrintAway Station (64-bit)</span>
+        </a>
+        <a href="/?shop=victoria_communications" target="_blank" class="w-full sm:w-auto px-6 py-3.5 rounded-2xl bg-gray-900 hover:bg-gray-800 text-gray-200 text-sm font-bold border border-gray-700 flex items-center justify-center space-x-2 transition">
+          <i class="fa-solid fa-qrcode text-indigo-400"></i>
+          <span>Experience Live Customer Storefront &rarr;</span>
+        </a>
+      </div>
+
+      <!-- Trust Metrics -->
+      <div class="pt-10 grid grid-cols-2 md:grid-cols-4 gap-4 max-w-3xl mx-auto text-center border-t border-gray-800/80">
+        <div>
+          <div class="text-2xl font-black text-white">0.1s</div>
+          <div class="text-xs text-gray-400 mt-0.5">Instant Tunnel Discovery</div>
+        </div>
+        <div>
+          <div class="text-2xl font-black text-white">100%</div>
+          <div class="text-xs text-gray-400 mt-0.5">Zero Spooler Crash SLA</div>
+        </div>
+        <div>
+          <div class="text-2xl font-black text-white">1-Click</div>
+          <div class="text-xs text-gray-400 mt-0.5">Fresh PC Auto-Onboarding</div>
+        </div>
+        <div>
+          <div class="text-2xl font-black text-white">₹0</div>
+          <div class="text-xs text-gray-400 mt-0.5">Free Starter Tier Forever</div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- SAAS PRICING TIERS -->
+  <section id="pricing" class="py-20 bg-gray-950/60 border-b border-gray-800">
+    <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 space-y-12">
+      
+      <div class="text-center space-y-3">
+        <h2 class="text-3xl sm:text-4xl font-extrabold text-white tracking-tight">
+          Simple, Transparent Plans Built for Stationery Profits
+        </h2>
+        <p class="text-xs sm:text-sm text-gray-400 max-w-xl mx-auto">
+          Start 100% free with daily test quota, or unlock unlimited pages, multi-printer B&amp;W/Color auto-routing, and custom shop branding.
+        </p>
+      </div>
+
+      <!-- Pricing Cards Grid -->
+      <div class="grid grid-cols-1 md:grid-cols-3 gap-7">
+
+        <!-- Plan 1: Free Starter -->
+        <div class="glass p-7 rounded-3xl border border-gray-800 flex flex-col justify-between hover:border-gray-700 transition">
+          <div class="space-y-5">
+            <div class="flex items-center justify-between">
+              <span class="text-xs font-bold uppercase tracking-wider text-gray-400">Community Starter</span>
+              <span class="px-2.5 py-1 rounded-full bg-gray-800 text-gray-300 font-bold text-[10px] border border-gray-700">FREE FOREVER</span>
+            </div>
+            <div>
+              <div class="text-4xl font-black text-white">₹0</div>
+              <p class="text-xs text-gray-400 mt-1">Free for new shop trials &amp; testing</p>
+            </div>
+            <ul class="space-y-3 text-xs text-gray-300 border-t border-gray-800 pt-5">
+              <li class="flex items-center space-x-2.5">
+                <i class="fa-solid fa-check text-emerald-400"></i>
+                <span><strong>10 Pages / Day</strong> Free Quota</span>
+              </li>
+              <li class="flex items-center space-x-2.5">
+                <i class="fa-solid fa-check text-emerald-400"></i>
+                <span>1 Connected Windows Physical Printer</span>
+              </li>
+              <li class="flex items-center space-x-2.5">
+                <i class="fa-solid fa-check text-emerald-400"></i>
+                <span>Customer QR Code Storefront</span>
+              </li>
+              <li class="flex items-center space-x-2.5">
+                <i class="fa-solid fa-check text-emerald-400"></i>
+                <span>Counter Admin Approval &amp; Cash Intake</span>
+              </li>
+              <li class="flex items-center space-x-2.5">
+                <i class="fa-solid fa-check text-emerald-400"></i>
+                <span>Image to A4 Visual Cropping Studio</span>
+              </li>
+              <li class="flex items-center space-x-2.5 text-gray-500">
+                <i class="fa-solid fa-xmark"></i>
+                <span>Smart Multi-Printer Color Auto-Routing</span>
+              </li>
+            </ul>
+          </div>
+          <div class="pt-8">
+            <a href="#download" class="w-full block py-3 rounded-xl bg-gray-800 hover:bg-gray-700 text-white text-center text-xs font-bold border border-gray-700 transition">
+              Download Free Starter
+            </a>
+          </div>
+        </div>
+
+        <!-- Plan 2: Pro Annual (Featured Best Value) -->
+        <div class="glass p-7 rounded-3xl border-2 border-indigo-500 relative flex flex-col justify-between glow-indigo transform md:-translate-y-2">
+          <div class="absolute -top-3.5 left-1/2 -translate-x-1/2 px-3 py-1 rounded-full bg-gradient-to-r from-indigo-500 to-violet-500 text-white font-black text-[10px] tracking-wider uppercase shadow-md shadow-indigo-500/30">
+            ★ Best Value • Save 40%
+          </div>
+          <div class="space-y-5">
+            <div class="flex items-center justify-between">
+              <span class="text-xs font-bold uppercase tracking-wider text-indigo-400">Pro Unlimited (Annual)</span>
+              <span class="px-2.5 py-1 rounded-full bg-indigo-500/20 text-indigo-300 font-bold text-[10px] border border-indigo-500/30">ANNUAL BILLING</span>
+            </div>
+            <div>
+              <div class="flex items-baseline space-x-1">
+                <span class="text-4xl font-black text-white">₹149</span>
+                <span class="text-xs text-gray-400 font-medium">/ month</span>
+              </div>
+              <p class="text-xs text-indigo-300/80 mt-1">Billed ₹1,788/year • Zero rate limits</p>
+            </div>
+            <ul class="space-y-3 text-xs text-gray-200 border-t border-gray-800 pt-5">
+              <li class="flex items-center space-x-2.5">
+                <i class="fa-solid fa-circle-check text-indigo-400"></i>
+                <span><strong>Unlimited Daily Printing</strong> (Zero Limits)</span>
+              </li>
+              <li class="flex items-center space-x-2.5">
+                <i class="fa-solid fa-circle-check text-indigo-400"></i>
+                <span><strong>Multi-Printer Auto-Routing</strong> (B&amp;W vs Color)</span>
+              </li>
+              <li class="flex items-center space-x-2.5">
+                <i class="fa-solid fa-circle-check text-indigo-400"></i>
+                <span>Branded Store Name &amp; Permanent QR Code</span>
+              </li>
+              <li class="flex items-center space-x-2.5">
+                <i class="fa-solid fa-circle-check text-indigo-400"></i>
+                <span>Custom UPI VPA &amp; Live Razorpay Online Payments</span>
+              </li>
+              <li class="flex items-center space-x-2.5">
+                <i class="fa-solid fa-circle-check text-indigo-400"></i>
+                <span>A4 Visual Cropping &amp; Orientation Studio</span>
+              </li>
+              <li class="flex items-center space-x-2.5">
+                <i class="fa-solid fa-circle-check text-indigo-400"></i>
+                <span>Priority Founder WhatsApp Support</span>
+              </li>
+            </ul>
+          </div>
+          <div class="pt-8">
+            <a href="/admin#pro-upgrade" class="w-full block py-3.5 rounded-xl bg-gradient-to-r from-indigo-600 to-violet-600 hover:from-indigo-500 hover:to-violet-500 text-white text-center text-xs font-extrabold shadow-lg shadow-indigo-600/30 transition">
+              Upgrade to Pro Annual (₹149/mo)
+            </a>
+          </div>
+        </div>
+
+        <!-- Plan 3: Pro Monthly -->
+        <div class="glass p-7 rounded-3xl border border-gray-800 flex flex-col justify-between hover:border-gray-700 transition">
+          <div class="space-y-5">
+            <div class="flex items-center justify-between">
+              <span class="text-xs font-bold uppercase tracking-wider text-violet-400">Pro Unlimited (Monthly)</span>
+              <span class="px-2.5 py-1 rounded-full bg-violet-500/10 text-violet-300 font-bold text-[10px] border border-violet-500/20">MONTHLY</span>
+            </div>
+            <div>
+              <div class="flex items-baseline space-x-1">
+                <span class="text-4xl font-black text-white">₹249</span>
+                <span class="text-xs text-gray-400 font-medium">/ month</span>
+              </div>
+              <p class="text-xs text-gray-400 mt-1">Cancel or pause anytime. No contracts.</p>
+            </div>
+            <ul class="space-y-3 text-xs text-gray-300 border-t border-gray-800 pt-5">
+              <li class="flex items-center space-x-2.5">
+                <i class="fa-solid fa-check text-emerald-400"></i>
+                <span><strong>Unlimited Daily Printing</strong></span>
+              </li>
+              <li class="flex items-center space-x-2.5">
+                <i class="fa-solid fa-check text-emerald-400"></i>
+                <span>Multi-Printer B&amp;W vs Color Routing</span>
+              </li>
+              <li class="flex items-center space-x-2.5">
+                <i class="fa-solid fa-check text-emerald-400"></i>
+                <span>Permanent Storefront Link (?shop=id)</span>
+              </li>
+              <li class="flex items-center space-x-2.5">
+                <i class="fa-solid fa-check text-emerald-400"></i>
+                <span>Counter Cash &amp; Online UPI Verification</span>
+              </li>
+              <li class="flex items-center space-x-2.5">
+                <i class="fa-solid fa-check text-emerald-400"></i>
+                <span>Automatic 1-Click Updates to v2.2.5+</span>
+              </li>
+            </ul>
+          </div>
+          <div class="pt-8">
+            <a href="/admin#pro-upgrade" class="w-full block py-3 rounded-xl bg-gray-800 hover:bg-gray-700 text-violet-300 text-center text-xs font-bold border border-violet-500/30 transition">
+              Get Pro Monthly (₹249/mo)
+            </a>
+          </div>
+        </div>
+
+      </div>
+    </div>
+  </section>
+
+  <!-- DOWNLOAD & SETUP SECTION -->
+  <section id="download" class="py-20 border-b border-gray-800">
+    <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 space-y-12">
+      
+      <div class="glass p-8 sm:p-12 rounded-3xl border border-indigo-500/30 relative overflow-hidden">
+        <div class="absolute -right-20 -bottom-20 w-80 h-80 rounded-full bg-indigo-500/10 blur-3xl pointer-events-none"></div>
+        
+        <div class="grid grid-cols-1 lg:grid-cols-2 gap-10 items-center">
+          <div class="space-y-5 text-left">
+            <div class="inline-flex items-center space-x-2 px-3 py-1 rounded-full bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 text-xs font-bold">
+              <i class="fa-solid fa-wand-magic-sparkles text-xs"></i>
+              <span>Zero-Config Native Windows Engine</span>
+            </div>
+            
+            <h2 class="text-3xl sm:text-4xl font-extrabold text-white tracking-tight">
+              Get Your Stationery Live in 30 Seconds
+            </h2>
+            
+            <p class="text-sm text-gray-300 leading-relaxed">
+              No complex drivers, no IIS, no Apache, no Node.js required. PrintAway compiles with built-in Windows .NET 4.8 and runs standalone on any Windows 10 or 11 PC connected to your printer.
+            </p>
+
+            <div class="flex flex-col sm:flex-row gap-3 pt-2">
+              <a href="/downloads/PrintAway-Station-Setup.zip" download class="px-6 py-3.5 rounded-2xl bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-white text-xs font-extrabold shadow-lg shadow-emerald-600/25 flex items-center justify-center space-x-2 transition">
+                <i class="fa-solid fa-file-zipper text-sm"></i>
+                <span>Download PrintAway-Station-Setup.zip (18.8 MB)</span>
+              </a>
+              <a href="/downloads/PrintAway.exe" download class="px-5 py-3.5 rounded-2xl bg-gray-900 hover:bg-gray-800 text-gray-200 text-xs font-bold border border-gray-700 flex items-center justify-center space-x-2 transition">
+                <i class="fa-solid fa-microchip text-indigo-400"></i>
+                <span>Download Standalone PrintAway.exe</span>
+              </a>
+            </div>
+          </div>
+
+          <!-- 3-Step Setup Instructions -->
+          <div class="space-y-4">
+            <div class="flex items-start space-x-4 p-4 rounded-2xl bg-gray-900/60 border border-gray-800">
+              <div class="w-8 h-8 rounded-xl bg-indigo-500/20 text-indigo-400 font-extrabold flex items-center justify-center text-sm flex-shrink-0">1</div>
+              <div>
+                <h4 class="text-sm font-bold text-white">Extract &amp; Run PrintAway.exe</h4>
+                <p class="text-xs text-gray-400 mt-0.5">Extract the downloaded ZIP and double-click <code class="text-indigo-300 font-mono">PrintAway.exe</code>. The automatic setup wizard opens instantly.</p>
+              </div>
+            </div>
+
+            <div class="flex items-start space-x-4 p-4 rounded-2xl bg-gray-900/60 border border-gray-800">
+              <div class="w-8 h-8 rounded-xl bg-indigo-500/20 text-indigo-400 font-extrabold flex items-center justify-center text-sm flex-shrink-0">2</div>
+              <div>
+                <h4 class="text-sm font-bold text-white">Complete Shop Onboarding Wizard</h4>
+                <p class="text-xs text-gray-400 mt-0.5">Type your store name, set your admin sign-in password, and pick your active Xerox/Canon printer queue.</p>
+              </div>
+            </div>
+
+            <div class="flex items-start space-x-4 p-4 rounded-2xl bg-gray-900/60 border border-gray-800">
+              <div class="w-8 h-8 rounded-xl bg-indigo-500/20 text-indigo-400 font-extrabold flex items-center justify-center text-sm flex-shrink-0">3</div>
+              <div>
+                <h4 class="text-sm font-bold text-white">Print Counter QR Code</h4>
+                <p class="text-xs text-gray-400 mt-0.5">Place your permanent QR code on your desk. Customers scan and print without ever handing you their phones!</p>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+    </div>
+  </section>
+
+  <!-- HARDWARE COMPATIBILITY -->
+  <section id="hardware" class="py-16 bg-gray-950/40 border-b border-gray-800">
+    <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 space-y-8 text-center">
+      <div>
+        <h3 class="text-2xl font-extrabold text-white">Universal Hardware Printer Compatibility</h3>
+        <p class="text-xs text-gray-400 mt-1">Works seamlessly with all commercial stationery printers and MFDs via native Windows spooler.</p>
+      </div>
+
+      <div class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-6 gap-4 text-xs font-bold text-gray-300">
+        <div class="p-4 rounded-2xl bg-gray-900/50 border border-gray-800 flex flex-col items-center space-y-2">
+          <i class="fa-solid fa-print text-indigo-400 text-lg"></i>
+          <span>Xerox B1025 / WC</span>
+        </div>
+        <div class="p-4 rounded-2xl bg-gray-900/50 border border-gray-800 flex flex-col items-center space-y-2">
+          <i class="fa-solid fa-print text-indigo-400 text-lg"></i>
+          <span>Canon imageRUNNER</span>
+        </div>
+        <div class="p-4 rounded-2xl bg-gray-900/50 border border-gray-800 flex flex-col items-center space-y-2">
+          <i class="fa-solid fa-print text-indigo-400 text-lg"></i>
+          <span>HP LaserJet Pro</span>
+        </div>
+        <div class="p-4 rounded-2xl bg-gray-900/50 border border-gray-800 flex flex-col items-center space-y-2">
+          <i class="fa-solid fa-print text-indigo-400 text-lg"></i>
+          <span>Brother Commercial</span>
+        </div>
+        <div class="p-4 rounded-2xl bg-gray-900/50 border border-gray-800 flex flex-col items-center space-y-2">
+          <i class="fa-solid fa-print text-indigo-400 text-lg"></i>
+          <span>Epson EcoTank</span>
+        </div>
+        <div class="p-4 rounded-2xl bg-gray-900/50 border border-gray-800 flex flex-col items-center space-y-2">
+          <i class="fa-solid fa-print text-indigo-400 text-lg"></i>
+          <span>Konica Minolta Bizhub</span>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- FAQ SECTION -->
+  <section id="faq" class="py-20 border-b border-gray-800">
+    <div class="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 space-y-10">
+      <div class="text-center space-y-2">
+        <h2 class="text-3xl font-extrabold text-white">Frequently Asked Questions</h2>
+        <p class="text-xs text-gray-400">Everything you need to know about setting up and running PrintAway at your stationery shop.</p>
+      </div>
+
+      <div class="space-y-4">
+        <div class="p-5 rounded-2xl bg-gray-900/60 border border-gray-800">
+          <h4 class="text-sm font-bold text-white flex items-center justify-between">
+            <span>Does PrintAway work if internet drops?</span>
+            <i class="fa-solid fa-chevron-down text-gray-500 text-xs"></i>
+          </h4>
+          <p class="text-xs text-gray-400 mt-2 leading-relaxed">
+            Yes! Local Counter Admin works 100% offline at <code class="text-indigo-300 font-mono">http://127.0.0.1:8080/admin</code>. Any walk-in customer connected to your shop WiFi can print without internet. When internet is live, Cloudflare tunnel connects students anywhere on campus.
+          </p>
+        </div>
+
+        <div class="p-5 rounded-2xl bg-gray-900/60 border border-gray-800">
+          <h4 class="text-sm font-bold text-white flex items-center justify-between">
+            <span>Can I still collect cash at the counter?</span>
+            <i class="fa-solid fa-chevron-down text-gray-500 text-xs"></i>
+          </h4>
+          <p class="text-xs text-gray-400 mt-2 leading-relaxed">
+            Absolutely. Customers can tap <strong>"Pay at Counter"</strong> on their phone. The order shows in your admin queue highlighted in yellow. You collect cash, click <em>Approve &amp; Print</em>, and the hardware begins printing immediately.
+          </p>
+        </div>
+
+        <div class="p-5 rounded-2xl bg-gray-900/60 border border-gray-800">
+          <h4 class="text-sm font-bold text-white flex items-center justify-between">
+            <span>How does B&amp;W vs Color multi-printer auto-routing work?</span>
+            <i class="fa-solid fa-chevron-down text-gray-500 text-xs"></i>
+          </h4>
+          <p class="text-xs text-gray-400 mt-2 leading-relaxed">
+            If you have a dedicated high-speed B&amp;W machine (like a Xerox or Canon heavy-duty runner) and a Color printer, you simply select them in your Live Orders hardware routing bar. B&amp;W jobs automatically go to your B&amp;W machine, and color jobs go to your color printer with zero manual intervention!
+          </p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- FOOTER -->
+  <footer class="py-12 bg-gray-950 text-gray-400 text-xs">
+    <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 flex flex-col sm:flex-row items-center justify-between gap-6">
+      <div class="flex items-center space-x-3">
+        <img src="/assets/logo.png" class="w-8 h-8 rounded-full border border-amber-400" alt="Logo" onerror="this.src='/assets/logo.svg'" />
+        <span>&copy; 2026 PrintAway Technologies. All rights reserved.</span>
+      </div>
+      <div class="flex items-center space-x-6">
+        <a href="/" class="hover:text-white transition">Customer Portal</a>
+        <a href="/admin" class="hover:text-white transition">Counter Admin</a>
+        <a href="/superadmin" class="hover:text-white transition">Founder Super-Admin</a>
+        <a href="/pricing" class="text-indigo-400 font-bold hover:underline">SaaS Pricing</a>
+      </div>
+    </div>
+  </footer>
+
+</body>
+</html>

@@ -8,6 +8,7 @@
   <link rel="icon" type="image/svg+xml" href="/assets/favicon.svg" />
   <link rel="apple-touch-icon" href="/assets/logo.png" />
   <script src="https://checkout.razorpay.com/v1/checkout.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/pdf-lib@1.17.9/dist/pdf-lib.min.js"></script>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link
@@ -1314,6 +1315,83 @@
     </div>
   </div>
 
+  <!-- A4 CROP & FIT STUDIO MODAL -->
+  <div id="modalA4CropStudio" class="mascot-modal-overlay hidden" style="align-items:center;justify-content:center;z-index:99999;">
+    <div class="mascot-loader-card" style="max-width:680px;width:95vw;max-height:92vh;display:flex;flex-direction:column;padding:0;overflow:hidden;border-radius:18px;text-align:left;">
+      <!-- Modal Header -->
+      <div style="padding:16px 20px;background:linear-gradient(135deg,#1e293b,#0f172a);color:#fff;display:flex;justify-content:space-between;align-items:center;">
+        <div style="display:flex;align-items:center;gap:10px;">
+          <div style="width:36px;height:36px;border-radius:10px;background:rgba(56,189,248,0.2);display:flex;align-items:center;justify-content:center;font-size:1.2rem;">
+            📐
+          </div>
+          <div>
+            <h3 style="margin:0;font-size:1.05rem;font-weight:800;color:#f8fafc;">A4 Page Crop &amp; Fit Studio</h3>
+            <p style="margin:2px 0 0;font-size:0.75rem;color:#94a3b8;">Adjust and preview exactly how your photo prints on an A4 sheet</p>
+          </div>
+        </div>
+        <button type="button" class="btn btn-secondary" onclick="closeA4CropStudio()" style="padding:4px 10px;font-size:0.8rem;background:rgba(255,255,255,0.1);color:#fff;border-color:rgba(255,255,255,0.2);">✕</button>
+      </div>
+
+      <!-- Controls Toolbar -->
+      <div style="padding:12px 18px;background:#f8fafc;border-bottom:1px solid #e2e8f0;display:flex;flex-wrap:wrap;gap:12px;align-items:center;justify-content:space-between;">
+        <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;">
+          <!-- Orientation -->
+          <span style="font-size:0.78rem;font-weight:700;color:#475569;">Orientation:</span>
+          <div style="display:inline-flex;border-radius:8px;overflow:hidden;border:1px solid #cbd5e1;">
+            <button type="button" id="btnA4Portrait" class="btn" style="padding:5px 11px;font-size:0.78rem;border-radius:0;background:#2563eb;color:#fff;" onclick="setA4Orientation('portrait')">📄 Portrait</button>
+            <button type="button" id="btnA4Landscape" class="btn btn-secondary" style="padding:5px 11px;font-size:0.78rem;border-radius:0;" onclick="setA4Orientation('landscape')">📃 Landscape</button>
+          </div>
+
+          <!-- Fit Mode -->
+          <span style="font-size:0.78rem;font-weight:700;color:#475569;margin-left:6px;">Fit:</span>
+          <div style="display:inline-flex;border-radius:8px;overflow:hidden;border:1px solid #cbd5e1;">
+            <button type="button" id="btnA4Fit" class="btn" style="padding:5px 10px;font-size:0.78rem;border-radius:0;background:#2563eb;color:#fff;" onclick="setA4FitMode('fit')">Fit Entire</button>
+            <button type="button" id="btnA4Fill" class="btn btn-secondary" style="padding:5px 10px;font-size:0.78rem;border-radius:0;" onclick="setA4FitMode('fill')">Fill Sheet</button>
+            <button type="button" id="btnA4Custom" class="btn btn-secondary" style="padding:5px 10px;font-size:0.78rem;border-radius:0;" onclick="setA4FitMode('custom')">Custom Drag/Zoom</button>
+          </div>
+        </div>
+
+        <div style="display:flex;gap:10px;align-items:center;">
+          <!-- Zoom Slider -->
+          <label style="font-size:0.78rem;font-weight:700;color:#475569;display:flex;align-items:center;gap:6px;">
+            <span>🔍</span>
+            <input type="range" id="rngA4Zoom" min="0.5" max="2.5" step="0.05" value="1.0" style="width:90px;" oninput="onA4ZoomSlider(this.value)" />
+            <span id="lblA4ZoomVal" style="font-size:0.72rem;min-width:32px;">100%</span>
+          </label>
+          <!-- Rotate Button -->
+          <button type="button" class="btn btn-secondary" onclick="rotateA4Image()" style="padding:5px 10px;font-size:0.78rem;display:inline-flex;align-items:center;gap:4px;" title="Rotate 90 degrees clockwise">
+            🔄 90°
+          </button>
+        </div>
+      </div>
+
+      <!-- Live A4 Sheet Preview Canvas Viewport -->
+      <div style="flex:1;overflow:auto;background:#e2e8f0;display:flex;align-items:center;justify-content:center;padding:16px;min-height:360px;position:relative;">
+        <div id="a4PaperWrapper" style="background:#ffffff;box-shadow:0 12px 36px rgba(0,0,0,0.22);border-radius:4px;position:relative;overflow:hidden;transition:all 0.25s ease;display:flex;align-items:center;justify-content:center;border:1px solid #cbd5e1;">
+          <!-- Printable Margin Guideline (5mm printer border) -->
+          <div style="position:absolute;inset:8px;border:1px dashed rgba(59,130,246,0.4);pointer-events:none;z-index:10;display:flex;align-items:flex-end;justify-content:flex-end;padding:4px;">
+            <span style="font-size:0.65rem;color:rgba(59,130,246,0.7);background:rgba(255,255,255,0.7);padding:1px 4px;border-radius:3px;">A4 Safe Print Zone</span>
+          </div>
+          <!-- Preview Canvas -->
+          <canvas id="a4CanvasPreview" style="display:block;cursor:grab;touch-action:none;"></canvas>
+        </div>
+      </div>
+
+      <!-- Modal Footer -->
+      <div style="padding:14px 20px;background:#ffffff;border-top:1px solid #e2e8f0;display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:10px;">
+        <div style="font-size:0.78rem;color:#64748b;">
+          💡 Tip: Select <em>Custom Drag/Zoom</em> to drag image or zoom in to crop any section on the A4 page.
+        </div>
+        <div style="display:flex;gap:10px;">
+          <button type="button" class="btn btn-secondary" onclick="closeA4CropStudio()" style="padding:8px 16px;font-size:0.85rem;">Cancel</button>
+          <button type="button" class="btn" onclick="confirmA4CropAndGeneratePdf()" style="padding:8px 20px;font-size:0.88rem;background:linear-gradient(135deg,#2563eb,#1d4ed8);font-weight:800;display:inline-flex;align-items:center;gap:8px;">
+            <span>✨ Apply &amp; Ready to Print</span>
+          </button>
+        </div>
+      </div>
+    </div>
+  </div>
+
   <canvas id="confettiCanvas"></canvas>
 
   <!-- NAVIGATION HEADER -->
@@ -1333,6 +1411,7 @@
       </a>
       <div class="nav-links">
         <a href="/" onclick="resetToNewOrder(); return false;">➕ New Print</a>
+        <a href="/pricing" target="_blank" style="background:rgba(245,158,11,0.15);color:#fbbf24;border-color:rgba(245,158,11,0.3);">💎 Plans</a>
         <a href="#" onclick="openShopSelector(); return false;" id="btnShopSwitch" class="pill-shop" title="Click to choose or switch stationery store">
           🏪 <span id="lblActiveShopBadge">Select Stationery</span> <span style="font-size:0.74rem;opacity:0.8;margin-left:2px;">▾ Change</span>
         </a>
@@ -1387,39 +1466,27 @@
 
     <div id="globalError" class="alert alert-error hidden"></div>
 
-    <!-- TRACK EXISTING ORDER CARD -->
-    <div class="card" style="padding:14px 18px;">
-      <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap;">
-        <span style="font-size:0.88rem;font-weight:700;color:var(--text);display:flex;align-items:center;gap:6px;">
-          🔎 Already ordered?
-        </span>
-        <input type="text" id="trackTokenInput" placeholder="Paste tracking token (pub_...)"
-          style="flex:1;min-width:180px;" />
-        <button class="btn btn-secondary" onclick="lookupTrackedOrder()">Track Status</button>
-      </div>
-    </div>
-
     <!-- ORDER CREATION WIZARD -->
     <div id="orderWizard">
 
-      <!-- STEP 1: Upload PDF -->
+      <!-- STEP 1: Upload PDF / Image -->
       <div class="card">
-        <h2><span class="step-badge">1</span> Select Document to Print (PDF Only)</h2>
+        <h2><span class="step-badge" style="background:linear-gradient(135deg,#4f46e5,#6366f1);color:#fff;">1</span> Select Document or Image to Print</h2>
         <div class="upload-zone" id="uploadDropZone" onclick="document.getElementById('pdfInput').click()">
-          <input type="file" id="pdfInput" accept=".pdf,application/pdf" class="hidden"
+          <input type="file" id="pdfInput" accept=".pdf,application/pdf,image/png,image/jpeg,image/jpg,image/webp,image/bmp" class="hidden"
             onchange="handleFileSelected(this)" />
           <div class="upload-icon-circle">
             📄
           </div>
-          <div style="font-weight:800;font-size:1.1rem;margin-bottom:6px;color:#0f172a;">
-            Tap to Upload or Drop PDF Here
+          <div style="font-weight:800;font-size:1.15rem;margin-bottom:6px;color:#0f172a;">
+            Tap to Upload or Drop PDF / Photos Here
           </div>
-          <div style="font-size:0.85rem;color:var(--muted);max-width:440px;margin:0 auto 12px;">
-            Supports up to 20 MB, 100 pages. Analyzes simplex/duplex and page selection automatically.
+          <div style="font-size:0.86rem;color:var(--muted);max-width:500px;margin:0 auto 12px;line-height:1.5;">
+            Supports <strong>PDF, JPG, PNG &amp; Photos</strong> (up to 20 MB). Includes interactive A4 page cropping, centering &amp; margins studio!
           </div>
           <div>
-            <button type="button" class="btn" style="pointer-events:none;">
-              Browse From Phone or PC &rarr;
+            <button type="button" class="btn" style="pointer-events:none;padding:10px 22px;">
+              📁 Browse Files / Gallery &rarr;
             </button>
           </div>
         </div>
@@ -1436,7 +1503,7 @@
         <!-- Validated File Preview Box -->
         <div id="uploadedFileInfo" class="file-preview-card hidden">
           <div class="file-preview-left">
-            <span class="pdf-badge">PDF</span>
+            <span class="pdf-badge" id="lblDocBadge">PDF</span>
             <div>
               <strong id="lblFileName" style="font-size:0.95rem;color:#0f172a;">document.pdf</strong>
               <div style="margin-top:4px;">
@@ -1447,7 +1514,11 @@
               </div>
             </div>
           </div>
-          <div>
+          <div style="display:flex;gap:8px;align-items:center;">
+            <button type="button" id="btnReAdjustCrop" class="btn btn-secondary hidden" style="font-size:0.82rem;padding:6px 14px;background:#eff6ff;color:#1d4ed8;border-color:#bfdbfe;font-weight:700;"
+              onclick="reopenA4CropStudio()">
+              📐 Re-adjust A4 Crop
+            </button>
             <button type="button" class="btn btn-secondary" style="font-size:0.8rem;padding:6px 12px;"
               onclick="document.getElementById('pdfInput').click()">
               Change File
@@ -1644,7 +1715,7 @@
         <div class="alert alert-warn" style="font-size:0.86rem;line-height:1.6;">
           <strong>Counter Approval &amp; Privacy Guarantee:</strong><br />
           • Your print job appears instantly on the shopkeeper's counter screen.<br />
-          • Pay online via UPI/Cards OR pay cash directly at the counter — printing starts as soon as the store admin
+          • Pay online via UPI/Cards OR pay directly at the counter — printing starts as soon as the store admin
           approves your order.<br />
           • Your document is encrypted and automatically deleted from the station after handover.
         </div>
@@ -1663,7 +1734,7 @@
           <button id="btnCreateOrderCash" class="btn"
             style="width:100%;padding:14px;font-size:1.02rem;background:linear-gradient(135deg,#059669,#047857);color:#fff;box-shadow:0 4px 14px rgba(5,150,105,0.28);"
             onclick="createOrderAndStartUpi('cash')">
-            💵 Pay Cash at Counter
+            🏪 Pay at Counter
           </button>
         </div>
       </div>
@@ -1705,11 +1776,11 @@
           <button id="btnSwitchCash" class="btn"
             style="background:#059669;color:#fff;font-weight:800;padding:13px 20px;font-size:0.96rem;"
             onclick="selectCashAtCounter()">
-            💵 Pay Cash at Counter Instead
+            🏪 Pay at Counter Instead
           </button>
         </div>
         <p style="font-size:0.8rem;color:var(--muted);margin-top:12px;">
-          ✓ Online payments verify automatically, or choose Cash at Counter to pay the shopkeeper directly before print
+          ✓ Online payments verify automatically, or choose Pay at Counter to pay the shopkeeper directly before print
           approval.
         </p>
       </div>
@@ -1717,7 +1788,7 @@
       <!-- Cash at Counter Notice Box (When paymentStatus === 'cash_at_counter') -->
       <div id="cashCounterBox" class="card hidden" style="background:#fffbeb;border:2px solid #f59e0b;padding:18px;">
         <h3 style="font-size:1.08rem;margin-bottom:6px;color:#92400e;display:flex;align-items:center;gap:8px;">
-          💵 Cash at Counter Selected — Pay ₹<span id="lblCashAmount">0.00</span> at Counter
+          🏪 Pay at Counter Selected — Pay ₹<span id="lblCashAmount">0.00</span> at Counter
         </h3>
         <p style="font-size:0.88rem;color:#78350f;margin:0;line-height:1.5;">
           Please tell the shopkeeper your Order Reference (<strong id="lblCashOrderCode"
@@ -1913,19 +1984,33 @@
         return;
       }
 
+      const now = Date.now();
       container.innerHTML = shops.map(s => {
         const sid = s.shop_id || 'pilot';
         const isSelected = (sid === currentShop);
-        const isOnline = !!(s.live_tunnel_url && s.live_tunnel_url.trim().startsWith('https://'));
+        let isOnline = false;
+        let lastSeenText = '';
+
+        if (s.last_heartbeat_utc) {
+          const beatDate = new Date(s.last_heartbeat_utc);
+          const diffMins = Math.floor((now - beatDate.getTime()) / 60000);
+          if (!isNaN(diffMins) && diffMins <= 30 && s.live_tunnel_url && s.live_tunnel_url.trim().startsWith('https://')) {
+            isOnline = true;
+            lastSeenText = diffMins <= 1 ? 'Just now' : `${diffMins}m ago`;
+          } else if (!isNaN(diffMins)) {
+            lastSeenText = diffMins < 60 ? `${diffMins}m ago` : `${Math.floor(diffMins/60)}h ago`;
+          }
+        }
+
         const statusBadge = isOnline
-          ? '<span class="shop-badge-online">🟢 Live &amp; Accepting Orders</span>'
-          : '<span class="shop-badge-ready">🟡 Counter Ready</span>';
+          ? `<span class="shop-badge-online" style="background:#ecfdf5;color:#047857;border:1px solid #a7f3d0;padding:2px 8px;border-radius:999px;font-size:0.75rem;font-weight:700;">🟢 Online (${lastSeenText || 'Active'})</span>`
+          : `<span class="shop-badge-offline" style="background:#fef2f2;color:#b91c1c;border:1px solid #fecaca;padding:2px 8px;border-radius:999px;font-size:0.75rem;font-weight:700;">🔴 Offline${lastSeenText ? ' (' + lastSeenText + ')' : ''}</span>`;
         const ownerContact = s.owner_name ? `${s.owner_name}${s.owner_phone ? ' • ' + s.owner_phone : ''}` : '';
 
         return `
           <div class="shop-select-card ${isSelected ? 'active-shop' : ''}" onclick="selectStationeryShop('${sid}', '${(s.shop_name || sid).replace(/'/g, "\\'")}')">
             <div>
-              <div style="display:flex;align-items:center;gap:8px;margin-bottom:3px;">
+              <div style="display:flex;align-items:center;gap:8px;margin-bottom:3px;flex-wrap:wrap;">
                 <strong style="font-size:0.98rem;color:#0f172a;">${s.shop_name || sid}</strong>
                 ${statusBadge}
               </div>
@@ -2245,10 +2330,349 @@
       requestServerQuote();
     }
 
+    // =========================================================================
+    // A4 CROP & FIT STUDIO FOR IMAGES & PHOTOS
+    // =========================================================================
+    let a4Studio = {
+      file: null,
+      img: null,
+      orientation: 'portrait', // 'portrait' | 'landscape'
+      fitMode: 'fit', // 'fit' | 'fill' | 'custom'
+      rotationDeg: 0, // 0, 90, 180, 270
+      zoom: 1.0,
+      panX: 0,
+      panY: 0,
+      isDragging: false,
+      lastMouseX: 0,
+      lastMouseY: 0
+    };
+
+    function isImageFile(file) {
+      if (!file) return false;
+      const type = file.type || '';
+      const name = (file.name || '').toLowerCase();
+      return type.startsWith('image/') || /\.(png|jpe?g|webp|bmp|gif|jfif)$/i.test(name);
+    }
+
+    function openA4CropStudio(file) {
+      a4Studio.file = file;
+      const reader = new FileReader();
+      reader.onload = function(e) {
+        const img = new Image();
+        img.onload = function() {
+          a4Studio.img = img;
+          a4Studio.orientation = (img.width > img.height * 1.15) ? 'landscape' : 'portrait';
+          a4Studio.fitMode = 'fit';
+          a4Studio.rotationDeg = 0;
+          a4Studio.zoom = 1.0;
+          a4Studio.panX = 0;
+          a4Studio.panY = 0;
+          const rng = document.getElementById('rngA4Zoom');
+          if (rng) rng.value = '1.0';
+          const lblVal = document.getElementById('lblA4ZoomVal');
+          if (lblVal) lblVal.textContent = '100%';
+          updateA4StudioButtons();
+          renderA4Preview();
+          document.getElementById('modalA4CropStudio').classList.remove('hidden');
+          setupA4CanvasEvents();
+        };
+        img.src = e.target.result;
+      };
+      reader.readAsDataURL(file);
+    }
+
+    function reopenA4CropStudio() {
+      if (a4Studio.img) {
+        document.getElementById('modalA4CropStudio').classList.remove('hidden');
+        renderA4Preview();
+      } else {
+        document.getElementById('pdfInput').click();
+      }
+    }
+
+    function closeA4CropStudio() {
+      document.getElementById('modalA4CropStudio').classList.add('hidden');
+    }
+
+    function setA4Orientation(ori) {
+      a4Studio.orientation = ori;
+      a4Studio.panX = 0;
+      a4Studio.panY = 0;
+      updateA4StudioButtons();
+      renderA4Preview();
+    }
+
+    function setA4FitMode(mode) {
+      a4Studio.fitMode = mode;
+      if (mode === 'fit' || mode === 'fill') {
+        a4Studio.zoom = 1.0;
+        a4Studio.panX = 0;
+        a4Studio.panY = 0;
+        const rng = document.getElementById('rngA4Zoom');
+        if (rng) rng.value = '1.0';
+        const lblVal = document.getElementById('lblA4ZoomVal');
+        if (lblVal) lblVal.textContent = '100%';
+      }
+      updateA4StudioButtons();
+      renderA4Preview();
+    }
+
+    function rotateA4Image() {
+      a4Studio.rotationDeg = (a4Studio.rotationDeg + 90) % 360;
+      a4Studio.panX = 0;
+      a4Studio.panY = 0;
+      renderA4Preview();
+    }
+
+    function onA4ZoomSlider(val) {
+      a4Studio.zoom = parseFloat(val);
+      a4Studio.fitMode = 'custom';
+      const lblVal = document.getElementById('lblA4ZoomVal');
+      if (lblVal) lblVal.textContent = Math.round(a4Studio.zoom * 100) + '%';
+      updateA4StudioButtons();
+      renderA4Preview();
+    }
+
+    function updateA4StudioButtons() {
+      const isPort = a4Studio.orientation === 'portrait';
+      const btnPort = document.getElementById('btnA4Portrait');
+      const btnLand = document.getElementById('btnA4Landscape');
+      if (btnPort && btnLand) {
+        btnPort.style.background = isPort ? '#2563eb' : '#fff';
+        btnPort.style.color = isPort ? '#fff' : '#1e293b';
+        btnLand.style.background = !isPort ? '#2563eb' : '#fff';
+        btnLand.style.color = !isPort ? '#fff' : '#1e293b';
+      }
+
+      ['fit', 'fill', 'custom'].forEach(m => {
+        const b = document.getElementById('btnA4' + m.charAt(0).toUpperCase() + m.slice(1));
+        if (b) {
+          const act = a4Studio.fitMode === m;
+          b.style.background = act ? '#2563eb' : '#fff';
+          b.style.color = act ? '#fff' : '#1e293b';
+        }
+      });
+    }
+
+    function getA4Dimensions() {
+      const isPort = a4Studio.orientation === 'portrait';
+      return isPort ? { w: 320, h: Math.round(320 * 1.4142) } : { w: 452, h: 320 };
+    }
+
+    function renderA4Preview() {
+      const canvas = document.getElementById('a4CanvasPreview');
+      if (!canvas || !a4Studio.img) return;
+      const dims = getA4Dimensions();
+      canvas.width = dims.w;
+      canvas.height = dims.h;
+      canvas.style.width = dims.w + 'px';
+      canvas.style.height = dims.h + 'px';
+
+      const ctx = canvas.getContext('2d');
+      ctx.fillStyle = '#ffffff';
+      ctx.fillRect(0, 0, dims.w, dims.h);
+
+      const img = a4Studio.img;
+      const rot = a4Studio.rotationDeg;
+      const isRotated = (rot === 90 || rot === 270);
+      const effectiveImgW = isRotated ? img.height : img.width;
+      const effectiveImgH = isRotated ? img.width : img.height;
+
+      let drawW, drawH;
+      if (a4Studio.fitMode === 'fill') {
+        const scale = Math.max(dims.w / effectiveImgW, dims.h / effectiveImgH) * a4Studio.zoom;
+        drawW = effectiveImgW * scale;
+        drawH = effectiveImgH * scale;
+      } else if (a4Studio.fitMode === 'fit') {
+        const safeW = dims.w - 16;
+        const safeH = dims.h - 16;
+        const scale = Math.min(safeW / effectiveImgW, safeH / effectiveImgH);
+        drawW = effectiveImgW * scale;
+        drawH = effectiveImgH * scale;
+      } else {
+        const safeW = dims.w - 16;
+        const safeH = dims.h - 16;
+        const baseScale = Math.min(safeW / effectiveImgW, safeH / effectiveImgH);
+        const scale = baseScale * a4Studio.zoom;
+        drawW = effectiveImgW * scale;
+        drawH = effectiveImgH * scale;
+      }
+
+      ctx.save();
+      ctx.translate(dims.w / 2 + a4Studio.panX, dims.h / 2 + a4Studio.panY);
+      ctx.rotate((rot * Math.PI) / 180);
+
+      const drawImgW = isRotated ? drawH : drawW;
+      const drawImgH = isRotated ? drawW : drawH;
+      ctx.drawImage(img, -drawImgW / 2, -drawImgH / 2, drawImgW, drawImgH);
+      ctx.restore();
+    }
+
+    let a4CanvasEventsAttached = false;
+    function setupA4CanvasEvents() {
+      if (a4CanvasEventsAttached) return;
+      a4CanvasEventsAttached = true;
+      const canvas = document.getElementById('a4CanvasPreview');
+      if (!canvas) return;
+
+      canvas.addEventListener('pointerdown', e => {
+        a4Studio.isDragging = true;
+        a4Studio.lastMouseX = e.clientX;
+        a4Studio.lastMouseY = e.clientY;
+        canvas.style.cursor = 'grabbing';
+      });
+
+      window.addEventListener('pointermove', e => {
+        if (!a4Studio.isDragging) return;
+        const dx = e.clientX - a4Studio.lastMouseX;
+        const dy = e.clientY - a4Studio.lastMouseY;
+        a4Studio.lastMouseX = e.clientX;
+        a4Studio.lastMouseY = e.clientY;
+        a4Studio.panX += dx;
+        a4Studio.panY += dy;
+        if (a4Studio.fitMode !== 'custom') {
+          a4Studio.fitMode = 'custom';
+          updateA4StudioButtons();
+        }
+        renderA4Preview();
+      });
+
+      window.addEventListener('pointerup', () => {
+        if (a4Studio.isDragging) {
+          a4Studio.isDragging = false;
+          if (canvas) canvas.style.cursor = 'grab';
+        }
+      });
+
+      canvas.addEventListener('wheel', e => {
+        e.preventDefault();
+        const delta = e.deltaY > 0 ? -0.1 : 0.1;
+        a4Studio.zoom = Math.max(0.4, Math.min(3.0, a4Studio.zoom + delta));
+        a4Studio.fitMode = 'custom';
+        const rng = document.getElementById('rngA4Zoom');
+        if (rng) rng.value = a4Studio.zoom.toFixed(2);
+        const lblVal = document.getElementById('lblA4ZoomVal');
+        if (lblVal) lblVal.textContent = Math.round(a4Studio.zoom * 100) + '%';
+        updateA4StudioButtons();
+        renderA4Preview();
+      }, { passive: false });
+    }
+
+    async function confirmA4CropAndGeneratePdf() {
+      if (!a4Studio.img) return;
+      showMascotLoader('Rendering High-Resolution A4 PDF...', 'Embedding adjusted photo onto ISO A4 sheet');
+      try {
+        const isPort = a4Studio.orientation === 'portrait';
+        const exportW = isPort ? 1240 : 1754;
+        const exportH = isPort ? 1754 : 1240;
+        const offCanvas = document.createElement('canvas');
+        offCanvas.width = exportW;
+        offCanvas.height = exportH;
+        const ctx = offCanvas.getContext('2d');
+
+        ctx.fillStyle = '#ffffff';
+        ctx.fillRect(0, 0, exportW, exportH);
+
+        const dims = getA4Dimensions();
+        const scaleMultiplier = exportW / dims.w;
+
+        const img = a4Studio.img;
+        const rot = a4Studio.rotationDeg;
+        const isRotated = (rot === 90 || rot === 270);
+        const effectiveImgW = isRotated ? img.height : img.width;
+        const effectiveImgH = isRotated ? img.width : img.height;
+
+        let drawW, drawH;
+        if (a4Studio.fitMode === 'fill') {
+          const s = Math.max(dims.w / effectiveImgW, dims.h / effectiveImgH) * a4Studio.zoom;
+          drawW = effectiveImgW * s * scaleMultiplier;
+          drawH = effectiveImgH * s * scaleMultiplier;
+        } else if (a4Studio.fitMode === 'fit') {
+          const safeW = dims.w - 16;
+          const safeH = dims.h - 16;
+          const s = Math.min(safeW / effectiveImgW, safeH / effectiveImgH);
+          drawW = effectiveImgW * s * scaleMultiplier;
+          drawH = effectiveImgH * s * scaleMultiplier;
+        } else {
+          const safeW = dims.w - 16;
+          const safeH = dims.h - 16;
+          const baseScale = Math.min(safeW / effectiveImgW, safeH / effectiveImgH);
+          const s = baseScale * a4Studio.zoom;
+          drawW = effectiveImgW * s * scaleMultiplier;
+          drawH = effectiveImgH * s * scaleMultiplier;
+        }
+
+        ctx.save();
+        ctx.translate(exportW / 2 + a4Studio.panX * scaleMultiplier, exportH / 2 + a4Studio.panY * scaleMultiplier);
+        ctx.rotate((rot * Math.PI) / 180);
+
+        const drawImgW = isRotated ? drawH : drawW;
+        const drawImgH = isRotated ? drawW : drawH;
+        ctx.drawImage(img, -drawImgW / 2, -drawImgH / 2, drawImgW, drawImgH);
+        ctx.restore();
+
+        const imgDataUrl = offCanvas.toDataURL('image/jpeg', 0.94);
+        const base64Data = imgDataUrl.split(',')[1];
+        const binaryStr = atob(base64Data);
+        const imgBytes = new Uint8Array(binaryStr.length);
+        for (let i = 0; i < binaryStr.length; i++) {
+          imgBytes[i] = binaryStr.charCodeAt(i);
+        }
+
+        const pdfDoc = await PDFLib.PDFDocument.create();
+        const pageW = isPort ? 595.28 : 841.89;
+        const pageH = isPort ? 841.89 : 595.28;
+        const pdfPage = pdfDoc.addPage([pageW, pageH]);
+        const embeddedImg = await pdfDoc.embedJpg(imgBytes);
+
+        pdfPage.drawImage(embeddedImg, {
+          x: 0,
+          y: 0,
+          width: pageW,
+          height: pageH
+        });
+
+        const pdfBytes = await pdfDoc.save();
+        closeA4CropStudio();
+
+        const originalName = a4Studio.file ? a4Studio.file.name : 'Photo';
+        const baseName = originalName.replace(/\.[^/.]+$/, '');
+        const pdfFileName = baseName + '_A4.pdf';
+
+        const res = await apiFetch('/api/uploads?filename=' + encodeURIComponent(pdfFileName), {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/pdf', 'X-File-Name': pdfFileName },
+          body: pdfBytes
+        });
+        const data = await res.json();
+        hideMascotLoader();
+        if (!res.ok || data.error) {
+          showError(data.message || 'Upload validation failed.');
+          return;
+        }
+
+        onFileValidated(data);
+        const btnReCrop = document.getElementById('btnReAdjustCrop');
+        if (btnReCrop) btnReCrop.classList.remove('hidden');
+        const lblBadge = document.getElementById('lblDocBadge');
+        if (lblBadge) lblBadge.textContent = 'A4 PHOTO';
+      } catch (err) {
+        hideMascotLoader();
+        console.error('A4 generation error:', err);
+        showError('Could not generate A4 PDF from image: ' + err.message);
+      }
+    }
+
     async function handleFileSelected(input) {
       showError(null);
       if (!input.files || !input.files[0]) return;
       const file = input.files[0];
+
+      if (isImageFile(file)) {
+        openA4CropStudio(file);
+        return;
+      }
+
       showMascotLoader('Validating Document...', 'Analyzing pages and PDF security signatures');
       try {
         const buf = await file.arrayBuffer();
@@ -2263,6 +2687,10 @@
           showError(data.message || 'Upload validation failed.');
           return;
         }
+        const btnReCrop = document.getElementById('btnReAdjustCrop');
+        if (btnReCrop) btnReCrop.classList.add('hidden');
+        const lblBadge = document.getElementById('lblDocBadge');
+        if (lblBadge) lblBadge.textContent = 'PDF';
         onFileValidated(data);
       } catch (e) {
         hideMascotLoader();
@@ -2727,7 +3155,7 @@
         document.getElementById('trkConfig').textContent = `${pSize} ${cMode} | ${data.duplexMode}${nUp}${ori} | ${data.copies} copy(s) | Pages: ${data.pageRange} (${data.selectedPages}/${data.documentPages}p)`;
         document.getElementById('trkSidesSheets').textContent = data.printedSides + ' printed sides / ' + data.physicalSheets + ' physical sheets';
         document.getElementById('trkTotal').textContent = Number(data.totalAmountInr).toFixed(2);
-        document.getElementById('trkPayStatus').textContent = data.paymentStatus === 'cash_at_counter' ? 'Pay Cash at Counter' : data.paymentStatus;
+        document.getElementById('trkPayStatus').textContent = data.paymentStatus === 'cash_at_counter' ? 'Pay at Counter' : data.paymentStatus;
         document.getElementById('trkUpdatedIst').textContent = data.updatedAtIst;
         document.getElementById('trkPubToken').textContent = data.publicToken;
 

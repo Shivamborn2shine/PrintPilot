@@ -43,12 +43,37 @@
           <i class="fa-solid fa-plus text-xs"></i>
           <span>New Franchise Shop</span>
         </button>
-        <button onclick="logoutFounder()" title="Settings / Key" class="p-2 text-gray-400 hover:text-white transition">
-          <i class="fa-solid fa-key"></i>
+        <button onclick="logoutFounder()" title="Lock Super-Admin Session" class="px-3 py-1.5 rounded-lg bg-rose-500/10 hover:bg-rose-500/20 text-rose-300 text-xs font-semibold border border-rose-500/30 transition flex items-center space-x-1">
+          <i class="fa-solid fa-lock text-xs"></i>
+          <span>Lock</span>
         </button>
       </div>
     </div>
   </header>
+
+  <!-- SUPER-ADMIN AUTH GATE MODAL -->
+  <div id="superadminAuthGate" class="fixed inset-0 z-50 flex items-center justify-center bg-gray-950/95 backdrop-blur-md">
+    <div class="glass w-full max-w-md p-8 rounded-3xl border border-gray-800 shadow-2xl space-y-6">
+      <div class="text-center space-y-2">
+        <div class="w-16 h-16 mx-auto rounded-2xl bg-indigo-500/10 border border-indigo-500/20 flex items-center justify-center text-indigo-400 text-2xl shadow-lg shadow-indigo-500/20">
+          <i class="fa-solid fa-shield-halved"></i>
+        </div>
+        <h2 class="text-xl font-extrabold text-white">Super-Admin Fleet Access</h2>
+        <p class="text-xs text-gray-400">Restricted founder control plane. Master authentication required.</p>
+      </div>
+      <form onsubmit="handleSuperadminLogin(event)" class="space-y-4">
+        <div>
+          <label class="block text-xs font-semibold text-gray-300 mb-1.5">Master Password</label>
+          <input type="password" id="inpSuperadminPass" placeholder="Enter founder master password..." required autofocus
+            class="w-full px-4 py-2.5 rounded-xl bg-gray-900 border border-gray-700 text-sm text-white focus:outline-none focus:border-indigo-500 transition" />
+        </div>
+        <div id="superadminAuthErr" class="hidden text-xs text-rose-400 bg-rose-500/10 border border-rose-500/20 p-2.5 rounded-xl text-center"></div>
+        <button type="submit" class="w-full py-2.5 bg-gradient-to-r from-indigo-600 to-violet-600 hover:from-indigo-500 text-white font-bold text-sm rounded-xl shadow-lg shadow-indigo-600/30 transition">
+          Unlock Fleet Control
+        </button>
+      </form>
+    </div>
+  </div>
 
   <!-- MAIN CONTAINER -->
   <main class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 flex-1 w-full space-y-8">
@@ -303,8 +328,65 @@
     let allShops = [];
     let telemetryMap = {};
 
+    const MASTER_PASSWORD_KEY = "PrintAwayMaster@2026!";
+
+    function checkSuperadminAuth() {
+      const isAuth = sessionStorage.getItem("printaway_superadmin_auth") === "verified";
+      const gate = document.getElementById("superadminAuthGate");
+      if (isAuth) {
+        if (gate) gate.classList.add("hidden");
+        loadDashboardData();
+      } else {
+        if (gate) gate.classList.remove("hidden");
+        const inp = document.getElementById("inpSuperadminPass");
+        if (inp) { inp.value = ""; inp.focus(); }
+      }
+    }
+
+    function handleSuperadminLogin(e) {
+      if (e) e.preventDefault();
+      const entered = document.getElementById("inpSuperadminPass").value;
+      const errEl = document.getElementById("superadminAuthErr");
+      if (entered === MASTER_PASSWORD_KEY) {
+        sessionStorage.setItem("printaway_superadmin_auth", "verified");
+        if (errEl) errEl.classList.add("hidden");
+        checkSuperadminAuth();
+      } else {
+        if (errEl) {
+          errEl.textContent = "Invalid Master Password. Access Denied.";
+          errEl.classList.remove("hidden");
+        }
+      }
+    }
+
+    function logoutFounder() {
+      sessionStorage.removeItem("printaway_superadmin_auth");
+      checkSuperadminAuth();
+    }
+
+    async function deleteShop(shopId) {
+      if (!confirm(`Are you sure you want to permanently delete shop '${shopId}' from fleet? This cannot be undone.`)) return;
+      try {
+        const res = await fetch(`${SUPABASE_URL}/rest/v1/shops?shop_id=eq.${encodeURIComponent(shopId)}`, {
+          method: "DELETE",
+          headers: {
+            "apikey": PUBLISHABLE_KEY,
+            "Authorization": `Bearer ${PUBLISHABLE_KEY}`
+          }
+        });
+        if (res.ok) {
+          alert(`Shop '${shopId}' deleted from cloud fleet.`);
+          loadDashboardData();
+        } else {
+          alert("Could not delete shop. Please verify Supabase delete permissions.");
+        }
+      } catch (err) {
+        alert("Delete error: " + err.message);
+      }
+    }
+
     document.addEventListener("DOMContentLoaded", () => {
-      loadDashboardData();
+      checkSuperadminAuth();
     });
 
     async function loadDashboardData() {
@@ -496,11 +578,11 @@
               </div>
             </td>
 
-            <td class="py-3.5 px-3">
-              <div class="mb-1">${planBadge}</div>
-              <div class="flex items-center justify-between text-[10px] text-gray-400 font-semibold mb-1">
-                <span>Today: ${pagesToday} pgs</span>
-                <span>${isPro ? 'Unlimited' : `${quota} limit`}</span>
+            <td class="py-3.5 px-3 min-w-[170px]">
+              <div class="mb-1.5">${planBadge}</div>
+              <div class="flex items-center justify-between text-[11px] font-medium mb-1">
+                <span class="text-gray-300">Today: <strong class="text-white">${pagesToday}</strong> pgs</span>
+                <span class="font-mono text-indigo-400 font-bold">${isPro ? '• Unlimited' : `• ${quota} limit`}</span>
               </div>
               <div class="w-full bg-gray-800 rounded-full h-1.5 overflow-hidden">
                 <div class="h-1.5 rounded-full ${pagesToday >= quota && !isPro ? 'bg-rose-500' : 'bg-indigo-500'}" style="width: ${isPro ? 25 : quotaPct}%"></div>
@@ -520,6 +602,10 @@
 
               <button onclick="downloadStationConfig('${shop.shop_id}')" class="p-1.5 rounded-lg bg-gray-800 hover:bg-gray-700 text-gray-300 text-[11px] border border-gray-700 transition" title="Download station.json">
                 <i class="fa-solid fa-download"></i>
+              </button>
+
+              <button onclick="deleteShop('${shop.shop_id}')" class="p-1.5 rounded-lg bg-rose-500/10 hover:bg-rose-500/20 text-rose-400 text-[11px] border border-rose-500/20 transition" title="Delete Shop">
+                <i class="fa-solid fa-trash"></i>
               </button>
             </td>
           </tr>

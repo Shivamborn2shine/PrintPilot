@@ -1,7 +1,7 @@
 {
-  "version": "2.2.5",
-  "releaseDate": "2026-11-11",
-  "releaseNotes": "Official PrintAway brand icon embedded into PrintAway.exe, instant Super-Admin tier upgrade reflection in Counter Admin, and rapid 30s SaaS control plane telemetry sync.",
+  "version": "2.2.6",
+  "releaseDate": "2026-11-12",
+  "releaseNotes": "SaaS Pricing page, first-time station onboarding wizard, A4 image crop & alignment studio, live hardware dispatch routing bar, real-time shop online status, and master password-protected superadmin.",
   "downloadUrl": "https://raw.githubusercontent.com/Shivamborn2shine/PrintPilot/main/bin/PrintAway.exe",
   "fallbackUrl": "https://printitaway.netlify.app/downloads/PrintAway.exe"
 }

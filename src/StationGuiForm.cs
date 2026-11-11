@@ -112,6 +112,11 @@ namespace PrintAway.Gui
             {
                 _supabaseSync.OnQuotaStatusChanged += OnQuotaChanged;
             }
+
+            this.Shown += (s, e) =>
+            {
+                CheckFirstTimeOnboarding();
+            };
         }
 
         protected override void WndProc(ref Message m)
@@ -248,7 +253,7 @@ namespace PrintAway.Gui
                 FlatStyle = FlatStyle.System,
                 Cursor = Cursors.Hand
             };
-            btnEditShop.Click += (s, e) => ShowEditShopAndAdminPasswordDialog();
+            btnEditShop.Click += (s, e) => ShowEditShopAndAdminPasswordDialog(false);
 
             var btnSetShop = new Button
             {
@@ -1216,17 +1221,40 @@ namespace PrintAway.Gui
             return "midtownstationary";
         }
 
-        private void ShowEditShopAndAdminPasswordDialog()
+        private void CheckFirstTimeOnboarding()
+        {
+            try
+            {
+                string flagPath = Path.Combine(_repoRoot, "data", "onboarded.flag");
+                string curShop = GetCurrentShopId();
+                if (!File.Exists(flagPath) && (curShop == "pilot" || string.IsNullOrEmpty(curShop)))
+                {
+                    this.BeginInvoke(new Action(() =>
+                    {
+                        ShowEditShopAndAdminPasswordDialog(true);
+                    }));
+                }
+            }
+            catch { }
+        }
+
+        private void ShowEditShopAndAdminPasswordDialog(bool isFirstRun = false)
         {
             var status = _repo.GetShopAndAvailabilityStatus();
             string curShopName = status != null && status.ContainsKey("shopName") && status["shopName"] != null
                 ? Convert.ToString(status["shopName"]) : "PrintAway Pilot Shop";
             string curShopId = GetCurrentShopId();
+            string curActiveQueue = status != null && status.ContainsKey("activeQueueName") && status["activeQueueName"] != null
+                ? Convert.ToString(status["activeQueueName"]) : "";
+            string curBwQueue = status != null && status.ContainsKey("bwQueueName") && status["bwQueueName"] != null
+                ? Convert.ToString(status["bwQueueName"]) : "";
+            string curColorQueue = status != null && status.ContainsKey("colorQueueName") && status["colorQueueName"] != null
+                ? Convert.ToString(status["colorQueueName"]) : "";
 
             using (var dlg = new Form())
             {
-                dlg.Text = "Shop Identity & Admin Password Setup";
-                dlg.ClientSize = new Size(480, 420);
+                dlg.Text = isFirstRun ? "Welcome to PrintAway! - First-Time Shop Setup Wizard" : "Shop Identity, Passwords & Printer Setup";
+                dlg.ClientSize = new Size(540, isFirstRun ? 610 : 590);
                 dlg.StartPosition = FormStartPosition.CenterParent;
                 dlg.FormBorderStyle = FormBorderStyle.FixedDialog;
                 dlg.MaximizeBox = false;
@@ -1238,113 +1266,128 @@ namespace PrintAway.Gui
                 var pnlHdr = new Panel
                 {
                     Dock = DockStyle.Top,
-                    Height = 60,
+                    Height = 65,
                     BackColor = Color.FromArgb(30, 41, 59)
                 };
                 var lblHdr = new Label
                 {
-                    Text = "🏪 Stationery Store & Admin Credentials",
-                    Font = new Font("Segoe UI", 11f, FontStyle.Bold),
+                    Text = isFirstRun ? "🎉 Welcome to PrintAway! 60-Second Setup" : "🏪 Stationery Shop & Hardware Routing",
+                    Font = new Font("Segoe UI", 11.5f, FontStyle.Bold),
                     ForeColor = Color.White,
                     Location = new Point(16, 10),
-                    Size = new Size(440, 24)
+                    Size = new Size(500, 24)
                 };
                 var lblSub = new Label
                 {
-                    Text = "Configure shop branding, unique customer QR ID, and admin sign-in password.",
-                    Font = new Font("Segoe UI", 8f, FontStyle.Regular),
+                    Text = isFirstRun
+                        ? "Configure your store name, admin password, and printer queues to launch your counter kiosk."
+                        : "Configure shop branding, unique customer QR ID, hardware queues, and admin sign-in password.",
+                    Font = new Font("Segoe UI", 8.2f, FontStyle.Regular),
                     ForeColor = Color.FromArgb(203, 213, 225),
-                    Location = new Point(16, 34),
-                    Size = new Size(440, 20)
+                    Location = new Point(16, 36),
+                    Size = new Size(500, 20)
                 };
                 pnlHdr.Controls.Add(lblHdr);
                 pnlHdr.Controls.Add(lblSub);
                 dlg.Controls.Add(pnlHdr);
 
-                int dy = 74;
+                int dy = 78;
 
-                // Shop Name
+                // 1. Shop Display Name
                 var lblName = new Label
                 {
-                    Text = "Stationery Store Name:",
+                    Text = "Stationery Store Display Name (e.g. Victoria Communications):",
                     Font = new Font("Segoe UI", 8.5f, FontStyle.Bold),
                     Location = new Point(20, dy),
-                    Size = new Size(440, 18)
+                    Size = new Size(495, 18)
                 };
                 var txtName = new TextBox
                 {
                     Text = curShopName,
                     Location = new Point(20, dy + 20),
-                    Size = new Size(435, 24),
+                    Size = new Size(495, 24),
                     Font = new Font("Segoe UI", 9.5f)
                 };
                 dlg.Controls.Add(lblName);
                 dlg.Controls.Add(txtName);
-                dy += 54;
+                dy += 52;
 
-                // Shop ID / Slug
+                // 2. Shop Slug
                 var lblSlug = new Label
                 {
-                    Text = "Shop Identifier / Slug (Used in customer QR link):",
+                    Text = "Shop Identifier / Slug (Appears in customer QR link: printitaway.netlify.app/?shop=...):",
                     Font = new Font("Segoe UI", 8.5f, FontStyle.Bold),
                     Location = new Point(20, dy),
-                    Size = new Size(440, 18)
+                    Size = new Size(495, 18)
                 };
                 var txtSlug = new TextBox
                 {
                     Text = curShopId,
                     Location = new Point(20, dy + 20),
-                    Size = new Size(435, 24),
+                    Size = new Size(495, 24),
                     Font = new Font("Segoe UI", 9.5f)
                 };
                 dlg.Controls.Add(lblSlug);
                 dlg.Controls.Add(txtSlug);
-                dy += 54;
+                dy += 52;
 
-                // Admin Password
+                // Auto-slugify as shopkeeper types store name
+                bool userEditedSlug = false;
+                txtSlug.TextChanged += (s, e) =>
+                {
+                    if (txtSlug.Focused) userEditedSlug = true;
+                };
+                txtName.TextChanged += (s, e) =>
+                {
+                    if (!userEditedSlug && (isFirstRun || curShopId == "pilot"))
+                    {
+                        string autoSlug = Regex.Replace(txtName.Text.Trim().ToLowerInvariant().Replace(" ", "_"), @"[^a-z0-9_-]", "");
+                        txtSlug.Text = autoSlug;
+                    }
+                };
+
+                // 3. Admin Passwords
                 var lblPass = new Label
                 {
-                    Text = "Set Counter Admin Password (leave blank to keep current):",
+                    Text = isFirstRun ? "Set Counter Admin Password * (Required):" : "Set Counter Admin Password (leave blank to keep current):",
                     Font = new Font("Segoe UI", 8.5f, FontStyle.Bold),
                     Location = new Point(20, dy),
-                    Size = new Size(440, 18)
+                    Size = new Size(240, 18)
                 };
                 var txtPass = new TextBox
                 {
                     Text = "",
                     Location = new Point(20, dy + 20),
-                    Size = new Size(435, 24),
+                    Size = new Size(240, 24),
                     Font = new Font("Segoe UI", 9.5f),
                     UseSystemPasswordChar = true
                 };
-                dlg.Controls.Add(lblPass);
-                dlg.Controls.Add(txtPass);
-                dy += 54;
 
-                // Confirm Password
                 var lblConfirm = new Label
                 {
-                    Text = "Confirm New Password:",
+                    Text = "Confirm Admin Password:",
                     Font = new Font("Segoe UI", 8.5f, FontStyle.Bold),
-                    Location = new Point(20, dy),
-                    Size = new Size(440, 18)
+                    Location = new Point(275, dy),
+                    Size = new Size(240, 18)
                 };
                 var txtConfirm = new TextBox
                 {
                     Text = "",
-                    Location = new Point(20, dy + 20),
-                    Size = new Size(435, 24),
+                    Location = new Point(275, dy + 20),
+                    Size = new Size(240, 24),
                     Font = new Font("Segoe UI", 9.5f),
                     UseSystemPasswordChar = true
                 };
+
+                dlg.Controls.Add(lblPass);
+                dlg.Controls.Add(txtPass);
                 dlg.Controls.Add(lblConfirm);
                 dlg.Controls.Add(txtConfirm);
-                dy += 50;
+                dy += 48;
 
-                // Show Password Checkbox
                 var chkShow = new CheckBox
                 {
-                    Text = "Show Password",
+                    Text = "Show Passwords",
                     Location = new Point(22, dy),
                     Size = new Size(130, 20),
                     Font = new Font("Segoe UI", 8f)
@@ -1355,26 +1398,97 @@ namespace PrintAway.Gui
                     txtConfirm.UseSystemPasswordChar = !chkShow.Checked;
                 };
                 dlg.Controls.Add(chkShow);
-                dy += 30;
+                dy += 26;
 
-                // Buttons
+                // 4. Discover & Select Windows Printer Queues
+                var grpPrinters = new GroupBox
+                {
+                    Text = "🖨️ Windows Printer Queues Selection",
+                    Font = new Font("Segoe UI", 8.5f, FontStyle.Bold),
+                    Location = new Point(20, dy),
+                    Size = new Size(495, 128),
+                    BackColor = Color.White
+                };
+
+                var lblPri = new Label { Text = "Primary Printer:", Location = new Point(14, 25), Size = new Size(130, 20), Font = new Font("Segoe UI", 8.5f, FontStyle.Regular) };
+                var cmbPri = new ComboBox { DropDownStyle = ComboBoxStyle.DropDownList, Location = new Point(150, 22), Size = new Size(330, 24), Font = new Font("Segoe UI", 8.5f) };
+
+                var lblBw = new Label { Text = "Dedicated B&W Printer:", Location = new Point(14, 58), Size = new Size(130, 20), Font = new Font("Segoe UI", 8.5f, FontStyle.Regular) };
+                var cmbBw = new ComboBox { DropDownStyle = ComboBoxStyle.DropDownList, Location = new Point(150, 55), Size = new Size(330, 24), Font = new Font("Segoe UI", 8.5f) };
+
+                var lblColor = new Label { Text = "Dedicated Color Printer:", Location = new Point(14, 91), Size = new Size(130, 20), Font = new Font("Segoe UI", 8.5f, FontStyle.Regular) };
+                var cmbColor = new ComboBox { DropDownStyle = ComboBoxStyle.DropDownList, Location = new Point(150, 88), Size = new Size(330, 24), Font = new Font("Segoe UI", 8.5f) };
+
+                // Populate with system queues
+                var queues = PdfAndPrinterEngine.DiscoverWindowsQueues();
+                cmbBw.Items.Add("(Same as Primary Printer)");
+                cmbColor.Items.Add("(Same as Primary Printer)");
+
+                int selPriIdx = 0, selBwIdx = 0, selColorIdx = 0;
+                for (int i = 0; i < queues.Count; i++)
+                {
+                    var q = queues[i];
+                    string itemLabel = (q.IsVirtualExcluded ? "[VIRTUAL] " : "[PHYSICAL] ") + q.QueueName;
+                    cmbPri.Items.Add(itemLabel);
+                    cmbBw.Items.Add(itemLabel);
+                    cmbColor.Items.Add(itemLabel);
+
+                    if (string.Equals(q.QueueName, curActiveQueue, StringComparison.OrdinalIgnoreCase))
+                    {
+                        selPriIdx = i;
+                    }
+                    if (!string.IsNullOrEmpty(curBwQueue) && string.Equals(q.QueueName, curBwQueue, StringComparison.OrdinalIgnoreCase))
+                    {
+                        selBwIdx = i + 1;
+                    }
+                    if (!string.IsNullOrEmpty(curColorQueue) && string.Equals(q.QueueName, curColorQueue, StringComparison.OrdinalIgnoreCase))
+                    {
+                        selColorIdx = i + 1;
+                    }
+                }
+                if (cmbPri.Items.Count > 0) cmbPri.SelectedIndex = selPriIdx;
+                cmbBw.SelectedIndex = selBwIdx;
+                cmbColor.SelectedIndex = selColorIdx;
+
+                grpPrinters.Controls.Add(lblPri);
+                grpPrinters.Controls.Add(cmbPri);
+                grpPrinters.Controls.Add(lblBw);
+                grpPrinters.Controls.Add(cmbBw);
+                grpPrinters.Controls.Add(lblColor);
+                grpPrinters.Controls.Add(cmbColor);
+                dlg.Controls.Add(grpPrinters);
+                dy += 136;
+
+                // 5. Auto-start on boot checkbox
+                var chkAuto = new CheckBox
+                {
+                    Text = "Start station automatically when Windows boots (Recommended for shop counter PC)",
+                    Location = new Point(22, dy),
+                    Size = new Size(490, 22),
+                    Checked = true,
+                    Font = new Font("Segoe UI", 8.5f, FontStyle.Regular)
+                };
+                dlg.Controls.Add(chkAuto);
+                dy += 34;
+
+                // 6. Action buttons
                 var btnSave = new Button
                 {
-                    Text = "💾 Save & Sync Station",
-                    Location = new Point(180, dy),
-                    Size = new Size(170, 32),
+                    Text = isFirstRun ? "🚀 Finish Setup & Launch Station" : "💾 Save & Sync Station",
+                    Location = new Point(140, dy),
+                    Size = new Size(230, 36),
                     BackColor = Color.FromArgb(37, 99, 235),
                     ForeColor = Color.White,
-                    Font = new Font("Segoe UI", 9f, FontStyle.Bold),
+                    Font = new Font("Segoe UI", 9.5f, FontStyle.Bold),
                     FlatStyle = FlatStyle.System,
                     Cursor = Cursors.Hand
                 };
 
                 var btnCancel = new Button
                 {
-                    Text = "Cancel",
-                    Location = new Point(360, dy),
-                    Size = new Size(95, 32),
+                    Text = isFirstRun ? "Set Up Later" : "Cancel",
+                    Location = new Point(380, dy),
+                    Size = new Size(135, 36),
                     BackColor = Color.White,
                     FlatStyle = FlatStyle.System,
                     Cursor = Cursors.Hand
@@ -1391,14 +1505,21 @@ namespace PrintAway.Gui
 
                     if (string.IsNullOrEmpty(newName))
                     {
-                        MessageBox.Show("Please enter a valid shop name.", "Input Required", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                        MessageBox.Show("Please enter a valid store name.", "Store Name Required", MessageBoxButtons.OK, MessageBoxIcon.Warning);
                         txtName.Focus();
                         return;
                     }
                     if (string.IsNullOrEmpty(newSlug))
                     {
-                        MessageBox.Show("Please enter a valid shop identifier.", "Input Required", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                        MessageBox.Show("Please enter a valid shop identifier / slug.", "Shop Slug Required", MessageBoxButtons.OK, MessageBoxIcon.Warning);
                         txtSlug.Focus();
+                        return;
+                    }
+
+                    if (isFirstRun && string.IsNullOrEmpty(newPassword))
+                    {
+                        MessageBox.Show("Please set a secure Admin Password for your shop counter panel.", "Password Required", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                        txtPass.Focus();
                         return;
                     }
 
@@ -1431,19 +1552,72 @@ namespace PrintAway.Gui
                         passwordChanged = true;
                     }
 
+                    // Extract selected queues
+                    string selPrimary = cmbPri.SelectedItem != null
+                        ? cmbPri.SelectedItem.ToString().Replace("[PHYSICAL] ", "").Replace("[VIRTUAL] ", "").Trim() : "";
+                    string selBw = (cmbBw.SelectedIndex > 0 && cmbBw.SelectedItem != null)
+                        ? cmbBw.SelectedItem.ToString().Replace("[PHYSICAL] ", "").Replace("[VIRTUAL] ", "").Trim() : selPrimary;
+                    string selColor = (cmbColor.SelectedIndex > 0 && cmbColor.SelectedItem != null)
+                        ? cmbColor.SelectedItem.ToString().Replace("[PHYSICAL] ", "").Replace("[VIRTUAL] ", "").Trim() : selPrimary;
+
                     // 1. Update config/station.json
                     UpdateStationJson("shopName", newName);
                     UpdateStationJson("shopId", newSlug);
                     UpdateStationJson("stationRegistryTopic", "printaway_station_registry_" + newSlug + "_9f8a7b");
+                    if (!string.IsNullOrEmpty(selPrimary)) UpdateStationJson("activePrinterQueue", selPrimary);
+                    if (!string.IsNullOrEmpty(selBw)) UpdateStationJson("bwPrinterQueue", selBw);
+                    if (!string.IsNullOrEmpty(selColor)) UpdateStationJson("colorPrinterQueue", selColor);
 
                     // 2. Update local SQLite database
-                    _repo.UpdateShopAndPrinterControls(null, null, null, null, "gui-edit-shop", null, null, null, null, null, null, null, newSlug, newName);
+                    _repo.UpdateShopAndPrinterControls(
+                        intakePaused: null,
+                        pauseReason: null,
+                        supportsDuplex: null,
+                        printerReadyOverride: null,
+                        adminUsername: "gui-onboard",
+                        supportsColor: null,
+                        supportsPageRange: null,
+                        allowedPaperSizes: null,
+                        maxCopies: null,
+                        activeQueueName: !string.IsNullOrEmpty(selPrimary) ? selPrimary : null,
+                        bwQueueName: selBw,
+                        colorQueueName: selColor,
+                        shopSlug: newSlug,
+                        shopName: newName
+                    );
 
-                    // 3. Update UI Labels immediately
-                    _lblShopTitle.Text = string.Format(CultureInfo.InvariantCulture, "{0} (ID: {1})", newName, newSlug);
-                    _lblCustomerLink.Text = "Customer QR: https://printitaway.netlify.app/?shop=" + newSlug;
+                    // 3. Update Windows Startup autostart shortcut
+                    try
+                    {
+                        string startupDir = Environment.GetFolderPath(Environment.SpecialFolder.Startup);
+                        string shortcutPath = Path.Combine(startupDir, "PrintAwayStation.lnk");
+                        string currentExe = Process.GetCurrentProcess().MainModule.FileName;
+                        if (chkAuto.Checked)
+                        {
+                            CreateWindowsShortcut(shortcutPath, currentExe);
+                            if (_chkAutoStart != null) _chkAutoStart.Checked = true;
+                        }
+                        else
+                        {
+                            if (File.Exists(shortcutPath)) File.Delete(shortcutPath);
+                            if (_chkAutoStart != null) _chkAutoStart.Checked = false;
+                        }
+                    }
+                    catch { }
 
-                    // 4. Broadcast live tunnel to new shop's ntfy topic & trigger cloud telemetry sync with Superadmin
+                    // 4. Write data/onboarded.flag
+                    try
+                    {
+                        string dataDir = Path.Combine(_repoRoot, "data");
+                        Directory.CreateDirectory(dataDir);
+                        File.WriteAllText(Path.Combine(dataDir, "onboarded.flag"), "Onboarded: " + DateTime.UtcNow.ToString("o") + "\nShop: " + newSlug + "\nName: " + newName);
+                    }
+                    catch { }
+
+                    // 5. Reload GUI fields & metrics
+                    LoadInitialData();
+
+                    // 6. Broadcast live tunnel to new shop's ntfy topic & sync Supabase
                     string activeTunnel = _repo.GetLiveTunnelUrl();
                     if (!string.IsNullOrEmpty(activeTunnel))
                     {
@@ -1466,11 +1640,18 @@ namespace PrintAway.Gui
                         _supabaseSync.TriggerSyncNow();
                     }
 
-                    string summary = string.Format(CultureInfo.InvariantCulture,
-                        "Station configuration saved and synced with cloud!\n\nShop Name: {0}\nShop ID: {1}\nPassword: {2}\n\nCustomer Portal Link:\nhttps://printitaway.netlify.app/?shop={1}\n\nCounter Admin Sign-In:\nUsername: admin (or {1})",
-                        newName, newSlug, passwordChanged ? "Updated successfully" : "Unchanged");
+                    string celebrationMsg = string.Format(CultureInfo.InvariantCulture,
+                        "🎉 Stationery Shop Successfully Configured!\n\n" +
+                        "Store Name: {0}\n" +
+                        "Shop ID: {1}\n" +
+                        "Primary Printer: {2}\n" +
+                        "Admin Password: {3}\n\n" +
+                        "Customer QR URL:\nhttps://printitaway.netlify.app/?shop={1}\n\n" +
+                        "Local Counter Admin Panel:\nhttp://127.0.0.1:{4}/admin\n\n" +
+                        "Shopkeepers can keep this Station window minimized while the shop is open.",
+                        newName, newSlug, selPrimary, passwordChanged ? "Configured & Active" : "Unchanged", _port);
 
-                    MessageBox.Show(summary, "PrintAway Configuration Saved", MessageBoxButtons.OK, MessageBoxIcon.Information);
+                    MessageBox.Show(celebrationMsg, "PrintAway Station Ready", MessageBoxButtons.OK, MessageBoxIcon.Information);
                     dlg.Close();
                 };
 

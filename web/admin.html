@@ -404,6 +404,7 @@
     </div>
     <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;">
       <a href="/" style="color:#93c5fd;text-decoration:none;font-size:0.82rem;font-weight:600;">&larr; Customer Portal</a>
+      <a href="/pricing" target="_blank" style="color:#c084fc;text-decoration:none;font-size:0.82rem;font-weight:600;border:1px solid #9333ea;padding:4px 8px;border-radius:6px;">✨ SaaS Plans</a>
       <a href="#" onclick="switchShopPrompt(); return false;" style="color:#a7f3d0;text-decoration:none;font-size:0.82rem;font-weight:600;border:1px solid #059669;padding:4px 8px;border-radius:6px;">🏪 <span id="lblAdminShopBadge">midtownstationary</span></a>
       <a href="#" onclick="configureStationUrl(); return false;" style="color:#38bdf8;text-decoration:none;font-size:0.82rem;font-weight:600;border:1px solid #0284c7;padding:4px 8px;border-radius:6px;">⚙️ Tunnel</a>
       <button id="btnRefreshTop" class="btn btn-secondary hidden" style="padding:4px 9px;font-size:0.78rem;" onclick="loadDashboard()">↻ Refresh</button>
@@ -506,6 +507,37 @@
            TAB 1: LIVE ORDERS & APPROVAL GATE
            ========================================== -->
       <div id="tabSectionOrders" class="tab-section">
+        <!-- Live Hardware Queue Dispatch Routing Bar -->
+        <div class="card" style="background:#f8fafc;border:1px solid #cbd5e1;padding:12px 18px;margin-bottom:14px;border-left:5px solid #4f46e5;display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:12px;">
+          <div style="display:flex;align-items:center;gap:10px;">
+            <span style="font-size:1.4rem;">🖨️</span>
+            <div>
+              <div style="font-weight:800;font-size:0.92rem;color:#0f172a;">Live Hardware Queue Dispatch Routing</div>
+              <div style="font-size:0.75rem;color:var(--muted);margin-top:1px;">Assign active physical printers for B&amp;W jobs vs Color jobs in real-time.</div>
+            </div>
+          </div>
+
+          <div style="display:flex;gap:12px;align-items:center;flex-wrap:wrap;">
+            <!-- Dedicated B&W Machine -->
+            <div style="display:flex;align-items:center;gap:6px;background:#fff;border:1.5px solid #64748b;border-radius:8px;padding:4px 10px;">
+              <span class="badge badge-bw" style="font-size:0.72rem;">🖤 B&amp;W Machine</span>
+              <select id="selLiveBwQueue" onchange="quickUpdatePrinterQueues()" style="border:none;background:transparent;font-size:0.82rem;font-weight:700;color:#0f172a;cursor:pointer;outline:none;">
+                <option value="">Detecting printers...</option>
+              </select>
+            </div>
+
+            <!-- Dedicated Color Machine -->
+            <div style="display:flex;align-items:center;gap:6px;background:#fff;border:1.5px solid #a855f7;border-radius:8px;padding:4px 10px;">
+              <span class="badge badge-color" style="font-size:0.72rem;">🎨 Color Machine</span>
+              <select id="selLiveColorQueue" onchange="quickUpdatePrinterQueues()" style="border:none;background:transparent;font-size:0.82rem;font-weight:700;color:#0f172a;cursor:pointer;outline:none;">
+                <option value="">Detecting printers...</option>
+              </select>
+            </div>
+
+            <span id="lblLiveQueueSaveStatus" style="font-size:0.78rem;color:#15803d;font-weight:700;"></span>
+          </div>
+        </div>
+
         <div class="card" id="ordersCard">
           <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:10px;margin-bottom:12px;">
             <div>
@@ -1534,6 +1566,8 @@
         if (document.getElementById('lblShopQrUrl')) document.getElementById('lblShopQrUrl').textContent = `https://printitaway.netlify.app/?shop=${shop.shopId || activeShop}`;
         if (document.getElementById('selBwQueueSwitch') && shop.bwQueueName !== undefined) document.getElementById('selBwQueueSwitch').value = shop.bwQueueName || '';
         if (document.getElementById('selColorQueueSwitch') && shop.colorQueueName !== undefined) document.getElementById('selColorQueueSwitch').value = shop.colorQueueName || '';
+        if (document.getElementById('selLiveBwQueue') && shop.bwQueueName !== undefined) document.getElementById('selLiveBwQueue').value = shop.bwQueueName || '';
+        if (document.getElementById('selLiveColorQueue') && shop.colorQueueName !== undefined) document.getElementById('selLiveColorQueue').value = shop.colorQueueName || '';
 
         // Fetch SaaS Daily Quota telemetry
         try {
@@ -2180,8 +2214,12 @@
         const selColor = document.getElementById('selColorQueueSwitch');
         const selOvTarget = document.getElementById('inpOvTargetQueue');
         const optHtml = '<option value="">(Use Primary / Smart Auto-Route)</option>' + (data.liveWindowsQueues || []).map(q => `<option value="${q.QueueName}">${q.QueueName} [${q.PortName}]</option>`).join('');
+        const selLiveBw = document.getElementById('selLiveBwQueue');
+        const selLiveColor = document.getElementById('selLiveColorQueue');
         if (selBw) selBw.innerHTML = optHtml;
         if (selColor) selColor.innerHTML = optHtml;
+        if (selLiveBw) selLiveBw.innerHTML = optHtml;
+        if (selLiveColor) selLiveColor.innerHTML = optHtml;
         if (selOvTarget) selOvTarget.innerHTML = optHtml;
 
         if (selSwitch) {
@@ -2202,6 +2240,36 @@
         }
       } catch (e) {
         console.error(e);
+      }
+    }
+
+    async function quickUpdatePrinterQueues() {
+      const bw = document.getElementById('selLiveBwQueue') ? document.getElementById('selLiveBwQueue').value : '';
+      const col = document.getElementById('selLiveColorQueue') ? document.getElementById('selLiveColorQueue').value : '';
+      const statusEl = document.getElementById('lblLiveQueueSaveStatus');
+      if (statusEl) statusEl.textContent = 'Saving routing...';
+
+      try {
+        const res = await fetch(apiUrl('/api/admin/shop-controls'), {
+          method: 'PATCH',
+          headers: adminHeaders(),
+          body: JSON.stringify({
+            bwQueueName: bw,
+            colorQueueName: col,
+            activeQueueName: bw || col
+          })
+        });
+        if (res.ok) {
+          if (statusEl) {
+            statusEl.textContent = '✓ Hardware routing updated!';
+            setTimeout(() => { if (statusEl) statusEl.textContent = ''; }, 3000);
+          }
+          await loadDashboard();
+        } else {
+          if (statusEl) statusEl.textContent = 'Failed to update';
+        }
+      } catch (err) {
+        if (statusEl) statusEl.textContent = 'Error saving';
       }
     }
 
