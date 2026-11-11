@@ -198,12 +198,25 @@ namespace PrintAway.Gui
                 Font = new Font("Segoe UI", 10f, FontStyle.Bold),
                 ForeColor = Color.FromArgb(30, 41, 59),
                 Location = new Point(14, 28),
-                Size = new Size(470, 22)
+                Size = new Size(325, 22)
             };
+
+            var btnEditShop = new Button
+            {
+                Text = "✏️ Shop & Password",
+                Size = new Size(138, 26),
+                Location = new Point(345, 10),
+                BackColor = Color.FromArgb(238, 242, 255),
+                ForeColor = Color.FromArgb(67, 56, 202),
+                Font = new Font("Segoe UI", 8.2f, FontStyle.Bold),
+                FlatStyle = FlatStyle.System,
+                Cursor = Cursors.Hand
+            };
+            btnEditShop.Click += (s, e) => ShowEditShopAndAdminPasswordDialog();
 
             var btnSetShop = new Button
             {
-                Text = "⚙️ Import Config",
+                Text = "⚙️ Import JSON",
                 Size = new Size(115, 26),
                 Location = new Point(490, 10),
                 BackColor = Color.White,
@@ -339,6 +352,7 @@ namespace PrintAway.Gui
             btnUpgradePro.Click += (s, e) => LaunchBrowser("http://127.0.0.1:" + _port + "/admin#pro-upgrade");
 
             grpShop.Controls.Add(_lblShopTitle);
+            grpShop.Controls.Add(btnEditShop);
             grpShop.Controls.Add(btnSetShop);
             grpShop.Controls.Add(_lblCustomerLink);
             grpShop.Controls.Add(btnCopyLink);
@@ -1097,6 +1111,253 @@ namespace PrintAway.Gui
             }
             catch { }
             return "pilot";
+        }
+
+        private void ShowEditShopAndAdminPasswordDialog()
+        {
+            var status = _repo.GetShopAndAvailabilityStatus();
+            string curShopName = status != null && status.ContainsKey("shopName") && status["shopName"] != null
+                ? Convert.ToString(status["shopName"]) : "PrintAway Pilot Shop";
+            string curShopId = GetCurrentShopId();
+
+            using (var dlg = new Form())
+            {
+                dlg.Text = "Shop Identity & Admin Password Setup";
+                dlg.ClientSize = new Size(480, 420);
+                dlg.StartPosition = FormStartPosition.CenterParent;
+                dlg.FormBorderStyle = FormBorderStyle.FixedDialog;
+                dlg.MaximizeBox = false;
+                dlg.MinimizeBox = false;
+                dlg.BackColor = Color.FromArgb(248, 250, 252);
+                dlg.Font = new Font("Segoe UI", 9f, FontStyle.Regular);
+
+                // Top Header Panel
+                var pnlHdr = new Panel
+                {
+                    Dock = DockStyle.Top,
+                    Height = 60,
+                    BackColor = Color.FromArgb(30, 41, 59)
+                };
+                var lblHdr = new Label
+                {
+                    Text = "🏪 Stationery Store & Admin Credentials",
+                    Font = new Font("Segoe UI", 11f, FontStyle.Bold),
+                    ForeColor = Color.White,
+                    Location = new Point(16, 10),
+                    Size = new Size(440, 24)
+                };
+                var lblSub = new Label
+                {
+                    Text = "Configure shop branding, unique customer QR ID, and admin sign-in password.",
+                    Font = new Font("Segoe UI", 8f, FontStyle.Regular),
+                    ForeColor = Color.FromArgb(203, 213, 225),
+                    Location = new Point(16, 34),
+                    Size = new Size(440, 20)
+                };
+                pnlHdr.Controls.Add(lblHdr);
+                pnlHdr.Controls.Add(lblSub);
+                dlg.Controls.Add(pnlHdr);
+
+                int dy = 74;
+
+                // Shop Name
+                var lblName = new Label
+                {
+                    Text = "Stationery Store Name:",
+                    Font = new Font("Segoe UI", 8.5f, FontStyle.Bold),
+                    Location = new Point(20, dy),
+                    Size = new Size(440, 18)
+                };
+                var txtName = new TextBox
+                {
+                    Text = curShopName,
+                    Location = new Point(20, dy + 20),
+                    Size = new Size(435, 24),
+                    Font = new Font("Segoe UI", 9.5f)
+                };
+                dlg.Controls.Add(lblName);
+                dlg.Controls.Add(txtName);
+                dy += 54;
+
+                // Shop ID / Slug
+                var lblSlug = new Label
+                {
+                    Text = "Shop Identifier / Slug (Used in customer QR link):",
+                    Font = new Font("Segoe UI", 8.5f, FontStyle.Bold),
+                    Location = new Point(20, dy),
+                    Size = new Size(440, 18)
+                };
+                var txtSlug = new TextBox
+                {
+                    Text = curShopId,
+                    Location = new Point(20, dy + 20),
+                    Size = new Size(435, 24),
+                    Font = new Font("Segoe UI", 9.5f)
+                };
+                dlg.Controls.Add(lblSlug);
+                dlg.Controls.Add(txtSlug);
+                dy += 54;
+
+                // Admin Password
+                var lblPass = new Label
+                {
+                    Text = "Set Counter Admin Password (leave blank to keep current):",
+                    Font = new Font("Segoe UI", 8.5f, FontStyle.Bold),
+                    Location = new Point(20, dy),
+                    Size = new Size(440, 18)
+                };
+                var txtPass = new TextBox
+                {
+                    Text = "",
+                    Location = new Point(20, dy + 20),
+                    Size = new Size(435, 24),
+                    Font = new Font("Segoe UI", 9.5f),
+                    UseSystemPasswordChar = true
+                };
+                dlg.Controls.Add(lblPass);
+                dlg.Controls.Add(txtPass);
+                dy += 54;
+
+                // Confirm Password
+                var lblConfirm = new Label
+                {
+                    Text = "Confirm New Password:",
+                    Font = new Font("Segoe UI", 8.5f, FontStyle.Bold),
+                    Location = new Point(20, dy),
+                    Size = new Size(440, 18)
+                };
+                var txtConfirm = new TextBox
+                {
+                    Text = "",
+                    Location = new Point(20, dy + 20),
+                    Size = new Size(435, 24),
+                    Font = new Font("Segoe UI", 9.5f),
+                    UseSystemPasswordChar = true
+                };
+                dlg.Controls.Add(lblConfirm);
+                dlg.Controls.Add(txtConfirm);
+                dy += 50;
+
+                // Show Password Checkbox
+                var chkShow = new CheckBox
+                {
+                    Text = "Show Password",
+                    Location = new Point(22, dy),
+                    Size = new Size(130, 20),
+                    Font = new Font("Segoe UI", 8f)
+                };
+                chkShow.CheckedChanged += (s, e) =>
+                {
+                    txtPass.UseSystemPasswordChar = !chkShow.Checked;
+                    txtConfirm.UseSystemPasswordChar = !chkShow.Checked;
+                };
+                dlg.Controls.Add(chkShow);
+                dy += 30;
+
+                // Buttons
+                var btnSave = new Button
+                {
+                    Text = "💾 Save & Sync Station",
+                    Location = new Point(180, dy),
+                    Size = new Size(170, 32),
+                    BackColor = Color.FromArgb(37, 99, 235),
+                    ForeColor = Color.White,
+                    Font = new Font("Segoe UI", 9f, FontStyle.Bold),
+                    FlatStyle = FlatStyle.System,
+                    Cursor = Cursors.Hand
+                };
+
+                var btnCancel = new Button
+                {
+                    Text = "Cancel",
+                    Location = new Point(360, dy),
+                    Size = new Size(95, 32),
+                    BackColor = Color.White,
+                    FlatStyle = FlatStyle.System,
+                    Cursor = Cursors.Hand
+                };
+                btnCancel.Click += (s, e) => dlg.Close();
+
+                btnSave.Click += (s, e) =>
+                {
+                    string newName = txtName.Text.Trim();
+                    string rawSlug = txtSlug.Text.Trim().ToLowerInvariant();
+                    string newSlug = Regex.Replace(rawSlug, @"[^a-z0-9_-]", "");
+                    string newPassword = txtPass.Text.Trim();
+                    string confirmPassword = txtConfirm.Text.Trim();
+
+                    if (string.IsNullOrEmpty(newName))
+                    {
+                        MessageBox.Show("Please enter a valid shop name.", "Input Required", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                        txtName.Focus();
+                        return;
+                    }
+                    if (string.IsNullOrEmpty(newSlug))
+                    {
+                        MessageBox.Show("Please enter a valid shop identifier.", "Input Required", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                        txtSlug.Focus();
+                        return;
+                    }
+
+                    bool passwordChanged = false;
+                    if (!string.IsNullOrEmpty(newPassword))
+                    {
+                        if (newPassword.Length < 6)
+                        {
+                            MessageBox.Show("Password must be at least 6 characters long.", "Password Too Short", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                            txtPass.Focus();
+                            return;
+                        }
+                        if (newPassword != confirmPassword)
+                        {
+                            MessageBox.Show("Passwords do not match. Please re-enter to confirm.", "Password Mismatch", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                            txtConfirm.Focus();
+                            return;
+                        }
+
+                        string pErr;
+                        if (!_repo.SetAdminPasswordDirect("admin", newPassword, out pErr))
+                        {
+                            MessageBox.Show("Failed to save password: " + pErr, "Error", MessageBoxButtons.OK, MessageBoxIcon.Error);
+                            return;
+                        }
+                        if (newSlug != "admin" && newSlug != "pilot")
+                        {
+                            _repo.SetAdminPasswordDirect(newSlug, newPassword, out pErr);
+                        }
+                        passwordChanged = true;
+                    }
+
+                    // 1. Update config/station.json
+                    UpdateStationJson("shopName", newName);
+                    UpdateStationJson("shopId", newSlug);
+                    UpdateStationJson("stationRegistryTopic", "printaway_station_registry_" + newSlug + "_9f8a7b");
+
+                    // 2. Update local SQLite database
+                    _repo.UpdateShopAndPrinterControls(null, null, null, null, "gui-edit-shop", null, null, null, null, null, null, null, newSlug, newName);
+
+                    // 3. Update UI Labels immediately
+                    _lblShopTitle.Text = string.Format(CultureInfo.InvariantCulture, "{0} (ID: {1})", newName, newSlug);
+                    _lblCustomerLink.Text = "Customer QR: https://printitaway.netlify.app/?shop=" + newSlug;
+
+                    // 4. Trigger cloud telemetry sync with Superadmin
+                    if (_supabaseSync != null)
+                    {
+                        _supabaseSync.TriggerSyncNow();
+                    }
+
+                    string summary = string.Format(CultureInfo.InvariantCulture,
+                        "Station configuration saved and synced with cloud!\n\nShop Name: {0}\nShop ID: {1}\nPassword: {2}\n\nCustomer Portal Link:\nhttps://printitaway.netlify.app/?shop={1}\n\nCounter Admin Sign-In:\nUsername: admin (or {1})",
+                        newName, newSlug, passwordChanged ? "Updated successfully" : "Unchanged");
+
+                    MessageBox.Show(summary, "PrintAway Configuration Saved", MessageBoxButtons.OK, MessageBoxIcon.Information);
+                    dlg.Close();
+                };
+
+                dlg.Controls.Add(btnSave);
+                dlg.Controls.Add(btnCancel);
+                dlg.ShowDialog(this);
+            }
         }
 
         private void OnSetShopClicked()

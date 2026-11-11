@@ -1,7 +1,7 @@
 {
-  "version": "2.2.1",
+  "version": "2.2.2",
   "releaseDate": "2026-11-11",
-  "releaseNotes": "Zero-lag tunnel synchronization, in-place 1-click auto-updater, and Xerox monochrome bitmap rasterizer.",
+  "releaseNotes": "Shop branding & password setup GUI dialog, zero-lag tunnel sync, and Superadmin cloud synchronization.",
   "downloadUrl": "https://raw.githubusercontent.com/Shivamborn2shine/PrintPilot/main/bin/PrintAway.exe",
   "fallbackUrl": "https://printitaway.netlify.app/downloads/PrintAway.exe"
 }

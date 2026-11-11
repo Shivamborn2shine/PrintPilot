@@ -1454,7 +1454,7 @@ CREATE TABLE IF NOT EXISTS audit_events (
 
             if (user == null)
             {
-                errorMsg = "Invalid admin credentials. Please enter your shop password or master password.";
+                errorMsg = "Invalid admin credentials. Please check your username and password.";
                 LogAudit(null, "admin", username ?? "unknown", "ADMIN_LOGIN_FAILED", null, null, "Unknown username");
                 return null;
             }
@@ -1464,7 +1464,7 @@ CREATE TABLE IF NOT EXISTS audit_events (
             string actualHash = HashPassword(password ?? "", salt);
             if (!CryptographicEquals(expectedHash, actualHash))
             {
-                errorMsg = "Invalid store password. Please check your password or use Master Password.";
+                errorMsg = "Invalid store password. Please check your password.";
                 LogAudit(null, "admin", username, "ADMIN_LOGIN_FAILED", null, null, "Wrong password");
                 return null;
             }
@@ -1551,6 +1551,46 @@ CREATE TABLE IF NOT EXISTS audit_events (
                 });
 
             LogAudit(null, "admin", Convert.ToString(user["username"]), "PASSWORD_CHANGED", null, null, "Password updated successfully");
+            return true;
+        }
+
+        // Direct password initialization or update from host station without requiring current password
+        public bool SetAdminPasswordDirect(string username, string newPassword, out string errorMsg)
+        {
+            errorMsg = null;
+            if (string.IsNullOrWhiteSpace(newPassword) || newPassword.Trim().Length < 6)
+            {
+                errorMsg = "Password must be at least 6 characters long.";
+                return false;
+            }
+
+            var user = _db.QuerySingle("SELECT * FROM users WHERE (username = @u OR username = 'admin') AND is_active = 1 LIMIT 1;",
+                new Dictionary<string, object> { { "u", username ?? "admin" } });
+
+            string newSalt = GenerateRandomToken(16);
+            string newHash = HashPassword(newPassword.Trim(), newSalt);
+
+            if (user != null)
+            {
+                _db.ExecuteNonQuery(
+                    "UPDATE users SET password_hash = @h, password_salt = @s WHERE id = @id;",
+                    new Dictionary<string, object>
+                    {
+                        { "h", newHash },
+                        { "s", newSalt },
+                        { "id", user["id"] }
+                    });
+            }
+            else
+            {
+                string now = UtcNowIso();
+                _db.ExecuteInsert(
+                    @"INSERT INTO users (username, display_name, role, password_hash, password_salt, is_active, created_at_utc)
+                      VALUES ('admin', 'Shop Owner / Lead Admin', 'admin', @hash, @salt, 1, @now);",
+                    new Dictionary<string, object> { { "hash", newHash }, { "salt", newSalt }, { "now", now } });
+            }
+
+            LogAudit(null, "admin", username ?? "admin", "PASSWORD_INITIALIZED_DIRECT", null, null, "Admin password updated directly on host station");
             return true;
         }
 
