@@ -4,6 +4,7 @@ using System.Diagnostics;
 using System.Drawing;
 using System.Globalization;
 using System.IO;
+using System.Net;
 using System.Runtime.InteropServices;
 using System.Text.RegularExpressions;
 using System.Threading;
@@ -1340,9 +1341,26 @@ namespace PrintAway.Gui
                     _lblShopTitle.Text = string.Format(CultureInfo.InvariantCulture, "{0} (ID: {1})", newName, newSlug);
                     _lblCustomerLink.Text = "Customer QR: https://printitaway.netlify.app/?shop=" + newSlug;
 
-                    // 4. Trigger cloud telemetry sync with Superadmin
+                    // 4. Broadcast live tunnel to new shop's ntfy topic & trigger cloud telemetry sync with Superadmin
+                    string activeTunnel = _repo.GetLiveTunnelUrl();
+                    if (!string.IsNullOrEmpty(activeTunnel))
+                    {
+                        ThreadPool.QueueUserWorkItem(_ =>
+                        {
+                            try
+                            {
+                                using (var wc = new WebClient())
+                                {
+                                    wc.UploadString("https://ntfy.sh/printaway_station_registry_" + newSlug + "_9f8a7b", activeTunnel);
+                                }
+                            }
+                            catch { }
+                        });
+                    }
+
                     if (_supabaseSync != null)
                     {
+                        _supabaseSync.ShopId = newSlug;
                         _supabaseSync.TriggerSyncNow();
                     }
 

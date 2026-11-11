@@ -1750,7 +1750,7 @@
   </div>
 
   <script>
-    const DEFAULT_STATION_URL = 'https://sam-refrigerator-wealth-grams.trycloudflare.com';
+    const DEFAULT_STATION_URL = '';
 
     /* ==========================================================================
        ROBUST NETWORK LAYER (AUTO-RETRY & TUNNEL RE-DISCOVERY)
@@ -2001,6 +2001,9 @@
       if (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1') {
         return '';
       }
+      if (force) {
+        localStorage.removeItem('printaway_api_base');
+      }
       const sp = new URLSearchParams(window.location.search).get('station');
       if (sp) {
         const cleanSp = sp.trim().replace(/\/+$/, '');
@@ -2012,6 +2015,20 @@
         const badgeEl = document.getElementById('lblActiveShopBadge');
         if (badgeEl && !badgeEl.textContent.includes('Change')) {
           badgeEl.textContent = shopId;
+        }
+
+        // Helper to ping candidate tunnel before trusting it
+        async function isTunnelAlive(candidateUrl) {
+          if (!candidateUrl || !candidateUrl.startsWith('https://')) return false;
+          try {
+            const ctrl = new AbortController();
+            const tid = setTimeout(() => ctrl.abort(), 2500);
+            const res = await fetch(candidateUrl + '/api/shop/status', { signal: ctrl.signal });
+            clearTimeout(tid);
+            return res.ok;
+          } catch {
+            return false;
+          }
         }
 
         // Priority 1: Supabase Fleet Lookup
@@ -2028,24 +2045,50 @@
             if (list && list.length > 0 && list[0].live_tunnel_url) {
               const live = list[0].live_tunnel_url.trim().replace(/\/+$/, '');
               if (live.startsWith('https://')) {
-                localStorage.setItem('printaway_api_base', live);
-                return live;
+                if (!force || (await isTunnelAlive(live))) {
+                  localStorage.setItem('printaway_api_base', live);
+                  return live;
+                }
               }
             }
           }
         } catch (sbErr) { }
 
         // Priority 2: ntfy.sh registry topic
-        const topic = getRegistryTopicForShop(shopId);
-        const res = await fetch('https://ntfy.sh/' + topic + '/raw?poll=1&since=12h', { cache: 'no-store' });
-        if (res.ok) {
-          const text = await res.text();
-          const lines = text.split(/\r?\n/).map(l => l.trim()).filter(l => l.startsWith('https://'));
-          if (lines.length > 0) {
-            const latest = lines[lines.length - 1].replace(/\/+$/, '');
-            localStorage.setItem('printaway_api_base', latest);
-            return latest;
+        try {
+          const topic = getRegistryTopicForShop(shopId);
+          const res = await fetch('https://ntfy.sh/' + topic + '/raw?poll=1&since=12h', { cache: 'no-store' });
+          if (res.ok) {
+            const text = await res.text();
+            const lines = text.split(/\r?\n/).map(l => l.trim()).filter(l => l.startsWith('https://'));
+            if (lines.length > 0) {
+              const latest = lines[lines.length - 1].replace(/\/+$/, '');
+              if (!force || (await isTunnelAlive(latest))) {
+                localStorage.setItem('printaway_api_base', latest);
+                return latest;
+              }
+            }
           }
+        } catch (e) { }
+
+        // Priority 3: Fallback bridge if station is currently registered under 'pilot'
+        if (shopId !== 'pilot') {
+          try {
+            const pRes = await fetch('https://zduoifzakiojfqbtxqqm.supabase.co/rest/v1/shops?shop_id=eq.pilot&select=live_tunnel_url', {
+              headers: { 'apikey': 'sb_publishable_rhmUZZbKhXiJxrChcPTbsg_gFIH9FdO' }
+            });
+            if (pRes.ok) {
+              const pList = await pRes.json();
+              if (pList && pList.length > 0 && pList[0].live_tunnel_url) {
+                const pTunnel = pList[0].live_tunnel_url.trim().replace(/\/+$/, '');
+                if (await isTunnelAlive(pTunnel)) {
+                  console.log('[AutoDiscover] Station is connected via pilot tunnel bridge:', pTunnel);
+                  localStorage.setItem('printaway_api_base', pTunnel);
+                  return pTunnel;
+                }
+              }
+            }
+          } catch (e) { }
         }
       } catch (e) {
         console.warn('Live station registry lookup skipped:', e);
@@ -2065,12 +2108,16 @@
     function configureStationUrl() {
       const cur = localStorage.getItem('printaway_api_base') || '';
       const entered = prompt(
-        "Enter your PrintAway Station Backend URL (e.g. https://...lhr.life or https://...trycloudflare.com or leave blank for local):",
+        "Enter your PrintAway Station Backend URL (e.g. https://...trycloudflare.com or https://...lhr.life or leave blank for local):\n\nNote: Browsers block http://127.0.0.1 on HTTPS websites. To use local station directly, open http://127.0.0.1:8080 in a new tab.",
         cur
       );
       if (entered !== null) {
-        if (entered.trim()) {
-          localStorage.setItem('printaway_api_base', entered.trim());
+        const val = entered.trim();
+        if (val.startsWith('http://localhost') || val.startsWith('http://127.0.0.1')) {
+          alert("Web browsers block 'http://' localhost requests from secure 'https://' websites (Mixed Content Security Policy).\n\nTo use the station on localhost directly, open http://127.0.0.1:8080 in a new browser tab!\n\nOr enter your secure HTTPS tunnel URL here.");
+        }
+        if (val) {
+          localStorage.setItem('printaway_api_base', val);
         } else {
           localStorage.removeItem('printaway_api_base');
         }

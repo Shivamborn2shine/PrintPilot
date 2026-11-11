@@ -72,31 +72,39 @@ Copy-Item -Path (Join-Path $rootDir "scripts\enable-autostart.ps1") -Destination
 Copy-Item -Path (Join-Path $rootDir "scripts\render-pdf.ps1") -Destination (Join-Path $OutputDir "scripts\render-pdf.ps1") -Force
 
 # Copy default config template (without sensitive secrets)
-$templateConfig = @{
-    shopId = "pilot"
-    shopName = "PrintAway Pilot Shop"
-    tagline = "Printing ke liye pareshan ho? Just PrintAway."
-    operatingHours = "09:00 AM - 09:00 PM IST"
-    turnaroundText = "3-5 mins after counter admin approval"
-    port = 8080
-    activePrinterQueue = "auto"
-    bwPrinterQueue = ""
-    colorPrinterQueue = ""
-    autoFallbackToPhysicalPrinter = $true
-    netlifySiteUrl = "https://printitaway.netlify.app"
-    stationRegistryTopic = "printaway_station_registry_pilot_9f8a7b6c5d4e"
-    autoPushTunnelToGit = $false
-} | ConvertTo-Json -Depth 5
-[System.IO.File]::WriteAllText((Join-Path $OutputDir "config\station.json"), $templateConfig, [System.Text.Encoding]::UTF8)
+if (Test-Path (Join-Path $rootDir "config\station.json")) {
+    Copy-Item -Path (Join-Path $rootDir "config\station.json") -Destination (Join-Path $OutputDir "config\station.json") -Force
+} else {
+    $templateConfig = @{
+        shopId = "midtownstationary"
+        shopName = "Midtown Stationary"
+        tagline = "Printing ke liye pareshan ho? Just PrintAway."
+        operatingHours = "09:00 AM - 09:00 PM IST"
+        turnaroundText = "3-5 mins after counter admin approval"
+        port = 8080
+        activePrinterQueue = "auto"
+        bwPrinterQueue = ""
+        colorPrinterQueue = ""
+        autoFallbackToPhysicalPrinter = $true
+        netlifySiteUrl = "https://printitaway.netlify.app"
+        stationRegistryTopic = "printaway_station_registry_midtownstationary_9f8a7b"
+        autoPushTunnelToGit = $false
+    } | ConvertTo-Json -Depth 5
+    [System.IO.File]::WriteAllText((Join-Path $OutputDir "config\station.json"), $templateConfig, [System.Text.Encoding]::UTF8)
+}
 
 # Copy web frontend UI files (Client HTML/CSS/Assets - ZERO C# backend code)
 $webOutDir = Join-Path $OutputDir "web"
+$binWebDir = Join-Path $OutputDir "bin\web"
 if (-not (Test-Path $webOutDir)) { New-Item -ItemType Directory -Path $webOutDir -Force | Out-Null }
+if (-not (Test-Path $binWebDir)) { New-Item -ItemType Directory -Path $binWebDir -Force | Out-Null }
 if (Test-Path (Join-Path $rootDir "web\index.html")) {
     Copy-Item -Path (Join-Path $rootDir "web\index.html") -Destination (Join-Path $webOutDir "index.html") -Force
+    Copy-Item -Path (Join-Path $rootDir "web\index.html") -Destination (Join-Path $binWebDir "index.html") -Force
 }
 if (Test-Path (Join-Path $rootDir "web\admin.html")) {
     Copy-Item -Path (Join-Path $rootDir "web\admin.html") -Destination (Join-Path $webOutDir "admin.html") -Force
+    Copy-Item -Path (Join-Path $rootDir "web\admin.html") -Destination (Join-Path $binWebDir "admin.html") -Force
 }
 if (Test-Path (Join-Path $rootDir "web\assets")) {
     Copy-Item -Recurse -Path (Join-Path $rootDir "web\assets\*") -Destination (Join-Path $webOutDir "assets") -Force

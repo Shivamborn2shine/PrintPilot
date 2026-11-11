@@ -1184,20 +1184,38 @@ namespace PrintAway.Web
                 var status = _repo.GetShopAndAvailabilityStatus();
                 string shopId = (status != null && status.ContainsKey("shopId") && status["shopId"] != null)
                     ? Convert.ToString(status["shopId"])
-                    : "pilot";
+                    : "midtownstationary";
+                string liveTunnel = _repo.GetLiveTunnelUrl();
                 string targetPath = (fileName == "admin.html") ? "/admin" : "";
-                string targetUrl = string.Format(CultureInfo.InvariantCulture, "https://printitaway.netlify.app{0}?shop={1}", targetPath, shopId);
+                string targetUrl = string.IsNullOrEmpty(liveTunnel)
+                    ? string.Format(CultureInfo.InvariantCulture, "https://printitaway.netlify.app{0}?shop={1}", targetPath, shopId)
+                    : string.Format(CultureInfo.InvariantCulture, "https://printitaway.netlify.app{0}?shop={1}&station={2}", targetPath, shopId, Uri.EscapeDataString(liveTunnel));
+
                 res.StatusCode = 302;
-                res.Headers.Add("Location", targetUrl);
-                byte[] redirectHtml = Encoding.UTF8.GetBytes(string.Format(CultureInfo.InvariantCulture,
-                    "<!DOCTYPE html><html><head><meta http-equiv='refresh' content='0;url={0}'></head><body><p>Redirecting to <a href='{0}'>PrintAway Cloud Portal</a>...</p></body></html>",
-                    targetUrl));
-                WriteBytes(res, 302, "text/html; charset=utf-8", redirectHtml);
+                res.Headers["Location"] = targetUrl;
+                string redirectHtml = string.Format(CultureInfo.InvariantCulture,
+                    "<!DOCTYPE html><html><head><meta charset='utf-8'><title>Redirecting to PrintAway...</title>" +
+                    "<meta http-equiv='refresh' content='0;url={0}'></head>" +
+                    "<body style='font-family:Segoe UI,sans-serif;text-align:center;padding:50px;background:#f8fafc;color:#1e293b;'>" +
+                    "<h2>PrintAway Station is Online</h2>" +
+                    "<p>Redirecting to <a href='{0}' style='color:#2563eb;font-weight:bold;'>PrintAway Cloud Portal</a>...</p>" +
+                    "<script>window.location.href='{0}';</script></body></html>",
+                    targetUrl);
+                byte[] redirectBytes = Encoding.UTF8.GetBytes(redirectHtml);
+                WriteBytes(res, 302, "text/html; charset=utf-8", redirectBytes);
                 return;
             }
             catch
             {
-                WriteError(res, 404, "UI_FILE_MISSING", "Missing UI file: " + fileName);
+                string safeHtml = "<!DOCTYPE html><html><head><meta charset='utf-8'><title>PrintAway Station</title></head>" +
+                    "<body style='font-family:Segoe UI,sans-serif;text-align:center;padding:50px;background:#f8fafc;'>" +
+                    "<h2>PrintAway Hardware Station</h2>" +
+                    "<p>Local API server is active on port 8080.</p>" +
+                    "<p><a href='https://printitaway.netlify.app/?shop=midtownstationary' style='color:#2563eb;font-weight:bold;'>Open Customer Storefront</a> &nbsp;|&nbsp; " +
+                    "<a href='https://printitaway.netlify.app/admin?shop=midtownstationary' style='color:#2563eb;font-weight:bold;'>Open Counter Admin</a></p>" +
+                    "</body></html>";
+                byte[] safeBytes = Encoding.UTF8.GetBytes(safeHtml);
+                WriteBytes(res, 200, "text/html; charset=utf-8", safeBytes);
             }
         }
 

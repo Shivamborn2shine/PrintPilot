@@ -29,11 +29,39 @@ namespace PrintAway.SaaS
     {
         private readonly string _supabaseUrl;
         private readonly string _apiKey;
-        private readonly string _shopId;
+        private string _shopId;
         private readonly PrintAwayRepository _repo;
         private readonly TunnelManager _tunnel;
         private readonly Timer _syncTimer;
         private readonly JavaScriptSerializer _serializer;
+
+        public string ShopId
+        {
+            get
+            {
+                try
+                {
+                    if (_repo != null)
+                    {
+                        var status = _repo.GetShopAndAvailabilityStatus();
+                        if (status != null && status.ContainsKey("shopId") && status["shopId"] != null)
+                        {
+                            string s = Convert.ToString(status["shopId"]).Trim();
+                            if (!string.IsNullOrEmpty(s)) return s;
+                        }
+                    }
+                }
+                catch { }
+                return _shopId ?? "midtownstationary";
+            }
+            set
+            {
+                if (!string.IsNullOrWhiteSpace(value))
+                {
+                    _shopId = value.Trim();
+                }
+            }
+        }
 
         private QuotaStatus _currentQuota;
         private bool _disposed;
@@ -45,14 +73,14 @@ namespace PrintAway.SaaS
         {
             _supabaseUrl = !string.IsNullOrWhiteSpace(supabaseUrl) ? supabaseUrl.Trim().TrimEnd('/') : "";
             _apiKey = !string.IsNullOrWhiteSpace(apiKey) ? apiKey.Trim() : "";
-            _shopId = !string.IsNullOrWhiteSpace(shopId) ? shopId.Trim() : "pilot";
+            _shopId = !string.IsNullOrWhiteSpace(shopId) ? shopId.Trim() : "midtownstationary";
             _repo = repo;
             _tunnel = tunnel;
             _serializer = new JavaScriptSerializer();
 
             _currentQuota = new QuotaStatus
             {
-                ShopId = _shopId,
+                ShopId = ShopId,
                 Tier = "free",
                 Status = "active",
                 DailyQuota = 10,
@@ -217,7 +245,15 @@ namespace PrintAway.SaaS
                 // Get active printer & tunnel info
                 var shopStatus = _repo.GetShopAndAvailabilityStatus();
                 string activePrinter = Convert.ToString(shopStatus["activeQueueName"]);
-                string tunnelUrl = _tunnel != null && !string.IsNullOrWhiteSpace(_tunnel.LiveTunnelUrl) ? _tunnel.LiveTunnelUrl : "";
+                string tunnelUrl = "";
+                if (_tunnel != null && !string.IsNullOrWhiteSpace(_tunnel.LiveTunnelUrl))
+                {
+                    tunnelUrl = _tunnel.LiveTunnelUrl;
+                }
+                if (string.IsNullOrWhiteSpace(tunnelUrl) && _repo != null)
+                {
+                    tunnelUrl = _repo.GetLiveTunnelUrl();
+                }
 
                 // 2. Heartbeat to public.shops
                 SendHeartbeat(activePrinter, tunnelUrl);
@@ -242,10 +278,10 @@ namespace PrintAway.SaaS
         {
             try
             {
-                string patchUrl = string.Format(CultureInfo.InvariantCulture, "{0}/rest/v1/shops?shop_id=eq.{1}", _supabaseUrl, Uri.EscapeDataString(_shopId));
+                string patchUrl = string.Format(CultureInfo.InvariantCulture, "{0}/rest/v1/shops?shop_id=eq.{1}", _supabaseUrl, Uri.EscapeDataString(ShopId));
                 var payload = new Dictionary<string, object>
                 {
-                    { "client_version", "2.2.0" },
+                    { "client_version", PrintAway.Updater.AutoUpdater.CurrentVersion },
                     { "last_heartbeat_utc", DateTime.UtcNow.ToString("o") },
                     { "active_printer_model", activePrinter ?? "" }
                 };
@@ -270,7 +306,7 @@ namespace PrintAway.SaaS
                 string postUrl = string.Format(CultureInfo.InvariantCulture, "{0}/rest/v1/daily_telemetry", _supabaseUrl);
                 var row = new Dictionary<string, object>
                 {
-                    { "shop_id", _shopId },
+                    { "shop_id", ShopId },
                     { "date", dateStr },
                     { "pages_count", pages },
                     { "sheets_count", sheets },
@@ -296,7 +332,7 @@ namespace PrintAway.SaaS
         {
             try
             {
-                string getUrl = string.Format(CultureInfo.InvariantCulture, "{0}/rest/v1/shops?shop_id=eq.{1}&select=*", _supabaseUrl, Uri.EscapeDataString(_shopId));
+                string getUrl = string.Format(CultureInfo.InvariantCulture, "{0}/rest/v1/shops?shop_id=eq.{1}&select=*", _supabaseUrl, Uri.EscapeDataString(ShopId));
                 string jsonResp = ExecuteHttpRequest(getUrl, "GET", null, null);
 
                 if (!string.IsNullOrWhiteSpace(jsonResp))
@@ -319,7 +355,7 @@ namespace PrintAway.SaaS
 
                         var newQuota = new QuotaStatus
                         {
-                            ShopId = _shopId,
+                            ShopId = ShopId,
                             Tier = tier,
                             Status = status,
                             DailyQuota = effectiveQuota,

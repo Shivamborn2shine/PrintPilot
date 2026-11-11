@@ -1072,7 +1072,7 @@
       localStorage.setItem('printaway_api_base', adminStationParam.trim().replace(/\/+$/, ''));
     }
 
-    const DEFAULT_STATION_URL = 'https://anybody-vpn-slim-suited.trycloudflare.com';
+    const DEFAULT_STATION_URL = '';
     function getActiveShopId() {
       const spShop = new URLSearchParams(window.location.search).get('shop');
       if (spShop && spShop.trim()) {
@@ -1104,9 +1104,12 @@
       }
     }
 
-    async function autoDiscoverLiveStation() {
+    async function autoDiscoverLiveStation(force = false) {
       if (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1') {
         return '';
+      }
+      if (force) {
+        localStorage.removeItem('printaway_api_base');
       }
       const sp = new URLSearchParams(window.location.search).get('station');
       if (sp) {
@@ -1119,20 +1122,37 @@
       const badgeEl = document.getElementById('lblAdminShopBadge');
       if (badgeEl) badgeEl.textContent = shopId;
 
+      // Helper to test candidate tunnel before trusting it
+      async function isTunnelAlive(candidateUrl) {
+        if (!candidateUrl || !candidateUrl.startsWith('https://')) return false;
+        try {
+          const ctrl = new AbortController();
+          const tid = setTimeout(() => ctrl.abort(), 2500);
+          const res = await fetch(candidateUrl + '/api/shop/status', { signal: ctrl.signal });
+          clearTimeout(tid);
+          return res.ok;
+        } catch {
+          return false;
+        }
+      }
+
       // Priority 1: Supabase lookup for live tunnel URL
       try {
         const sbRes = await fetch(`https://zduoifzakiojfqbtxqqm.supabase.co/rest/v1/shops?shop_id=eq.${encodeURIComponent(shopId)}&select=live_tunnel_url`, {
           headers: {
             'apikey': 'sb_publishable_rhmUZZbKhXiJxrChcPTbsg_gFIH9FdO',
             'Accept': 'application/json'
-          }
+          },
+          cache: force ? 'no-cache' : 'default'
         });
         if (sbRes.ok) {
           const list = await sbRes.json();
           if (list && list.length > 0 && list[0].live_tunnel_url && list[0].live_tunnel_url.startsWith('https://')) {
             const cleanUrl = list[0].live_tunnel_url.trim().replace(/\/+$/, '');
-            localStorage.setItem('printaway_api_base', cleanUrl);
-            return cleanUrl;
+            if (!force || (await isTunnelAlive(cleanUrl))) {
+              localStorage.setItem('printaway_api_base', cleanUrl);
+              return cleanUrl;
+            }
           }
         }
       } catch (err) { }
@@ -1146,11 +1166,33 @@
           const lines = text.split(/\r?\n/).map(l => l.trim()).filter(l => l.startsWith('https://'));
           if (lines.length > 0) {
             const latest = lines[lines.length - 1].replace(/\/+$/, '');
-            localStorage.setItem('printaway_api_base', latest);
-            return latest;
+            if (!force || (await isTunnelAlive(latest))) {
+              localStorage.setItem('printaway_api_base', latest);
+              return latest;
+            }
           }
         }
       } catch (e) { }
+
+      // Priority 3: Fallback bridge if station is currently registered under 'pilot'
+      if (shopId !== 'pilot') {
+        try {
+          const pRes = await fetch('https://zduoifzakiojfqbtxqqm.supabase.co/rest/v1/shops?shop_id=eq.pilot&select=live_tunnel_url', {
+            headers: { 'apikey': 'sb_publishable_rhmUZZbKhXiJxrChcPTbsg_gFIH9FdO' }
+          });
+          if (pRes.ok) {
+            const pList = await pRes.json();
+            if (pList && pList.length > 0 && pList[0].live_tunnel_url) {
+              const pTunnel = pList[0].live_tunnel_url.trim().replace(/\/+$/, '');
+              if (await isTunnelAlive(pTunnel)) {
+                console.log('[AutoDiscover] Station is connected via pilot tunnel bridge:', pTunnel);
+                localStorage.setItem('printaway_api_base', pTunnel);
+                return pTunnel;
+              }
+            }
+          }
+        } catch (e) { }
+      }
 
       return localStorage.getItem('printaway_api_base') || DEFAULT_STATION_URL;
     }
@@ -1169,12 +1211,16 @@
     function configureStationUrl() {
       const cur = localStorage.getItem('printaway_api_base') || '';
       const entered = prompt(
-        "Enter your PrintAway Station Backend URL (e.g. https://your-tunnel.trycloudflare.com or leave empty to use current host):",
+        "Enter your PrintAway Station Backend URL (e.g. https://your-tunnel.trycloudflare.com or leave empty to auto-discover):\n\nNote: Browsers block http://127.0.0.1 on HTTPS pages. To use local station directly, open http://127.0.0.1:8080/admin in a new tab.",
         cur
       );
       if (entered !== null) {
-        if (entered.trim()) {
-          localStorage.setItem('printaway_api_base', entered.trim());
+        const val = entered.trim();
+        if (val.startsWith('http://localhost') || val.startsWith('http://127.0.0.1')) {
+          alert("Web browsers block 'http://' localhost requests from secure 'https://' websites (Mixed Content Security Policy).\n\nTo manage the counter locally without a tunnel, open http://127.0.0.1:8080/admin directly in a new browser tab!\n\nOr enter your secure HTTPS tunnel URL here.");
+        }
+        if (val) {
+          localStorage.setItem('printaway_api_base', val);
         } else {
           localStorage.removeItem('printaway_api_base');
         }
