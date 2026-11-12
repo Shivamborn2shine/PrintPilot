@@ -730,7 +730,10 @@ namespace PrintAway.Gui
                     ? _tunnel.LiveTunnelUrl
                     : _repo.GetLiveTunnelUrl();
 
-                if (!string.IsNullOrEmpty(initialTunnel) && _lblTunnelUrl != null)
+                if (!string.IsNullOrEmpty(initialTunnel) &&
+                    initialTunnel.IndexOf("api.trycloudflare.com", StringComparison.OrdinalIgnoreCase) < 0 &&
+                    initialTunnel.IndexOf("pkg.trycloudflare.com", StringComparison.OrdinalIgnoreCase) < 0 &&
+                    _lblTunnelUrl != null)
                 {
                     string provider = (_tunnel != null && !string.IsNullOrEmpty(_tunnel.ActiveProviderName))
                         ? _tunnel.ActiveProviderName
@@ -740,7 +743,7 @@ namespace PrintAway.Gui
                 }
                 else if (_lblTunnelUrl != null)
                 {
-                    _lblTunnelUrl.Text = "Tunnel: Syncing with start-station launcher...";
+                    _lblTunnelUrl.Text = "Tunnel: Initializing secure tunnel engine...";
                     _lblTunnelUrl.ForeColor = Color.FromArgb(100, 116, 139);
                 }
 
@@ -814,7 +817,10 @@ namespace PrintAway.Gui
                     ? _tunnel.LiveTunnelUrl
                     : _repo.GetLiveTunnelUrl();
 
-                if (!string.IsNullOrEmpty(liveTunnel) && _lblTunnelUrl != null)
+                if (!string.IsNullOrEmpty(liveTunnel) &&
+                    liveTunnel.IndexOf("api.trycloudflare.com", StringComparison.OrdinalIgnoreCase) < 0 &&
+                    liveTunnel.IndexOf("pkg.trycloudflare.com", StringComparison.OrdinalIgnoreCase) < 0 &&
+                    _lblTunnelUrl != null)
                 {
                     string provider = (_tunnel != null && !string.IsNullOrEmpty(_tunnel.ActiveProviderName))
                         ? _tunnel.ActiveProviderName
@@ -928,9 +934,15 @@ namespace PrintAway.Gui
                     this.BeginInvoke(new Action<string>(OnTunnelCaptured), url);
                     return;
                 }
+                if (string.IsNullOrEmpty(url) ||
+                    url.IndexOf("api.trycloudflare.com", StringComparison.OrdinalIgnoreCase) >= 0 ||
+                    url.IndexOf("pkg.trycloudflare.com", StringComparison.OrdinalIgnoreCase) >= 0)
+                {
+                    return;
+                }
                 if (_lblTunnelUrl != null)
                 {
-                    string provider = !string.IsNullOrEmpty(_tunnel.ActiveProviderName) ? _tunnel.ActiveProviderName : "Active";
+                    string provider = (_tunnel != null && !string.IsNullOrEmpty(_tunnel.ActiveProviderName)) ? _tunnel.ActiveProviderName : "Active";
                     _lblTunnelUrl.Text = "🟢 Live (" + provider + "): " + url;
                     _lblTunnelUrl.ForeColor = Color.FromArgb(21, 128, 61);
                 }

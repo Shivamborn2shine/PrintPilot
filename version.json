@@ -1,7 +1,7 @@
 {
-  "version": "2.2.6",
+  "version": "2.2.7",
   "releaseDate": "2026-11-12",
-  "releaseNotes": "SaaS Pricing page, first-time station onboarding wizard, A4 image crop & alignment studio, live hardware dispatch routing bar, real-time shop online status, and master password-protected superadmin.",
+  "releaseNotes": "Fix Cloudflare Quick Tunnel regex to strictly capture live assigned hostnames and ignore internal management API endpoints (api.trycloudflare.com), and purge invalid cached tunnel references across SQLite, local files, and web client.",
   "downloadUrl": "https://raw.githubusercontent.com/Shivamborn2shine/PrintPilot/main/bin/PrintAway.exe",
   "fallbackUrl": "https://printitaway.netlify.app/downloads/PrintAway.exe"
 }

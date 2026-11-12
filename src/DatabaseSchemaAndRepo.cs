@@ -2754,6 +2754,13 @@ CREATE TABLE IF NOT EXISTS audit_events (
                         string content = File.ReadAllText(path).Trim();
                         if (!string.IsNullOrWhiteSpace(content))
                         {
+                            if (content.IndexOf("api.trycloudflare.com", StringComparison.OrdinalIgnoreCase) >= 0 ||
+                                content.IndexOf("pkg.trycloudflare.com", StringComparison.OrdinalIgnoreCase) >= 0)
+                            {
+                                try { File.Delete(path); } catch { }
+                                _liveTunnelUrl = null;
+                                return null;
+                            }
                             _liveTunnelUrl = content;
                             _lastTunnelFileReadUtc = lastWrite;
                             return content;
@@ -2762,20 +2769,32 @@ CREATE TABLE IF NOT EXISTS audit_events (
                 }
             }
             catch { }
+            if (!string.IsNullOrEmpty(_liveTunnelUrl) &&
+                (_liveTunnelUrl.IndexOf("api.trycloudflare.com", StringComparison.OrdinalIgnoreCase) >= 0 ||
+                 _liveTunnelUrl.IndexOf("pkg.trycloudflare.com", StringComparison.OrdinalIgnoreCase) >= 0))
+            {
+                _liveTunnelUrl = null;
+            }
             return _liveTunnelUrl;
         }
 
         public void SetLiveTunnelUrl(string url)
         {
-            _liveTunnelUrl = url;
+            if (string.IsNullOrWhiteSpace(url)) return;
+            string clean = url.Trim();
+            if (clean.IndexOf("api.trycloudflare.com", StringComparison.OrdinalIgnoreCase) >= 0 ||
+                clean.IndexOf("pkg.trycloudflare.com", StringComparison.OrdinalIgnoreCase) >= 0)
+            {
+                return; // Reject internal Cloudflare management API URLs
+            }
+            _liveTunnelUrl = clean;
             _lastTunnelFileReadUtc = DateTime.UtcNow;
             try
             {
                 string dataDir = Path.GetDirectoryName(_vaultDirectory);
                 if (!Directory.Exists(dataDir)) Directory.CreateDirectory(dataDir);
                 string path = Path.Combine(dataDir, "tunnel.url");
-                if (!string.IsNullOrWhiteSpace(url))
-                    File.WriteAllText(path, url.Trim(), Encoding.UTF8);
+                File.WriteAllText(path, clean, Encoding.UTF8);
             }
             catch { }
         }

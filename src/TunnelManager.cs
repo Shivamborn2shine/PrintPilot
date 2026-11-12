@@ -13,8 +13,8 @@ namespace PrintAway.Tunnel
 {
     public sealed class TunnelManager : IDisposable
     {
-        private static readonly Regex CloudflareUrlRegex = new Regex(@"https://[a-zA-Z0-9-]+\.trycloudflare\.com", RegexOptions.Compiled);
-        private static readonly Regex SshUrlRegex = new Regex(@"https://[a-zA-Z0-9-]+\.lhr\.life", RegexOptions.Compiled);
+        private static readonly Regex CloudflareUrlRegex = new Regex(@"https://(?!api\.|pkg\.|update\.|staging\.)([a-zA-Z0-9-]{5,}\.trycloudflare\.com)", RegexOptions.Compiled | RegexOptions.IgnoreCase);
+        private static readonly Regex SshUrlRegex = new Regex(@"https://[a-zA-Z0-9-]+\.lhr\.(life|rocks|pro)", RegexOptions.Compiled | RegexOptions.IgnoreCase);
 
         private readonly string _rootDir;
         private readonly int _localPort;
@@ -282,6 +282,12 @@ namespace PrintAway.Tunnel
             if (match.Success)
             {
                 string url = match.Value.Trim();
+                if (url.IndexOf("api.trycloudflare.com", StringComparison.OrdinalIgnoreCase) >= 0 ||
+                    url.IndexOf("pkg.trycloudflare.com", StringComparison.OrdinalIgnoreCase) >= 0)
+                {
+                    return; // Ignore internal management API endpoint
+                }
+
                 if (!string.Equals(_liveTunnelUrl, url, StringComparison.OrdinalIgnoreCase))
                 {
                     _liveTunnelUrl = url;
@@ -299,6 +305,7 @@ namespace PrintAway.Tunnel
             {
                 if (_disposed) return;
                 StopProcessOnly();
+                _liveTunnelUrl = null;
 
                 string sshExe = FindOpenSshExecutable();
                 if (string.IsNullOrEmpty(sshExe))
@@ -465,6 +472,11 @@ namespace PrintAway.Tunnel
         {
             if (string.IsNullOrWhiteSpace(url)) return;
             string cleanUrl = url.Trim();
+            if (cleanUrl.IndexOf("api.trycloudflare.com", StringComparison.OrdinalIgnoreCase) >= 0 ||
+                cleanUrl.IndexOf("pkg.trycloudflare.com", StringComparison.OrdinalIgnoreCase) >= 0)
+            {
+                return;
+            }
 
             // 1. Write to data/tunnel.url for instant zero-latency file sync
             try

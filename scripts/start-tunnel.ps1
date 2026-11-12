@@ -194,8 +194,11 @@ for ($attempt = 1; $attempt -le $maxRetries; $attempt++) {
                 $logWriter.WriteLine($line)
                 $logWriter.Flush()
                 if ($line -match "https://([a-zA-Z0-9-]+\.trycloudflare\.com)") {
-                    $tunnelUrl = "https://" + $matches[1]
-                    break
+                    $foundHost = $matches[1].ToLower()
+                    if ($foundHost -ne "api.trycloudflare.com" -and $foundHost -ne "pkg.trycloudflare.com" -and $foundHost -notmatch "^api\." -and $foundHost.Length -ge 6) {
+                        $tunnelUrl = "https://" + $foundHost
+                        break
+                    }
                 }
                 if ($line -match "status 429") {
                     $got429 = $true
@@ -247,7 +250,7 @@ if (-not $tunnelUrl) {
             if ($line) {
                 $logWriter.WriteLine($line)
                 $logWriter.Flush()
-                if ($line -match "https://([a-zA-Z0-9-]+\.lhr\.life)") {
+                if ($line -match "https://([a-zA-Z0-9-]+\.lhr\.(life|rocks|pro))") {
                     $tunnelUrl = "https://" + $matches[1]
                     Write-Host "  [OK] Resilient OpenSSH Fallback Tunnel Live: $tunnelUrl" -ForegroundColor Green
                     break
@@ -268,7 +271,7 @@ if (-not $tunnelUrl) {
 }
 
 # 4. Publish live tunnel URL to Shop's Isolated Cloud Registry Topic & Supabase Control Plane
-if ($tunnelUrl) {
+if ($tunnelUrl -and $tunnelUrl -notmatch "api\.trycloudflare\.com" -and $tunnelUrl -notmatch "pkg\.trycloudflare\.com") {
     # 4a. Sync immediately with local PrintAway GUI Station (Zero Delay / Zero Confusion)
     try {
         Set-Content (Join-Path $rootDir "data\tunnel.url") $tunnelUrl -Force

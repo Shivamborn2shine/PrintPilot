@@ -1140,14 +1140,20 @@
       if (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1') {
         return '';
       }
+      const cached = localStorage.getItem('printaway_api_base');
+      if (cached && (cached.includes('api.trycloudflare.com') || cached.includes('pkg.trycloudflare.com'))) {
+        localStorage.removeItem('printaway_api_base');
+      }
       if (force) {
         localStorage.removeItem('printaway_api_base');
       }
       const sp = new URLSearchParams(window.location.search).get('station');
       if (sp) {
         const cleanSp = sp.trim().replace(/\/+$/, '');
-        localStorage.setItem('printaway_api_base', cleanSp);
-        return cleanSp;
+        if (!cleanSp.includes('api.trycloudflare.com') && !cleanSp.includes('pkg.trycloudflare.com')) {
+          localStorage.setItem('printaway_api_base', cleanSp);
+          return cleanSp;
+        }
       }
 
       const shopId = getActiveShopId();
@@ -1157,6 +1163,7 @@
       // Helper to test candidate tunnel before trusting it
       async function isTunnelAlive(candidateUrl) {
         if (!candidateUrl || !candidateUrl.startsWith('https://')) return false;
+        if (candidateUrl.includes('api.trycloudflare.com') || candidateUrl.includes('pkg.trycloudflare.com')) return false;
         try {
           const ctrl = new AbortController();
           const tid = setTimeout(() => ctrl.abort(), 2500);
@@ -1181,9 +1188,11 @@
           const list = await sbRes.json();
           if (list && list.length > 0 && list[0].live_tunnel_url && list[0].live_tunnel_url.startsWith('https://')) {
             const cleanUrl = list[0].live_tunnel_url.trim().replace(/\/+$/, '');
-            if (!force || (await isTunnelAlive(cleanUrl))) {
-              localStorage.setItem('printaway_api_base', cleanUrl);
-              return cleanUrl;
+            if (!cleanUrl.includes('api.trycloudflare.com') && !cleanUrl.includes('pkg.trycloudflare.com')) {
+              if (!force || (await isTunnelAlive(cleanUrl))) {
+                localStorage.setItem('printaway_api_base', cleanUrl);
+                return cleanUrl;
+              }
             }
           }
         }
@@ -1195,7 +1204,9 @@
         const res = await fetch('https://ntfy.sh/' + topic + '/raw?poll=1&since=12h', { cache: 'no-store' });
         if (res.ok) {
           const text = await res.text();
-          const lines = text.split(/\r?\n/).map(l => l.trim()).filter(l => l.startsWith('https://'));
+          const lines = text.split(/\r?\n/)
+            .map(l => l.trim())
+            .filter(l => l.startsWith('https://') && !l.includes('api.trycloudflare.com') && !l.includes('pkg.trycloudflare.com'));
           if (lines.length > 0) {
             const latest = lines[lines.length - 1].replace(/\/+$/, '');
             if (!force || (await isTunnelAlive(latest))) {

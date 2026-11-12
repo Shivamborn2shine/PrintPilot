@@ -396,12 +396,16 @@ namespace PrintAway.Web
                         string tUrl = data != null && data.ContainsKey("tunnelUrl") ? Convert.ToString(data["tunnelUrl"]) : null;
                         if (!string.IsNullOrWhiteSpace(tUrl))
                         {
-                            string cleanUrl = tUrl.Trim();
-                            _repo.SetLiveTunnelUrl(cleanUrl);
-                            var handler = OnTunnelUrlRegistered;
-                            if (handler != null)
+                            string cleanUrl = tUrl.Trim().TrimEnd('/');
+                            if (cleanUrl.IndexOf("api.trycloudflare.com", StringComparison.OrdinalIgnoreCase) < 0 &&
+                                cleanUrl.IndexOf("pkg.trycloudflare.com", StringComparison.OrdinalIgnoreCase) < 0)
                             {
-                                try { handler(cleanUrl); } catch { }
+                                _repo.SetLiveTunnelUrl(cleanUrl);
+                                var handler = OnTunnelUrlRegistered;
+                                if (handler != null)
+                                {
+                                    try { handler(cleanUrl); } catch { }
+                                }
                             }
                         }
                         WriteJson(res, 200, new Dictionary<string, object>
