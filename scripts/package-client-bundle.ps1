@@ -112,6 +112,7 @@ if (Test-Path (Join-Path $rootDir "web\admin.html")) {
 }
 if (Test-Path (Join-Path $rootDir "web\assets")) {
     Copy-Item -Recurse -Path (Join-Path $rootDir "web\assets\*") -Destination (Join-Path $webOutDir "assets") -Force
+    Copy-Item -Recurse -Path (Join-Path $rootDir "web\assets\*") -Destination (Join-Path $binWebDir "assets") -Force
 }
 
 # Create a clean README for the shopkeeper

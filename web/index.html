@@ -8,7 +8,12 @@
   <link rel="icon" type="image/svg+xml" href="/assets/favicon.svg" />
   <link rel="apple-touch-icon" href="/assets/logo.png" />
   <script src="https://checkout.razorpay.com/v1/checkout.js"></script>
-  <script src="https://cdn.jsdelivr.net/npm/pdf-lib@1.17.9/dist/pdf-lib.min.js"></script>
+  <script src="/assets/pdf-lib.min.js"></script>
+  <script>
+    if (typeof PDFLib === 'undefined') {
+      document.write('<script src="https://cdn.jsdelivr.net/npm/pdf-lib/dist/pdf-lib.min.js"><\/script>');
+    }
+  </script>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link
@@ -2380,6 +2385,11 @@
 
     async function convertTextFileToPdf(file) {
       showMascotLoader('Formatting Document...', 'Converting text document to standard A4 PDF pages');
+      if (typeof PDFLib === 'undefined' || !PDFLib.PDFDocument) {
+        // Direct backend fallback: PrintAway station engine auto-converts text to A4 PDF
+        const rawBuf = await file.arrayBuffer();
+        return { pdfBytes: rawBuf, pdfName: file.name, contentType: 'text/plain' };
+      }
       const text = await file.text();
       const pdfDoc = await PDFLib.PDFDocument.create();
       const font = await pdfDoc.embedFont(PDFLib.StandardFonts.Courier);
@@ -2433,7 +2443,7 @@
 
       const pdfBytes = await pdfDoc.save();
       const pdfName = file.name.replace(/\.[^/.]+$/, '') + '_Doc.pdf';
-      return { pdfBytes, pdfName };
+      return { pdfBytes, pdfName, contentType: 'application/pdf' };
     }
 
     function openA4CropStudio(file) {
@@ -2726,30 +2736,43 @@
           imgBytes[i] = binaryStr.charCodeAt(i);
         }
 
-        const pdfDoc = await PDFLib.PDFDocument.create();
-        const pageW = isPort ? 595.28 : 841.89;
-        const pageH = isPort ? 841.89 : 595.28;
-        const pdfPage = pdfDoc.addPage([pageW, pageH]);
-        const embeddedImg = await pdfDoc.embedJpg(imgBytes);
-
-        pdfPage.drawImage(embeddedImg, {
-          x: 0,
-          y: 0,
-          width: pageW,
-          height: pageH
-        });
-
-        const pdfBytes = await pdfDoc.save();
-        closeA4CropStudio();
-
         const originalName = a4Studio.file ? a4Studio.file.name : 'Photo';
         const baseName = originalName.replace(/\.[^/.]+$/, '');
-        const pdfFileName = baseName + '_A4.pdf';
 
-        const res = await apiFetch('/api/uploads?filename=' + encodeURIComponent(pdfFileName), {
+        let uploadBytes = null;
+        let uploadFileName = '';
+        let uploadContentType = 'application/pdf';
+
+        if (typeof PDFLib !== 'undefined' && PDFLib.PDFDocument) {
+          const pdfDoc = await PDFLib.PDFDocument.create();
+          const pageW = isPort ? 595.28 : 841.89;
+          const pageH = isPort ? 841.89 : 595.28;
+          const pdfPage = pdfDoc.addPage([pageW, pageH]);
+          const embeddedImg = await pdfDoc.embedJpg(imgBytes);
+
+          pdfPage.drawImage(embeddedImg, {
+            x: 0,
+            y: 0,
+            width: pageW,
+            height: pageH
+          });
+
+          uploadBytes = await pdfDoc.save();
+          uploadFileName = baseName + '_A4.pdf';
+          uploadContentType = 'application/pdf';
+        } else {
+          // Direct backend fallback: PrintAway station engine natively turns cropped JPEG into ISO A4 PDF!
+          uploadBytes = imgBytes;
+          uploadFileName = baseName + '_A4.jpg';
+          uploadContentType = 'image/jpeg';
+        }
+
+        closeA4CropStudio();
+
+        const res = await apiFetch('/api/uploads?filename=' + encodeURIComponent(uploadFileName), {
           method: 'POST',
-          headers: { 'Content-Type': 'application/pdf', 'X-File-Name': pdfFileName },
-          body: pdfBytes
+          headers: { 'Content-Type': uploadContentType, 'X-File-Name': uploadFileName },
+          body: uploadBytes
         });
         const data = await res.json();
         hideMascotLoader();
@@ -2784,9 +2807,10 @@
       if (isTextDoc(file)) {
         try {
           const converted = await convertTextFileToPdf(file);
+          const cType = converted.contentType || 'application/pdf';
           const res = await apiFetch('/api/uploads?filename=' + encodeURIComponent(converted.pdfName), {
             method: 'POST',
-            headers: { 'Content-Type': 'application/pdf', 'X-File-Name': converted.pdfName },
+            headers: { 'Content-Type': cType, 'X-File-Name': converted.pdfName },
             body: converted.pdfBytes
           });
           const data = await res.json();
