@@ -1465,6 +1465,7 @@
     </div>
 
     <div id="globalError" class="alert alert-error hidden"></div>
+    <input type="hidden" id="trackTokenInput" />
 
     <!-- ORDER CREATION WIZARD -->
     <div id="orderWizard">
@@ -2996,7 +2997,8 @@
           return;
         }
         currentOrder = data;
-        document.getElementById('trackTokenInput').value = data.publicToken;
+        const trkInput = document.getElementById('trackTokenInput');
+        if (trkInput) trkInput.value = data.publicToken;
         document.getElementById('orderWizard').classList.add('hidden');
         document.getElementById('trackingCard').classList.remove('hidden');
         updateStepper(4);
@@ -3129,8 +3131,9 @@
       }
     }
 
-    async function lookupTrackedOrder() {
-      const tok = document.getElementById('trackTokenInput').value.trim();
+    async function lookupTrackedOrder(overrideToken = null) {
+      const trkInput = document.getElementById('trackTokenInput');
+      const tok = overrideToken || (trkInput ? trkInput.value.trim() : '');
       if (!tok) return;
       showMascotLoader('Finding Order...', 'Looking up tracking record');
       currentOrder = currentOrder || {};
@@ -3251,8 +3254,9 @@
 
       if (window.location.pathname.startsWith('/track/pub_')) {
         const tok = window.location.pathname.substring('/track/'.length);
-        document.getElementById('trackTokenInput').value = tok;
-        lookupTrackedOrder();
+        const trkInput = document.getElementById('trackTokenInput');
+        if (trkInput) trkInput.value = tok;
+        lookupTrackedOrder(tok);
       }
     });
   </script>
