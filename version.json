@@ -1,7 +1,7 @@
 {
-  "version": "2.2.8",
+  "version": "2.2.9",
   "releaseDate": "2026-11-12",
-  "releaseNotes": "Fix A4 Crop Studio modal visibility and interactive controls, add instant auto-fit shortcut, and provide native dual-layer image (PNG/JPG/WEBP/BMP) and text document conversion into standard ISO A4 PDF.",
+  "releaseNotes": "Add founder Remove Shop capability in Super-Admin with cascading cloud & proxy deletion, and upgrade print rasterization pipeline to Ultra-HD 300 DPI native laser-sharp resolution without downsampling blur.",
   "downloadUrl": "https://raw.githubusercontent.com/Shivamborn2shine/PrintPilot/main/bin/PrintAway.exe",
   "fallbackUrl": "https://printitaway.netlify.app/downloads/PrintAway.exe"
 }

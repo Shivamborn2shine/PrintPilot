@@ -302,6 +302,33 @@ namespace PrintAway.Web
                     return;
                 }
 
+                if (method == "DELETE" && path.StartsWith("/api/saas/superadmin/shops"))
+                {
+                    if (_supabaseSync == null || !_supabaseSync.IsConfigured)
+                    {
+                        WriteError(res, 503, "SUPABASE_NOT_CONFIGURED", "Supabase SaaS control plane is not configured.");
+                        return;
+                    }
+
+                    string targetShopId = req.QueryString["shopId"] ?? "";
+                    if (string.IsNullOrEmpty(targetShopId))
+                    {
+                        WriteError(res, 400, "MISSING_SHOP_ID", "shopId query parameter is required.");
+                        return;
+                    }
+
+                    try
+                    {
+                        _supabaseSync.DeleteShop(targetShopId);
+                        WriteJson(res, 200, new Dictionary<string, object> { { "success", true }, { "deletedShopId", targetShopId } });
+                    }
+                    catch (Exception ex)
+                    {
+                        WriteError(res, 500, "DELETE_SHOP_ERROR", ex.Message);
+                    }
+                    return;
+                }
+
                 // SaaS Upgrade: Create Razorpay Order (POST /api/saas/upgrade/create-order)
                 if (method == "POST" && path == "/api/saas/upgrade/create-order")
                 {

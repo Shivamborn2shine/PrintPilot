@@ -63,9 +63,10 @@ foreach ($pageNum in $targetPages) {
     $page = $pdfDoc.GetPage($zeroIndex)
     $ras = New-Object Windows.Storage.Streams.InMemoryRandomAccessStream
     $opts = New-Object Windows.Data.Pdf.PdfPageRenderOptions
-    # Render at 2x page dimensions for crisp laser print output (approx 150-300 DPI)
-    $opts.DestinationWidth = [uint32]($page.Size.Width * 2)
-    $opts.DestinationHeight = [uint32]($page.Size.Height * 2)
+    # Render at 4.167x page dimensions (Full 300 DPI Ultra-HD resolution for laser printers)
+    $renderScale = 4.1666667
+    $opts.DestinationWidth = [uint32][Math]::Round($page.Size.Width * $renderScale)
+    $opts.DestinationHeight = [uint32][Math]::Round($page.Size.Height * $renderScale)
     Invoke-WinRtAction ($page.RenderToStreamAsync($ras, $opts))
     
     $netStream = [System.IO.WindowsRuntimeStreamExtensions]::AsStreamForRead($ras)

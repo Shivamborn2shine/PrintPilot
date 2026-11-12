@@ -14,6 +14,9 @@ CREATE POLICY "Allow public insert to shops" ON public.shops FOR INSERT WITH CHE
 DROP POLICY IF EXISTS "Allow public update to shops" ON public.shops;
 CREATE POLICY "Allow public update to shops" ON public.shops FOR UPDATE USING (true) WITH CHECK (true);
 
+DROP POLICY IF EXISTS "Allow public delete from shops" ON public.shops;
+CREATE POLICY "Allow public delete from shops" ON public.shops FOR DELETE USING (true);
+
 -- 2. daily_telemetry table permissions
 ALTER TABLE public.daily_telemetry ENABLE ROW LEVEL SECURITY;
 DROP POLICY IF EXISTS "Allow public read to daily_telemetry" ON public.daily_telemetry;
@@ -25,6 +28,9 @@ CREATE POLICY "Allow public insert to daily_telemetry" ON public.daily_telemetry
 DROP POLICY IF EXISTS "Allow public update to daily_telemetry" ON public.daily_telemetry;
 CREATE POLICY "Allow public update to daily_telemetry" ON public.daily_telemetry FOR UPDATE USING (true) WITH CHECK (true);
 
+DROP POLICY IF EXISTS "Allow public delete from daily_telemetry" ON public.daily_telemetry;
+CREATE POLICY "Allow public delete from daily_telemetry" ON public.daily_telemetry FOR DELETE USING (true);
+
 -- 3. saas_subscriptions table permissions
 ALTER TABLE public.saas_subscriptions ENABLE ROW LEVEL SECURITY;
 DROP POLICY IF EXISTS "Allow public read to saas_subscriptions" ON public.saas_subscriptions;
@@ -32,4 +38,7 @@ CREATE POLICY "Allow public read to saas_subscriptions" ON public.saas_subscript
 
 DROP POLICY IF EXISTS "Allow public insert to saas_subscriptions" ON public.saas_subscriptions;
 CREATE POLICY "Allow public insert to saas_subscriptions" ON public.saas_subscriptions FOR INSERT WITH CHECK (true);
+
+DROP POLICY IF EXISTS "Allow public delete from saas_subscriptions" ON public.saas_subscriptions;
+CREATE POLICY "Allow public delete from saas_subscriptions" ON public.saas_subscriptions FOR DELETE USING (true);
 

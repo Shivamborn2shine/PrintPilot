@@ -174,7 +174,7 @@ namespace PrintAway.Engine
                         {
                             using (var encParams = new EncoderParameters(1))
                             {
-                                encParams.Param[0] = new EncoderParameter(System.Drawing.Imaging.Encoder.Quality, 92L);
+                                encParams.Param[0] = new EncoderParameter(System.Drawing.Imaging.Encoder.Quality, 96L);
                                 originalImg.Save(msJpeg, jpgEncoder, encParams);
                             }
                         }
@@ -216,16 +216,17 @@ namespace PrintAway.Engine
             try
             {
                 string text = Encoding.UTF8.GetString(textBytes);
-                // Render text onto a clean high-resolution A4 bitmap
-                int dpi = 150;
-                int pageW = (int)(8.27 * dpi); // 1240 px
-                int pageH = (int)(11.69 * dpi); // 1754 px
+                // Render text onto a clean ultra-HD A4 bitmap (300 DPI)
+                int dpi = 300;
+                int pageW = (int)(8.27 * dpi); // 2480 px
+                int pageH = (int)(11.69 * dpi); // 3508 px
                 using (var bmp = new Bitmap(pageW, pageH))
                 using (var g = Graphics.FromImage(bmp))
                 using (var brush = new SolidBrush(Color.Black))
-                using (var font = new Font("Courier New", 10.0f, FontStyle.Regular, GraphicsUnit.Point))
+                using (var font = new Font("Courier New", 18.0f, FontStyle.Regular, GraphicsUnit.Point))
                 {
                     g.Clear(Color.White);
+                    g.TextRenderingHint = System.Drawing.Text.TextRenderingHint.ClearTypeGridFit;
                     int margin = (int)(0.5 * dpi); // 0.5 in margin
                     var rect = new RectangleF(margin, margin, pageW - (margin * 2), pageH - (margin * 2));
                     g.DrawString(text, font, brush, rect);
@@ -984,20 +985,30 @@ namespace PrintAway.Engine
                     int drawY = destSlot.Y + (destSlot.Height - drawH) / 2;
                     var fitRect = new Rectangle(drawX, drawY, drawW, drawH);
 
+                    // High-quality rendering flags on printer context
+                    g.InterpolationMode = System.Drawing.Drawing2D.InterpolationMode.HighQualityBicubic;
+                    g.SmoothingMode = System.Drawing.Drawing2D.SmoothingMode.HighQuality;
+                    g.PixelOffsetMode = System.Drawing.Drawing2D.PixelOffsetMode.HighQuality;
+                    g.CompositingQuality = System.Drawing.Drawing2D.CompositingQuality.HighQuality;
+
                     // Always composite onto an opaque white RGB canvas to eliminate alpha-channel/transparency
-                    // which causes Windows V4 PCL6 print filter pipelines (such as Xerox B1025) to drop or fail jobs
-                    using (var opaqueBmp = new Bitmap(drawW, drawH, PixelFormat.Format32bppRgb))
+                    // which causes Windows V4 PCL6 print filter pipelines (such as Xerox B1025) to drop or fail jobs.
+                    // Preserve FULL native pixel resolution (img.Width x img.Height) to prevent downsampling blur:
+                    using (var opaqueBmp = new Bitmap(img.Width, img.Height, PixelFormat.Format32bppRgb))
                     {
                         using (var bg = Graphics.FromImage(opaqueBmp))
                         {
                             bg.Clear(Color.White);
                             bg.InterpolationMode = System.Drawing.Drawing2D.InterpolationMode.HighQualityBicubic;
-                            bg.DrawImage(img, new Rectangle(0, 0, drawW, drawH));
+                            bg.SmoothingMode = System.Drawing.Drawing2D.SmoothingMode.HighQuality;
+                            bg.PixelOffsetMode = System.Drawing.Drawing2D.PixelOffsetMode.HighQuality;
+                            bg.CompositingQuality = System.Drawing.Drawing2D.CompositingQuality.HighQuality;
+                            bg.DrawImage(img, new Rectangle(0, 0, img.Width, img.Height));
                         }
 
                         if (isColor)
                         {
-                            g.DrawImage(opaqueBmp, fitRect);
+                            g.DrawImage(opaqueBmp, fitRect, new Rectangle(0, 0, img.Width, img.Height), GraphicsUnit.Pixel);
                         }
                         else
                         {
@@ -1013,7 +1024,7 @@ namespace PrintAway.Engine
                                     new float[] { 0,      0,      0,      0, 1 }
                                 });
                                 attrs.SetColorMatrix(grayMatrix);
-                                g.DrawImage(opaqueBmp, fitRect, 0, 0, drawW, drawH, GraphicsUnit.Pixel, attrs);
+                                g.DrawImage(opaqueBmp, fitRect, 0, 0, img.Width, img.Height, GraphicsUnit.Pixel, attrs);
                             }
                         }
                     }
@@ -1160,8 +1171,9 @@ foreach ($pageNum in $targetPages) {
     $page = $pdfDoc.GetPage($zeroIndex)
     $ras = New-Object Windows.Storage.Streams.InMemoryRandomAccessStream
     $opts = New-Object Windows.Data.Pdf.PdfPageRenderOptions
-    $opts.DestinationWidth = [uint32]($page.Size.Width * 2)
-    $opts.DestinationHeight = [uint32]($page.Size.Height * 2)
+    $renderScale = 4.1666667
+    $opts.DestinationWidth = [uint32][Math]::Round($page.Size.Width * $renderScale)
+    $opts.DestinationHeight = [uint32][Math]::Round($page.Size.Height * $renderScale)
     Invoke-WinRtAction ($page.RenderToStreamAsync($ras, $opts))
     
     $netStream = [System.IO.WindowsRuntimeStreamExtensions]::AsStreamForRead($ras)

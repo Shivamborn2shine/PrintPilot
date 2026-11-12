@@ -200,7 +200,7 @@
               <th class="py-3 px-3">Shop Identity</th>
               <th class="py-3 px-3">Live Hardware & Tunnel</th>
               <th class="py-3 px-3">Daily Quota / Plan</th>
-              <th class="py-3 px-3 text-right">Founder Actions</th>
+              <th class="py-3 px-3 text-right min-w-[260px]">Founder Actions</th>
             </tr>
           </thead>
           <tbody id="shopsTableBody" class="divide-y divide-gray-800/40">
@@ -303,8 +303,11 @@
       <div class="bg-gray-950 p-3 rounded-xl border border-gray-800 font-mono text-[11px] text-gray-400 mb-5 max-h-36 overflow-y-auto">
         CREATE POLICY "Allow public insert to shops" ON public.shops FOR INSERT WITH CHECK (true);<br/>
         CREATE POLICY "Allow public update to shops" ON public.shops FOR UPDATE USING (true) WITH CHECK (true);<br/>
+        CREATE POLICY "Allow public delete from shops" ON public.shops FOR DELETE USING (true);<br/>
         CREATE POLICY "Allow public insert to daily_telemetry" ON public.daily_telemetry FOR INSERT WITH CHECK (true);<br/>
-        CREATE POLICY "Allow public insert to saas_subscriptions" ON public.saas_subscriptions FOR INSERT WITH CHECK (true);
+        CREATE POLICY "Allow public delete from daily_telemetry" ON public.daily_telemetry FOR DELETE USING (true);<br/>
+        CREATE POLICY "Allow public insert to saas_subscriptions" ON public.saas_subscriptions FOR INSERT WITH CHECK (true);<br/>
+        CREATE POLICY "Allow public delete from saas_subscriptions" ON public.saas_subscriptions FOR DELETE USING (true);
       </div>
       <div class="flex items-center justify-end space-x-3">
         <button onclick="closeRlsAlertModal()" class="px-4 py-2 rounded-xl bg-gray-800 hover:bg-gray-700 text-gray-300 text-xs font-medium transition">Close</button>
@@ -365,20 +368,53 @@
     }
 
     async function deleteShop(shopId) {
-      if (!confirm(`Are you sure you want to permanently delete shop '${shopId}' from fleet? This cannot be undone.`)) return;
+      if (!confirm(`Are you sure you want to permanently delete shop '${shopId}' from the fleet?\n\nThis will remove its storefront registration, tunnel connection, and telemetry.`)) return;
       try {
-        const res = await fetch(`${SUPABASE_URL}/rest/v1/shops?shop_id=eq.${encodeURIComponent(shopId)}`, {
-          method: "DELETE",
-          headers: {
-            "apikey": PUBLISHABLE_KEY,
-            "Authorization": `Bearer ${PUBLISHABLE_KEY}`
+        let deleted = false;
+
+        // Strategy 1: Station server proxy (uses service role key on backend, bypassing RLS)
+        try {
+          const resProxy = await fetch(`/api/saas/superadmin/shops?shopId=${encodeURIComponent(shopId)}`, {
+            method: "DELETE"
+          });
+          if (resProxy.ok) {
+            deleted = true;
           }
-        });
-        if (res.ok) {
-          alert(`Shop '${shopId}' deleted from cloud fleet.`);
+        } catch (e) { }
+
+        // Strategy 2: Direct Supabase REST call (for standalone cloud control plane)
+        if (!deleted) {
+          // Cascade delete telemetry
+          try {
+            await fetch(`${SUPABASE_URL}/rest/v1/daily_telemetry?shop_id=eq.${encodeURIComponent(shopId)}`, {
+              method: "DELETE",
+              headers: { "apikey": PUBLISHABLE_KEY, "Authorization": `Bearer ${PUBLISHABLE_KEY}` }
+            });
+          } catch (e) { }
+
+          // Cascade delete subscriptions
+          try {
+            await fetch(`${SUPABASE_URL}/rest/v1/saas_subscriptions?shop_id=eq.${encodeURIComponent(shopId)}`, {
+              method: "DELETE",
+              headers: { "apikey": PUBLISHABLE_KEY, "Authorization": `Bearer ${PUBLISHABLE_KEY}` }
+            });
+          } catch (e) { }
+
+          const res = await fetch(`${SUPABASE_URL}/rest/v1/shops?shop_id=eq.${encodeURIComponent(shopId)}`, {
+            method: "DELETE",
+            headers: {
+              "apikey": PUBLISHABLE_KEY,
+              "Authorization": `Bearer ${PUBLISHABLE_KEY}`
+            }
+          });
+          if (res.ok) deleted = true;
+        }
+
+        if (deleted) {
+          alert(`✅ Shop '${shopId}' removed successfully from fleet.`);
           loadDashboardData();
         } else {
-          alert("Could not delete shop. Please verify Supabase delete permissions.");
+          alert("Could not delete shop. If managing from cloud without local station proxy, make sure DELETE policy is active in Supabase (click 'Copy RLS SQL' in the top bar).");
         }
       } catch (err) {
         alert("Delete error: " + err.message);
@@ -589,7 +625,7 @@
               </div>
             </td>
 
-            <td class="py-3.5 px-3 text-right space-x-1.5 whitespace-nowrap">
+            <td class="py-3.5 px-3 text-right space-x-1.5 whitespace-nowrap min-w-[260px]">
               ${isPro 
                 ? `<button onclick="setShopTier('${shop.shop_id}', 'free')" class="px-2.5 py-1 bg-gray-800 hover:bg-gray-700 text-gray-300 rounded-lg text-[10px] font-semibold border border-gray-700 transition" title="Downgrade to Free 10 pgs/day">Downgrade Free</button>`
                 : `<button onclick="setShopTier('${shop.shop_id}', 'pro_annual')" class="px-2.5 py-1 bg-gradient-to-r from-indigo-600 to-violet-600 hover:from-indigo-500 text-white rounded-lg text-[10px] font-bold shadow transition" title="Upgrade Pro ₹149/mo (Annual)">⚡ Pro (₹149/mo)</button>
@@ -604,8 +640,9 @@
                 <i class="fa-solid fa-download"></i>
               </button>
 
-              <button onclick="deleteShop('${shop.shop_id}')" class="p-1.5 rounded-lg bg-rose-500/10 hover:bg-rose-500/20 text-rose-400 text-[11px] border border-rose-500/20 transition" title="Delete Shop">
-                <i class="fa-solid fa-trash"></i>
+              <button onclick="deleteShop('${shop.shop_id}')" class="inline-flex items-center px-2.5 py-1 rounded-lg bg-rose-500/15 hover:bg-rose-500/30 text-rose-400 hover:text-rose-300 text-[10px] font-bold border border-rose-500/30 transition shadow-sm space-x-1" title="Remove Shop from Fleet">
+                <i class="fa-solid fa-trash text-[9px]"></i>
+                <span>Remove</span>
               </button>
             </td>
           </tr>
@@ -944,7 +981,7 @@ ON CONFLICT (shop_id) DO NOTHING;`;
     }
 
     function copyRlsSql() {
-      const sql = `-- Run this in Supabase SQL Editor to grant INSERT & UPDATE permissions
+      const sql = `-- Run this in Supabase SQL Editor to grant SELECT, INSERT, UPDATE & DELETE permissions
 ALTER TABLE public.shops ENABLE ROW LEVEL SECURITY;
 DROP POLICY IF EXISTS "Allow public read to shops" ON public.shops;
 CREATE POLICY "Allow public read to shops" ON public.shops FOR SELECT USING (true);
@@ -952,6 +989,8 @@ DROP POLICY IF EXISTS "Allow public insert to shops" ON public.shops;
 CREATE POLICY "Allow public insert to shops" ON public.shops FOR INSERT WITH CHECK (true);
 DROP POLICY IF EXISTS "Allow public update to shops" ON public.shops;
 CREATE POLICY "Allow public update to shops" ON public.shops FOR UPDATE USING (true) WITH CHECK (true);
+DROP POLICY IF EXISTS "Allow public delete from shops" ON public.shops;
+CREATE POLICY "Allow public delete from shops" ON public.shops FOR DELETE USING (true);
 
 ALTER TABLE public.daily_telemetry ENABLE ROW LEVEL SECURITY;
 DROP POLICY IF EXISTS "Allow public read to daily_telemetry" ON public.daily_telemetry;
@@ -960,12 +999,16 @@ DROP POLICY IF EXISTS "Allow public insert to daily_telemetry" ON public.daily_t
 CREATE POLICY "Allow public insert to daily_telemetry" ON public.daily_telemetry FOR INSERT WITH CHECK (true);
 DROP POLICY IF EXISTS "Allow public update to daily_telemetry" ON public.daily_telemetry;
 CREATE POLICY "Allow public update to daily_telemetry" ON public.daily_telemetry FOR UPDATE USING (true) WITH CHECK (true);
+DROP POLICY IF EXISTS "Allow public delete from daily_telemetry" ON public.daily_telemetry;
+CREATE POLICY "Allow public delete from daily_telemetry" ON public.daily_telemetry FOR DELETE USING (true);
 
 ALTER TABLE public.saas_subscriptions ENABLE ROW LEVEL SECURITY;
 DROP POLICY IF EXISTS "Allow public read to saas_subscriptions" ON public.saas_subscriptions;
 CREATE POLICY "Allow public read to saas_subscriptions" ON public.saas_subscriptions FOR SELECT USING (true);
 DROP POLICY IF EXISTS "Allow public insert to saas_subscriptions" ON public.saas_subscriptions;
-CREATE POLICY "Allow public insert to saas_subscriptions" ON public.saas_subscriptions FOR INSERT WITH CHECK (true);`;
+CREATE POLICY "Allow public insert to saas_subscriptions" ON public.saas_subscriptions FOR INSERT WITH CHECK (true);
+DROP POLICY IF EXISTS "Allow public delete from saas_subscriptions" ON public.saas_subscriptions;
+CREATE POLICY "Allow public delete from saas_subscriptions" ON public.saas_subscriptions FOR DELETE USING (true);`;
 
       navigator.clipboard.writeText(sql).then(() => {
         alert("RLS Policy Update SQL copied to clipboard! Paste it into Supabase SQL Editor and click 'Run'.");

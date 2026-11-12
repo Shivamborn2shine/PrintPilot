@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Diagnostics;
 using System.Globalization;
 using System.IO;
 using System.Net;
@@ -226,6 +227,29 @@ namespace PrintAway.SaaS
             string url = string.Format(CultureInfo.InvariantCulture, "{0}/rest/v1/shops", _supabaseUrl);
             var headers = new Dictionary<string, string> { { "Prefer", "return=representation" } };
             return ExecuteHttpRequest(url, "POST", jsonPayload, headers);
+        }
+
+        public bool DeleteShop(string shopId)
+        {
+            if (!IsConfigured) throw new InvalidOperationException("Supabase is not configured.");
+            try
+            {
+                // Cascade delete associated telemetry and subscriptions first to avoid FK constraints
+                string telemUrl = string.Format(CultureInfo.InvariantCulture, "{0}/rest/v1/daily_telemetry?shop_id=eq.{1}", _supabaseUrl, Uri.EscapeDataString(shopId));
+                try { ExecuteHttpRequest(telemUrl, "DELETE", null, null); } catch { }
+
+                string subUrl = string.Format(CultureInfo.InvariantCulture, "{0}/rest/v1/saas_subscriptions?shop_id=eq.{1}", _supabaseUrl, Uri.EscapeDataString(shopId));
+                try { ExecuteHttpRequest(subUrl, "DELETE", null, null); } catch { }
+
+                string shopUrl = string.Format(CultureInfo.InvariantCulture, "{0}/rest/v1/shops?shop_id=eq.{1}", _supabaseUrl, Uri.EscapeDataString(shopId));
+                ExecuteHttpRequest(shopUrl, "DELETE", null, null);
+                return true;
+            }
+            catch (Exception ex)
+            {
+                Trace.WriteLine("[SupabaseSync] DeleteShop error: " + ex.Message);
+                throw;
+            }
         }
 
         public void RecordSubscription(string shopId, string tier, double amountInr, string paymentRef)
