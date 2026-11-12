@@ -402,6 +402,43 @@ namespace PrintAway
                     Assert(ov != null && Convert.ToInt32(ov["selectedPages"]) == 3 && Convert.ToInt32(ov["printedSides"]) == 6 && Convert.ToInt32(ov["physicalSheets"]) == 4 && Convert.ToString(ov["colorMode"]) == "color",
                         "Admin override (3 selected pages x 2 copies duplex in color) must update quote to 6 sides and 4 physical sheets");
                 });
+
+                // Test 11: Image and Document Native Auto-Conversion to ISO A4 PDF (Way 3 Safety Net)
+                runTest("T11: Image & Document Fallback to ISO A4 PDF (PNG/JPEG/Text to valid PDF)", () =>
+                {
+                    string errCode, errMsg;
+                    // Generate a sample PNG image in memory
+                    byte[] pngBytes;
+                    using (var bmp = new System.Drawing.Bitmap(600, 400))
+                    {
+                        using (var g = System.Drawing.Graphics.FromImage(bmp))
+                        {
+                            g.Clear(System.Drawing.Color.LightSkyBlue);
+                            using (var pen = new System.Drawing.Pen(System.Drawing.Color.MidnightBlue, 3.0f))
+                            {
+                                g.DrawRectangle(pen, 10, 10, 580, 380);
+                            }
+                        }
+                        using (var ms = new System.IO.MemoryStream())
+                        {
+                            bmp.Save(ms, System.Drawing.Imaging.ImageFormat.Png);
+                            pngBytes = ms.ToArray();
+                        }
+                    }
+
+                    Assert(PdfAndPrinterEngine.IsImageBytes(pngBytes), "PNG bytes must be identified by IsImageBytes");
+                    var savedImg = repo.SaveValidatedPdf("sample_photo.png", pngBytes, out errCode, out errMsg);
+                    Assert(savedImg != null, "SaveValidatedPdf must succeed for PNG image: " + errMsg);
+                    Assert(Convert.ToInt32(savedImg["pageCount"]) == 1, "Image must convert into a 1-page A4 document");
+                    Assert(Convert.ToString(savedImg["displayName"]).EndsWith("_A4.pdf", StringComparison.OrdinalIgnoreCase), "Output displayName must end with _A4.pdf");
+
+                    // Verify plain text document auto-conversion
+                    byte[] txtBytes = System.Text.Encoding.UTF8.GetBytes("PrintAway Test Receipt\nOrder: #TEST-123\nDate: 2026-11-12\nTotal: INR 50.00\nThank you for printing with PrintAway!");
+                    var savedTxt = repo.SaveValidatedPdf("receipt.txt", txtBytes, out errCode, out errMsg);
+                    Assert(savedTxt != null, "SaveValidatedPdf must succeed for text file: " + errMsg);
+                    Assert(Convert.ToInt32(savedTxt["pageCount"]) >= 1, "Text must convert into at least 1-page PDF");
+                    Assert(Convert.ToString(savedTxt["displayName"]).EndsWith("_Doc.pdf", StringComparison.OrdinalIgnoreCase), "Output displayName must end with _Doc.pdf");
+                });
             }
 
             Console.WriteLine("------------------------------------------------------------------");

@@ -732,6 +732,29 @@ CREATE TABLE IF NOT EXISTS audit_events (
                 return null;
             }
 
+            // Way 3: Automatic fallback conversion for raw image & text uploads (JPEG, PNG, WEBP, BMP, GIF, TXT)
+            if (PdfAndPrinterEngine.IsImageBytes(pdfBytes) || PdfAndPrinterEngine.IsImageExtension(originalFilename))
+            {
+                byte[] convertedPdf = PdfAndPrinterEngine.ConvertImageToA4Pdf(pdfBytes);
+                if (convertedPdf != null && convertedPdf.Length > 0)
+                {
+                    pdfBytes = convertedPdf;
+                    if (!originalFilename.EndsWith(".pdf", StringComparison.OrdinalIgnoreCase))
+                    {
+                        originalFilename = Path.GetFileNameWithoutExtension(originalFilename) + "_A4.pdf";
+                    }
+                }
+            }
+            else if (PdfAndPrinterEngine.IsTextExtension(originalFilename))
+            {
+                byte[] convertedPdf = PdfAndPrinterEngine.ConvertTextToA4Pdf(pdfBytes);
+                if (convertedPdf != null && convertedPdf.Length > 0)
+                {
+                    pdfBytes = convertedPdf;
+                    originalFilename = Path.GetFileNameWithoutExtension(originalFilename) + "_Doc.pdf";
+                }
+            }
+
             PdfValidationResult val = PdfAndPrinterEngine.ValidatePdf(pdfBytes);
             if (!val.IsValid)
             {

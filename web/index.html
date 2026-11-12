@@ -1329,7 +1329,12 @@
             <p style="margin:2px 0 0;font-size:0.75rem;color:#94a3b8;">Adjust and preview exactly how your photo prints on an A4 sheet</p>
           </div>
         </div>
-        <button type="button" class="btn btn-secondary" onclick="closeA4CropStudio()" style="padding:4px 10px;font-size:0.8rem;background:rgba(255,255,255,0.1);color:#fff;border-color:rgba(255,255,255,0.2);">✕</button>
+        <div style="display:flex;align-items:center;gap:8px;">
+          <button type="button" class="btn" onclick="instantAutoFitA4AndPrint()" style="padding:6px 14px;font-size:0.78rem;background:linear-gradient(135deg,#059669,#10b981);color:#fff;font-weight:700;border:none;border-radius:8px;display:inline-flex;align-items:center;gap:6px;" title="Skip adjusting and fit directly onto A4">
+            ⚡ Instant Auto-Fit
+          </button>
+          <button type="button" class="btn btn-secondary" onclick="closeA4CropStudio()" style="padding:4px 10px;font-size:0.8rem;background:rgba(255,255,255,0.1);color:#fff;border-color:rgba(255,255,255,0.2);">✕</button>
+        </div>
       </div>
 
       <!-- Controls Toolbar -->
@@ -1382,8 +1387,11 @@
         <div style="font-size:0.78rem;color:#64748b;">
           💡 Tip: Select <em>Custom Drag/Zoom</em> to drag image or zoom in to crop any section on the A4 page.
         </div>
-        <div style="display:flex;gap:10px;">
+        <div style="display:flex;gap:10px;align-items:center;">
           <button type="button" class="btn btn-secondary" onclick="closeA4CropStudio()" style="padding:8px 16px;font-size:0.85rem;">Cancel</button>
+          <button type="button" class="btn btn-secondary" onclick="instantAutoFitA4AndPrint()" style="padding:8px 16px;font-size:0.85rem;background:#f0fdf4;color:#15803d;border-color:#bbf7d0;font-weight:700;">
+            ⚡ Quick Auto-Fit
+          </button>
           <button type="button" class="btn" onclick="confirmA4CropAndGeneratePdf()" style="padding:8px 20px;font-size:0.88rem;background:linear-gradient(135deg,#2563eb,#1d4ed8);font-weight:800;display:inline-flex;align-items:center;gap:8px;">
             <span>✨ Apply &amp; Ready to Print</span>
           </button>
@@ -1474,16 +1482,16 @@
       <div class="card">
         <h2><span class="step-badge" style="background:linear-gradient(135deg,#4f46e5,#6366f1);color:#fff;">1</span> Select Document or Image to Print</h2>
         <div class="upload-zone" id="uploadDropZone" onclick="document.getElementById('pdfInput').click()">
-          <input type="file" id="pdfInput" accept=".pdf,application/pdf,image/png,image/jpeg,image/jpg,image/webp,image/bmp" class="hidden"
+          <input type="file" id="pdfInput" accept=".pdf,application/pdf,image/*,.png,.jpg,.jpeg,.webp,.bmp,.jfif,.txt,.csv" class="hidden"
             onchange="handleFileSelected(this)" />
           <div class="upload-icon-circle">
             📄
           </div>
           <div style="font-weight:800;font-size:1.15rem;margin-bottom:6px;color:#0f172a;">
-            Tap to Upload or Drop PDF / Photos Here
+            Tap to Upload or Drop PDF / Photos / Documents Here
           </div>
-          <div style="font-size:0.86rem;color:var(--muted);max-width:500px;margin:0 auto 12px;line-height:1.5;">
-            Supports <strong>PDF, JPG, PNG &amp; Photos</strong> (up to 20 MB). Includes interactive A4 page cropping, centering &amp; margins studio!
+          <div style="font-size:0.86rem;color:var(--muted);max-width:520px;margin:0 auto 12px;line-height:1.5;">
+            Supports <strong>PDF, Photos (JPG, PNG, WEBP) &amp; Text Docs</strong> (up to 20 MB). Includes interactive A4 page cropping, centering &amp; margins studio!
           </div>
           <div>
             <button type="button" class="btn" style="pointer-events:none;padding:10px 22px;">
@@ -2359,17 +2367,91 @@
 
     function isImageFile(file) {
       if (!file) return false;
-      const type = file.type || '';
+      const type = (file.type || '').toLowerCase();
       const name = (file.name || '').toLowerCase();
-      return type.startsWith('image/') || /\.(png|jpe?g|webp|bmp|gif|jfif)$/i.test(name);
+      return type.startsWith('image/') || /\.(png|jpe?g|webp|bmp|gif|jfif|svg|tiff?)$/i.test(name);
+    }
+
+    function isTextDoc(file) {
+      if (!file) return false;
+      const name = (file.name || '').toLowerCase();
+      return /\.(txt|csv|log|md|json|tsv)$/i.test(name);
+    }
+
+    async function convertTextFileToPdf(file) {
+      showMascotLoader('Formatting Document...', 'Converting text document to standard A4 PDF pages');
+      const text = await file.text();
+      const pdfDoc = await PDFLib.PDFDocument.create();
+      const font = await pdfDoc.embedFont(PDFLib.StandardFonts.Courier);
+      const fontSize = 10;
+      const lineHeight = 14;
+      const margin = 40;
+      const pageW = 595.28;
+      const pageH = 841.89;
+      const printableW = pageW - (margin * 2);
+      const printableH = pageH - (margin * 2);
+      const maxLinesPerPage = Math.floor(printableH / lineHeight);
+
+      const rawLines = text.split(/\r?\n/);
+      const wrappedLines = [];
+      const maxCharsPerLine = Math.floor(printableW / (fontSize * 0.6));
+
+      for (const rawLine of rawLines) {
+        if (rawLine.length === 0) {
+          wrappedLines.push('');
+          continue;
+        }
+        for (let i = 0; i < rawLine.length; i += maxCharsPerLine) {
+          wrappedLines.push(rawLine.substring(i, i + maxCharsPerLine));
+        }
+      }
+
+      const totalPages = Math.ceil(wrappedLines.length / maxLinesPerPage) || 1;
+      for (let p = 0; p < totalPages; p++) {
+        const page = pdfDoc.addPage([pageW, pageH]);
+        const startIdx = p * maxLinesPerPage;
+        const pageLines = wrappedLines.slice(startIdx, startIdx + maxLinesPerPage);
+        let y = pageH - margin;
+        for (const line of pageLines) {
+          page.drawText(line, {
+            x: margin,
+            y: y,
+            size: fontSize,
+            font: font,
+            color: PDFLib.rgb(0.1, 0.1, 0.1)
+          });
+          y -= lineHeight;
+        }
+        page.drawText(`Page ${p + 1} of ${totalPages}`, {
+          x: pageW - margin - 70,
+          y: margin / 2,
+          size: 8,
+          font: font,
+          color: PDFLib.rgb(0.5, 0.5, 0.5)
+        });
+      }
+
+      const pdfBytes = await pdfDoc.save();
+      const pdfName = file.name.replace(/\.[^/.]+$/, '') + '_Doc.pdf';
+      return { pdfBytes, pdfName };
     }
 
     function openA4CropStudio(file) {
       a4Studio.file = file;
+      showMascotLoader('Opening A4 Crop Studio...', 'Loading high-resolution photo preview');
       const reader = new FileReader();
+      reader.onerror = function() {
+        hideMascotLoader();
+        showError('Unable to read selected photo file. Please try another image.');
+      };
       reader.onload = function(e) {
         const img = new Image();
+        img.onerror = function() {
+          hideMascotLoader();
+          showError('Invalid or corrupted image format. Please select a valid PNG, JPG, or WEBP file.');
+        };
         img.onload = function() {
+          hideMascotLoader();
           a4Studio.img = img;
           a4Studio.orientation = (img.width > img.height * 1.15) ? 'landscape' : 'portrait';
           a4Studio.fitMode = 'fit';
@@ -2383,7 +2465,9 @@
           if (lblVal) lblVal.textContent = '100%';
           updateA4StudioButtons();
           renderA4Preview();
-          document.getElementById('modalA4CropStudio').classList.remove('hidden');
+          const modal = document.getElementById('modalA4CropStudio');
+          modal.classList.remove('hidden');
+          modal.classList.add('active');
           setupA4CanvasEvents();
         };
         img.src = e.target.result;
@@ -2393,7 +2477,9 @@
 
     function reopenA4CropStudio() {
       if (a4Studio.img) {
-        document.getElementById('modalA4CropStudio').classList.remove('hidden');
+        const modal = document.getElementById('modalA4CropStudio');
+        modal.classList.remove('hidden');
+        modal.classList.add('active');
         renderA4Preview();
       } else {
         document.getElementById('pdfInput').click();
@@ -2401,7 +2487,18 @@
     }
 
     function closeA4CropStudio() {
-      document.getElementById('modalA4CropStudio').classList.add('hidden');
+      const modal = document.getElementById('modalA4CropStudio');
+      modal.classList.remove('active');
+      modal.classList.add('hidden');
+    }
+
+    function instantAutoFitA4AndPrint() {
+      if (!a4Studio.img) return;
+      a4Studio.fitMode = 'fit';
+      a4Studio.zoom = 1.0;
+      a4Studio.panX = 0;
+      a4Studio.panY = 0;
+      confirmA4CropAndGeneratePdf();
     }
 
     function setA4Orientation(ori) {
@@ -2677,10 +2774,39 @@
       showError(null);
       if (!input.files || !input.files[0]) return;
       const file = input.files[0];
+      try { input.value = ''; } catch(e) {}
 
       if (isImageFile(file)) {
         openA4CropStudio(file);
         return;
+      }
+
+      if (isTextDoc(file)) {
+        try {
+          const converted = await convertTextFileToPdf(file);
+          const res = await apiFetch('/api/uploads?filename=' + encodeURIComponent(converted.pdfName), {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/pdf', 'X-File-Name': converted.pdfName },
+            body: converted.pdfBytes
+          });
+          const data = await res.json();
+          hideMascotLoader();
+          if (!res.ok || data.error) {
+            showError(data.message || 'Upload validation failed.');
+            return;
+          }
+          const btnReCrop = document.getElementById('btnReAdjustCrop');
+          if (btnReCrop) btnReCrop.classList.add('hidden');
+          const lblBadge = document.getElementById('lblDocBadge');
+          if (lblBadge) lblBadge.textContent = 'TEXT DOC';
+          onFileValidated(data);
+          return;
+        } catch (err) {
+          hideMascotLoader();
+          console.error('Text doc conversion error:', err);
+          showError('Could not format text document: ' + err.message);
+          return;
+        }
       }
 
       showMascotLoader('Validating Document...', 'Analyzing pages and PDF security signatures');

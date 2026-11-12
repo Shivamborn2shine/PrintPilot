@@ -90,6 +90,236 @@ namespace PrintAway.Engine
         private static readonly Regex VirtualPrinterRegex = new Regex(@"Microsoft Print to PDF|Microsoft XPS Document Writer|OneNote|Fax|Send To OneNote", RegexOptions.IgnoreCase | RegexOptions.Compiled);
         private static readonly Regex VirtualPortRegex = new Regex(@"^(?:PORTPROMPT:|nul:|SHRFAX:|FILE:)$", RegexOptions.IgnoreCase | RegexOptions.Compiled);
 
+        public static bool IsImageBytes(byte[] bytes)
+        {
+            if (bytes == null || bytes.Length < 4) return false;
+            // JPEG: FF D8 FF
+            if (bytes[0] == 0xFF && bytes[1] == 0xD8 && bytes[2] == 0xFF) return true;
+            // PNG: 89 50 4E 47
+            if (bytes.Length >= 8 && bytes[0] == 0x89 && bytes[1] == 0x50 && bytes[2] == 0x4E && bytes[3] == 0x47) return true;
+            // GIF: 47 49 46
+            if (bytes[0] == 0x47 && bytes[1] == 0x49 && bytes[2] == 0x46) return true;
+            // BMP: 42 4D
+            if (bytes[0] == 0x42 && bytes[1] == 0x4D) return true;
+            // TIFF: 49 49 2A 00 or 4D 4D 00 2A
+            if (bytes.Length >= 4 && ((bytes[0] == 0x49 && bytes[1] == 0x49 && bytes[2] == 0x2A && bytes[3] == 0x00) ||
+                                      (bytes[0] == 0x4D && bytes[1] == 0x4D && bytes[2] == 0x00 && bytes[3] == 0x2A))) return true;
+            // WEBP: RIFF....WEBP
+            if (bytes.Length >= 12 && bytes[0] == 0x52 && bytes[1] == 0x49 && bytes[2] == 0x46 && bytes[3] == 0x46 &&
+                bytes[8] == 0x57 && bytes[9] == 0x45 && bytes[10] == 0x42 && bytes[11] == 0x50) return true;
+            return false;
+        }
+
+        public static bool IsImageExtension(string filename)
+        {
+            if (string.IsNullOrEmpty(filename)) return false;
+            string ext = Path.GetExtension(filename).ToLowerInvariant();
+            return ext == ".jpg" || ext == ".jpeg" || ext == ".png" || ext == ".webp" || ext == ".bmp" || ext == ".gif" || ext == ".jfif" || ext == ".tif" || ext == ".tiff";
+        }
+
+        public static bool IsTextExtension(string filename)
+        {
+            if (string.IsNullOrEmpty(filename)) return false;
+            string ext = Path.GetExtension(filename).ToLowerInvariant();
+            return ext == ".txt" || ext == ".csv" || ext == ".log" || ext == ".tsv";
+        }
+
+        private static ImageCodecInfo GetEncoder(ImageFormat format)
+        {
+            ImageCodecInfo[] codecs = ImageCodecInfo.GetImageDecoders();
+            for (int i = 0; i < codecs.Length; i++)
+            {
+                if (codecs[i].FormatID == format.Guid)
+                {
+                    return codecs[i];
+                }
+            }
+            return null;
+        }
+
+        public static byte[] ConvertImageToA4Pdf(byte[] imageBytes)
+        {
+            if (imageBytes == null || imageBytes.Length == 0) return null;
+            try
+            {
+                using (var msIn = new MemoryStream(imageBytes))
+                using (var originalImg = Image.FromStream(msIn))
+                {
+                    // Check for mobile camera EXIF orientation tag 0x0112 (274)
+                    try
+                    {
+                        if (Array.IndexOf(originalImg.PropertyIdList, 0x0112) >= 0)
+                        {
+                            var prop = originalImg.GetPropertyItem(0x0112);
+                            if (prop != null && prop.Value != null && prop.Value.Length >= 2)
+                            {
+                                int orientation = BitConverter.ToUInt16(prop.Value, 0);
+                                if (orientation == 6) originalImg.RotateFlip(RotateFlipType.Rotate90FlipNone);
+                                else if (orientation == 8) originalImg.RotateFlip(RotateFlipType.Rotate270FlipNone);
+                                else if (orientation == 3) originalImg.RotateFlip(RotateFlipType.Rotate180FlipNone);
+                            }
+                        }
+                    }
+                    catch { }
+
+                    int imgW = originalImg.Width;
+                    int imgH = originalImg.Height;
+                    if (imgW <= 0 || imgH <= 0) return null;
+
+                    byte[] jpegBytes;
+                    using (var msJpeg = new MemoryStream())
+                    {
+                        ImageCodecInfo jpgEncoder = GetEncoder(ImageFormat.Jpeg);
+                        if (jpgEncoder != null)
+                        {
+                            using (var encParams = new EncoderParameters(1))
+                            {
+                                encParams.Param[0] = new EncoderParameter(System.Drawing.Imaging.Encoder.Quality, 92L);
+                                originalImg.Save(msJpeg, jpgEncoder, encParams);
+                            }
+                        }
+                        else
+                        {
+                            originalImg.Save(msJpeg, ImageFormat.Jpeg);
+                        }
+                        jpegBytes = msJpeg.ToArray();
+                    }
+
+                    // ISO A4 points (72 points/inch)
+                    // Portrait: 595.28 x 841.89 pt | Landscape: 841.89 x 595.28 pt
+                    bool isLandscape = imgW > (int)(imgH * 1.15);
+                    double pageW = isLandscape ? 841.89 : 595.28;
+                    double pageH = isLandscape ? 595.28 : 841.89;
+
+                    double margin = 20.0; // 7mm safe printable margin
+                    double safeW = pageW - (margin * 2.0);
+                    double safeH = pageH - (margin * 2.0);
+                    double scale = Math.Min(safeW / imgW, safeH / imgH);
+                    double drawW = imgW * scale;
+                    double drawH = imgH * scale;
+                    double posX = (pageW - drawW) / 2.0;
+                    double posY = (pageH - drawH) / 2.0;
+
+                    return GenerateSingleImageA4Pdf(jpegBytes, imgW, imgH, pageW, pageH, drawW, drawH, posX, posY);
+                }
+            }
+            catch (Exception ex)
+            {
+                Trace.WriteLine("[PdfAndPrinterEngine] ConvertImageToA4Pdf error: " + ex.Message);
+                return null;
+            }
+        }
+
+        public static byte[] ConvertTextToA4Pdf(byte[] textBytes)
+        {
+            if (textBytes == null || textBytes.Length == 0) return null;
+            try
+            {
+                string text = Encoding.UTF8.GetString(textBytes);
+                // Render text onto a clean high-resolution A4 bitmap
+                int dpi = 150;
+                int pageW = (int)(8.27 * dpi); // 1240 px
+                int pageH = (int)(11.69 * dpi); // 1754 px
+                using (var bmp = new Bitmap(pageW, pageH))
+                using (var g = Graphics.FromImage(bmp))
+                using (var brush = new SolidBrush(Color.Black))
+                using (var font = new Font("Courier New", 10.0f, FontStyle.Regular, GraphicsUnit.Point))
+                {
+                    g.Clear(Color.White);
+                    int margin = (int)(0.5 * dpi); // 0.5 in margin
+                    var rect = new RectangleF(margin, margin, pageW - (margin * 2), pageH - (margin * 2));
+                    g.DrawString(text, font, brush, rect);
+
+                    using (var msJpeg = new MemoryStream())
+                    {
+                        ImageCodecInfo jpgEncoder = GetEncoder(ImageFormat.Jpeg);
+                        if (jpgEncoder != null)
+                        {
+                            using (var encParams = new EncoderParameters(1))
+                            {
+                                encParams.Param[0] = new EncoderParameter(System.Drawing.Imaging.Encoder.Quality, 92L);
+                                bmp.Save(msJpeg, jpgEncoder, encParams);
+                            }
+                        }
+                        else
+                        {
+                            bmp.Save(msJpeg, ImageFormat.Jpeg);
+                        }
+                        byte[] jpegBytes = msJpeg.ToArray();
+                        return GenerateSingleImageA4Pdf(jpegBytes, pageW, pageH, 595.28, 841.89, 595.28 - 40, 841.89 - 40, 20, 20);
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                Trace.WriteLine("[PdfAndPrinterEngine] ConvertTextToA4Pdf error: " + ex.Message);
+                return null;
+            }
+        }
+
+        private static byte[] GenerateSingleImageA4Pdf(byte[] jpegBytes, int imgW, int imgH, double pageW, double pageH, double drawW, double drawH, double posX, double posY)
+        {
+            using (var ms = new MemoryStream())
+            {
+                var offsets = new List<long>();
+                var ascii = Encoding.ASCII;
+
+                Action<string> writeAscii = (s) =>
+                {
+                    byte[] b = ascii.GetBytes(s);
+                    ms.Write(b, 0, b.Length);
+                };
+
+                writeAscii("%PDF-1.4\n%\xE2\xE3\xCF\xD3\n");
+
+                // 1: Catalog
+                offsets.Add(ms.Position);
+                writeAscii("1 0 obj\n<< /Type /Catalog /Pages 2 0 R >>\nendobj\n");
+
+                // 2: Pages
+                offsets.Add(ms.Position);
+                writeAscii("2 0 obj\n<< /Type /Pages /Kids [3 0 R] /Count 1 >>\nendobj\n");
+
+                // 3: Page
+                offsets.Add(ms.Position);
+                string mediaBox = string.Format(CultureInfo.InvariantCulture, "[0 0 {0:0.##} {1:0.##}]", pageW, pageH);
+                writeAscii("3 0 obj\n<< /Type /Page /Parent 2 0 R /MediaBox " + mediaBox + " /Contents 4 0 R /Resources << /XObject << /Im1 5 0 R >> /ProcSet [/PDF /ImageC] >> >>\nendobj\n");
+
+                // 4: Contents (drawing stream)
+                offsets.Add(ms.Position);
+                string streamContent = string.Format(CultureInfo.InvariantCulture,
+                    "q\n{0:0.##} 0 0 {1:0.##} {2:0.##} {3:0.##} cm\n/Im1 Do\nQ\n",
+                    drawW, drawH, posX, posY);
+                byte[] contentBytes = ascii.GetBytes(streamContent);
+                writeAscii(string.Format(CultureInfo.InvariantCulture, "4 0 obj\n<< /Length {0} >>\nstream\n", contentBytes.Length));
+                ms.Write(contentBytes, 0, contentBytes.Length);
+                writeAscii("endstream\nendobj\n");
+
+                // 5: Image XObject
+                offsets.Add(ms.Position);
+                writeAscii(string.Format(CultureInfo.InvariantCulture,
+                    "5 0 obj\n<< /Type /XObject /Subtype /Image /Width {0} /Height {1} /ColorSpace /DeviceRGB /BitsPerComponent 8 /Filter /DCTDecode /Length {2} >>\nstream\n",
+                    imgW, imgH, jpegBytes.Length));
+                ms.Write(jpegBytes, 0, jpegBytes.Length);
+                writeAscii("\nendstream\nendobj\n");
+
+                // xref
+                long startXref = ms.Position;
+                writeAscii(string.Format(CultureInfo.InvariantCulture, "xref\n0 {0}\n0000000000 65535 f \n", offsets.Count + 1));
+                for (int i = 0; i < offsets.Count; i++)
+                {
+                    writeAscii(string.Format(CultureInfo.InvariantCulture, "{0:D10} 00000 n \n", offsets[i]));
+                }
+
+                // trailer
+                writeAscii(string.Format(CultureInfo.InvariantCulture,
+                    "trailer\n<< /Size {0} /Root 1 0 R >>\nstartxref\n{1}\n%%EOF\n",
+                    offsets.Count + 1, startXref));
+
+                return ms.ToArray();
+            }
+        }
+
         public static PdfValidationResult ValidatePdf(byte[] fileBytes, long maxFileSizeBytes = 20L * 1024L * 1024L, int maxPageCount = 100)
         {
             var result = new PdfValidationResult();
