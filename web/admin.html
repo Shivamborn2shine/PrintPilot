@@ -944,7 +944,7 @@
             </div>
             <button class="btn btn-secondary" onclick="saveHardwareCapabilities()">Update Shop Identity</button>
             <div style="font-size:0.78rem;color:#0369a1;margin-top:10px;background:#e0f2fe;padding:8px 10px;border-radius:6px;">
-              Permanent Customer QR URL: <strong id="lblShopQrUrl">https://printitaway.netlify.app/?shop=midtownstationary</strong>
+              Permanent Customer QR URL: <strong id="lblShopQrUrl">?shop=midtownstationary</strong>
             </div>
           </div>
 
@@ -1734,7 +1734,8 @@
         if (document.getElementById('inpShopId')) document.getElementById('inpShopId').value = shop.shopId || activeShop;
         if (document.getElementById('inpShopName')) document.getElementById('inpShopName').value = shop.shopName || '';
         if (document.getElementById('lblAdminShopBadge')) document.getElementById('lblAdminShopBadge').textContent = (shop.shopId || activeShop);
-        if (document.getElementById('lblShopQrUrl')) document.getElementById('lblShopQrUrl').textContent = `https://printitaway.netlify.app/?shop=${shop.shopId || activeShop}`;
+        const portalBase = (window.location.hostname !== 'localhost' && window.location.hostname !== '127.0.0.1') ? window.location.origin : 'https://printitaway.vercel.app';
+        if (document.getElementById('lblShopQrUrl')) document.getElementById('lblShopQrUrl').textContent = `${portalBase}/?shop=${shop.shopId || activeShop}`;
         if (document.getElementById('selBwQueueSwitch') && shop.bwQueueName !== undefined) document.getElementById('selBwQueueSwitch').value = shop.bwQueueName || '';
         if (document.getElementById('selColorQueueSwitch') && shop.colorQueueName !== undefined) document.getElementById('selColorQueueSwitch').value = shop.colorQueueName || '';
         if (document.getElementById('selLiveBwQueue') && shop.bwQueueName !== undefined) document.getElementById('selLiveBwQueue').value = shop.bwQueueName || '';

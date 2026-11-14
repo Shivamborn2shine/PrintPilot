@@ -1,0 +1,36 @@
+{
+  "$schema": "https://openapi.vercel.sh/vercel.json",
+  "framework": null,
+  "buildCommand": "echo Static PrintAway web ready",
+  "outputDirectory": "web",
+  "cleanUrls": true,
+  "trailingSlash": false,
+  "rewrites": [
+    { "source": "/admin", "destination": "/admin.html" },
+    { "source": "/superadmin", "destination": "/superadmin.html" },
+    { "source": "/pricing", "destination": "/pricing.html" },
+    { "source": "/track/:token*", "destination": "/index.html" }
+  ],
+  "redirects": [
+    {
+      "source": "/downloads/PrintAway-Station-Setup.zip",
+      "destination": "https://github.com/Shivamborn2shine/PrintPilot/raw/main/releases/PrintAway-Station-Setup.zip",
+      "permanent": false
+    },
+    {
+      "source": "/downloads/PrintAway.exe",
+      "destination": "https://raw.githubusercontent.com/Shivamborn2shine/PrintPilot/main/bin/PrintAway.exe",
+      "permanent": false
+    }
+  ],
+  "headers": [
+    {
+      "source": "/(.*)",
+      "headers": [
+        { "key": "X-Frame-Options", "value": "SAMEORIGIN" },
+        { "key": "X-Content-Type-Options", "value": "nosniff" },
+        { "key": "Referrer-Policy", "value": "no-referrer" }
+      ]
+    }
+  ]
+}

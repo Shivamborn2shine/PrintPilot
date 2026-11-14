@@ -1,0 +1,16 @@
+.git
+.env
+.env.*
+src
+bin
+dist
+data
+releases
+scripts
+config
+*.exe
+*.zip
+*.bat
+*.ps1
+web/downloads/*.exe
+web/downloads/*.zip

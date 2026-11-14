@@ -608,7 +608,7 @@
               </div>
               <div class="mt-1">${tunnelLink}</div>
               <div class="mt-0.5">
-                <a href="https://printitaway.netlify.app/?shop=${shop.shop_id}" target="_blank" class="text-[10px] text-violet-400 hover:underline flex items-center space-x-1">
+                <a href="${(window.location.hostname !== 'localhost' && window.location.hostname !== '127.0.0.1' ? window.location.origin : 'https://printitaway.vercel.app')}/?shop=${shop.shop_id}" target="_blank" class="text-[10px] text-violet-400 hover:underline flex items-center space-x-1">
                   <span>Storefront: ?shop=${shop.shop_id}</span>
                 </a>
               </div>
