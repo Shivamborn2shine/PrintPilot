@@ -494,6 +494,44 @@ namespace PrintAway
                     Assert(PrintAway.Tunnel.TunnelManager.IsValidPublicTunnelUrl("https://xyz.a.free.pinggy.link"), "Valid Pinggy link must be accepted");
                     Assert(PrintAway.Tunnel.TunnelManager.IsValidPublicTunnelUrl("https://shop1.printaway.in"), "Custom HTTPS domain must be accepted");
                 });
+
+                // Test 13: 500-Page Limit Support & ScanDrop-Style Chunked Binary Upload + Admin File Preview
+                runTest("T13: 500-page PDF accepted (501 rejected), chunked upload assembly & admin preview bytes succeed", () =>
+                {
+                    string errCode, errMsg;
+                    byte[] pdf500 = PdfAndPrinterEngine.GenerateSamplePdfBytes(500, "500 Page Limit Verification");
+                    var val500 = PdfAndPrinterEngine.ValidatePdf(pdf500);
+                    Assert(val500.IsValid && val500.PageCount == 500, "500-page PDF must be accepted (got " + val500.PageCount + " / " + val500.ErrorMessage + ")");
+
+                    byte[] pdf501 = PdfAndPrinterEngine.GenerateSamplePdfBytes(501, "501 Page Limit Rejection");
+                    var val501 = PdfAndPrinterEngine.ValidatePdf(pdf501);
+                    Assert(!val501.IsValid && val501.ErrorCode == "PAGE_LIMIT_EXCEEDED", "501-page PDF must fail with PAGE_LIMIT_EXCEEDED");
+
+                    // Split 500-page PDF into 3 binary chunks, save chunks, reassemble, and verify admin file preview retrieval
+                    int third = pdf500.Length / 3;
+                    byte[] ch0 = new byte[third];
+                    byte[] ch1 = new byte[third];
+                    byte[] ch2 = new byte[pdf500.Length - (third * 2)];
+                    Buffer.BlockCopy(pdf500, 0, ch0, 0, ch0.Length);
+                    Buffer.BlockCopy(pdf500, third, ch1, 0, ch1.Length);
+                    Buffer.BlockCopy(pdf500, third * 2, ch2, 0, ch2.Length);
+
+                    string upId = "test_chunk_" + PrintAwayRepository.GenerateRandomToken(6);
+                    var r0 = repo.SaveUploadChunk(upId, 0, 3, ch0, out errCode, out errMsg);
+                    var r1 = repo.SaveUploadChunk(upId, 1, 3, ch1, out errCode, out errMsg);
+                    var r2 = repo.SaveUploadChunk(upId, 2, 3, ch2, out errCode, out errMsg);
+                    Assert(r0 != null && r1 != null && r2 != null, "All 3 chunks must save cleanly: " + errMsg);
+
+                    var assembled = repo.CompleteChunkedUpload(upId, "book_500p.pdf", 3, out errCode, out errMsg);
+                    Assert(assembled != null && Convert.ToInt32(assembled["pageCount"]) == 500,
+                        "Chunked upload must reassemble and validate 500 pages: " + errMsg);
+
+                    string fToken = Convert.ToString(assembled["fileToken"]);
+                    string outName, outErr;
+                    byte[] previewBytes = repo.GetFilePdfBytesByToken(fToken, out outName, out outErr);
+                    Assert(previewBytes != null && previewBytes.Length == pdf500.Length,
+                        "Admin file preview bytes must match assembled PDF length: " + outErr);
+                });
             }
 
             Console.WriteLine("------------------------------------------------------------------");

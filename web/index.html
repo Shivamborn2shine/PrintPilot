@@ -1498,7 +1498,7 @@
             Tap to Upload or Drop PDF / Word Docs / Photos Here
           </div>
           <div style="font-size:0.86rem;color:var(--muted);max-width:560px;margin:0 auto 12px;line-height:1.5;">
-            Supports <strong>PDF, Word (.DOCX, .DOC, .RTF, .ODT), Photos (JPG, PNG, WEBP) &amp; Text Docs</strong> (up to 20 MB). Word &amp; photos auto-convert to crisp A4 PDFs with interactive cropping!
+            Supports <strong>PDF, Word (.DOCX, .DOC, .RTF, .ODT), Photos (JPG, PNG, WEBP) &amp; Text Docs</strong> (up to <strong>500 pages / 50 MB</strong>). Fast chunked direct-to-station upload!
           </div>
           <div>
             <button type="button" class="btn" style="pointer-events:none;padding:10px 22px;">
@@ -1842,48 +1842,93 @@
     /* ==========================================================================
        ROBUST NETWORK LAYER (AUTO-RETRY ON 502/503/504 & TUNNEL RE-DISCOVERY)
        ========================================================================== */
+    async function isHtmlResponse(res) {
+      if (!res) return false;
+      const ctype = (res.headers && res.headers.get('content-type') ? res.headers.get('content-type') : '').toLowerCase();
+      if (ctype.includes('text/html') || ctype.includes('application/xhtml')) return true;
+      try {
+        const txt = await res.clone().text();
+        const trimmed = (txt || '').trimStart();
+        if (trimmed.startsWith('<!DOCTYPE') || trimmed.startsWith('<!doctype') || trimmed.startsWith('<html')) {
+          return true;
+        }
+      } catch { }
+      return false;
+    }
+
+    async function parseJsonSafe(res, contextLabel) {
+      const rawText = await res.text();
+      const trimmed = (rawText || '').trimStart();
+      if (trimmed.startsWith('<')) {
+        throw new Error((contextLabel || 'Station request') + ': Tunnel returned HTML web page instead of JSON API response. Please verify PrintAway station tunnel is online and retry.');
+      }
+      if (!trimmed) {
+        if (!res.ok) throw new Error((contextLabel || 'Station request') + ' failed with HTTP ' + res.status);
+        return {};
+      }
+      try {
+        return JSON.parse(rawText);
+      } catch (e) {
+        throw new Error((contextLabel || 'Station request') + ' invalid server response (' + res.status + '): ' + e.message);
+      }
+    }
+
     async function apiFetch(path, options = {}) {
       const isCloudHosted = window.location.hostname !== 'localhost' && window.location.hostname !== '127.0.0.1';
       let targetUrl = apiUrl(path);
       if (isCloudHosted && targetUrl.startsWith('/api/')) {
-        await autoDiscoverLiveStation(true);
+        const discovered = await autoDiscoverLiveStation(true);
         targetUrl = apiUrl(path);
+        if (!discovered && targetUrl.startsWith('/api/')) {
+          targetUrl = '';
+        }
       }
 
       let lastErr = null;
-      try {
-        const res = await fetch(targetUrl, options);
-        if (![502, 503, 504, 530].includes(res.status)) {
-          return res;
+      if (targetUrl) {
+        try {
+          const res = await fetch(targetUrl, options);
+          const htmlFallback = await isHtmlResponse(res);
+          if (![502, 503, 504, 530].includes(res.status) && !htmlFallback) {
+            return res;
+          }
+          lastErr = new Error(htmlFallback ? 'Received HTML/SPA page instead of station API (stale tunnel)' : ('Tunnel edge returned HTTP ' + res.status));
+          console.warn(`[PrintAway Network] ${lastErr.message} for ${targetUrl}. Re-discovering live station...`);
+        } catch (err) {
+          lastErr = err;
+          console.warn(`[PrintAway Network] Fetch failed for ${targetUrl} (${err.message}). Attempting automatic tunnel discovery...`);
         }
-        lastErr = new Error('Tunnel edge returned HTTP ' + res.status);
-        console.warn(`[PrintAway Network] Transient tunnel HTTP ${res.status} for ${targetUrl}. Re-discovering live station...`);
-      } catch (err) {
-        lastErr = err;
-        console.warn(`[PrintAway Network] Fetch failed for ${targetUrl} (${err.message}). Attempting automatic tunnel discovery...`);
+      } else {
+        lastErr = new Error('No cached tunnel URL found');
       }
 
       // Auto-heal: re-discover freshest live tunnel and retry cleanly up to 2 times
       for (let attempt = 1; attempt <= 2; attempt++) {
         try {
           if (attempt > 1) {
-            await new Promise(r => setTimeout(r, 1800));
+            await new Promise(r => setTimeout(r, 1500));
           }
           const freshTunnel = await autoDiscoverLiveStation(true);
-          if (freshTunnel || !isCloudHosted) {
+          if (freshTunnel && freshTunnel.startsWith('https://')) {
+            targetUrl = freshTunnel.replace(/\/+$/, '') + path;
+          } else if (!isCloudHosted) {
             targetUrl = apiUrl(path);
-            console.log(`[PrintAway Network] Retry #${attempt} via live station: ${targetUrl}`);
-            const retryRes = await fetch(targetUrl, options);
-            if (![502, 503, 504, 530].includes(retryRes.status)) {
-              return retryRes;
-            }
+          } else {
+            continue;
           }
+          console.log(`[PrintAway Network] Retry #${attempt} via live station: ${targetUrl}`);
+          const retryRes = await fetch(targetUrl, options);
+          const retryHtml = await isHtmlResponse(retryRes);
+          if (![502, 503, 504, 530].includes(retryRes.status) && !retryHtml) {
+            return retryRes;
+          }
+          lastErr = new Error(retryHtml ? 'Station tunnel returned HTML page instead of JSON API' : ('Tunnel edge returned HTTP ' + retryRes.status));
         } catch (retryErr) {
           lastErr = retryErr;
           console.error(`[PrintAway Network] Retry #${attempt} failed:`, retryErr);
         }
       }
-      throw new Error(`Station tunnel is auto-refreshing (${lastErr ? lastErr.message : 'reconnecting'}). Please retry in a few seconds.`);
+      throw new Error(`Shop station tunnel appears offline or reconnecting (${lastErr ? lastErr.message : 'no live tunnel'}). Check PrintAway.exe on the shop PC and retry.`);
     }
 
     /* ==========================================================================
@@ -2146,7 +2191,7 @@
           badgeEl.textContent = shopId;
         }
 
-        // Helper to ping candidate tunnel before trusting it (zero custom headers = zero CORS preflight overhead)
+        // Helper to ping candidate tunnel before trusting it (verifies JSON response, never HTML splash/SPA page)
         async function isTunnelAlive(candidateUrl) {
           if (!candidateUrl || !candidateUrl.startsWith('https://')) return false;
           if (candidateUrl.includes('api.trycloudflare.com') || candidateUrl.includes('pkg.trycloudflare.com') ||
@@ -2156,17 +2201,22 @@
             const tid = setTimeout(() => ctrl.abort(), 3000);
             const res = await fetch(candidateUrl + '/api/health', { signal: ctrl.signal });
             clearTimeout(tid);
-            if (res.ok) return true;
+            if (res.ok) {
+              const txt = await res.text();
+              if (txt && txt.trimStart().startsWith('{')) return true;
+            }
           } catch { }
           try {
             const ctrl2 = new AbortController();
             const tid2 = setTimeout(() => ctrl2.abort(), 2500);
             const res2 = await fetch(candidateUrl + '/api/shop/status', { signal: ctrl2.signal });
             clearTimeout(tid2);
-            return res2.ok;
-          } catch {
-            return false;
-          }
+            if (res2.ok) {
+              const txt2 = await res2.text();
+              if (txt2 && txt2.trimStart().startsWith('{')) return true;
+            }
+          } catch { }
+          return false;
         }
 
         if (!force && cached && cached.startsWith('https://') && (await isTunnelAlive(cached))) {
@@ -2175,7 +2225,6 @@
         localStorage.removeItem('printaway_api_base');
 
         // Priority 1: Supabase Fleet Lookup
-        let sbCandidate = '';
         try {
           const sbRes = await fetch(`https://zduoifzakiojfqbtxqqm.supabase.co/rest/v1/shops?shop_id=eq.${encodeURIComponent(shopId)}&select=live_tunnel_url,shop_name,upi_vpa`, {
             headers: {
@@ -2189,7 +2238,6 @@
             if (list && list.length > 0 && list[0].live_tunnel_url) {
               const live = list[0].live_tunnel_url.trim().replace(/\/+$/, '');
               if (live.startsWith('https://') && !live.includes('api.trycloudflare.com') && !live.includes('pkg.trycloudflare.com')) {
-                sbCandidate = live;
                 if (await isTunnelAlive(live)) {
                   localStorage.setItem('printaway_api_base', live);
                   return live;
@@ -2217,7 +2265,6 @@
             }
           }
         } catch (e) { }
-        if (sbCandidate) return sbCandidate;
       } catch (e) {
         console.warn('Live station registry lookup skipped:', e);
       }
@@ -2475,7 +2522,7 @@
 
           const pageWpx = fullCanvas.width;
           const pageHpx = Math.round(a4HeightPx * renderScale);
-          const totalPages = Math.min(100, Math.max(1, Math.ceil(fullCanvas.height / pageHpx)));
+          const totalPages = Math.min(500, Math.max(1, Math.ceil(fullCanvas.height / pageHpx)));
 
           const pdfDoc = await PDFLib.PDFDocument.create();
           const ptW = 595.28;
@@ -2550,7 +2597,7 @@
           }
         }
 
-        const totalPages = Math.min(100, Math.ceil(wrappedLines.length / maxLinesPerPage) || 1);
+        const totalPages = Math.min(500, Math.ceil(wrappedLines.length / maxLinesPerPage) || 1);
         for (let p = 0; p < totalPages; p++) {
           const page = pdfDoc.addPage([pageW, pageH]);
           const startIdx = p * maxLinesPerPage;
@@ -2909,15 +2956,10 @@
 
         closeA4CropStudio();
 
-        const res = await apiFetch('/api/uploads?filename=' + encodeURIComponent(uploadFileName), {
-          method: 'POST',
-          headers: { 'Content-Type': uploadContentType, 'X-File-Name': uploadFileName },
-          body: uploadBytes
-        });
-        const data = await res.json();
+        const data = await uploadDocumentSmart(uploadBytes, uploadFileName, uploadContentType);
         hideMascotLoader();
-        if (!res.ok || data.error) {
-          showError(data.message || 'Upload validation failed.');
+        if (!data || data.error) {
+          showError((data && data.message) || 'Upload validation failed.');
           return;
         }
 
@@ -2931,6 +2973,94 @@
         console.error('A4 generation error:', err);
         showError('Could not generate A4 PDF from image: ' + err.message);
       }
+    }
+
+    /**
+     * ScanDrop-inspired fast local-PC transfer:
+     * - Files <= 1.5 MB upload in a single binary POST (/api/uploads).
+     * - Larger files (> 1.5 MB up to 50 MB / 500 pages) upload in resilient 1 MB chunks
+     *   (/api/uploads/chunk + /api/uploads/complete) with per-chunk retry and progress text.
+     */
+    async function uploadDocumentSmart(bytesOrBuffer, fileName, contentType) {
+      const u8 = bytesOrBuffer instanceof Uint8Array
+        ? bytesOrBuffer
+        : new Uint8Array(bytesOrBuffer);
+
+      const maxBytes = 50 * 1024 * 1024;
+      if (u8.byteLength > maxBytes) {
+        throw new Error('File size (' + (u8.byteLength / (1024 * 1024)).toFixed(1) + ' MB) exceeds 50 MB station maximum.');
+      }
+
+      const CHUNK_THRESHOLD = 1500 * 1024; // 1.5 MB
+      const CHUNK_SIZE = 1024 * 1024; // 1 MB binary chunks
+
+      if (u8.byteLength <= CHUNK_THRESHOLD) {
+        const res = await apiFetch('/api/uploads?filename=' + encodeURIComponent(fileName), {
+          method: 'POST',
+          headers: { 'Content-Type': contentType || 'application/octet-stream', 'X-File-Name': fileName },
+          body: u8
+        });
+        const data = await parseJsonSafe(res, 'Upload');
+        if (!res.ok || data.error) {
+          throw new Error(data.message || ('Upload rejected (HTTP ' + res.status + ')'));
+        }
+        return data;
+      }
+
+      const uploadId = 'pa_' + Date.now() + '_' + Math.random().toString(36).slice(2, 8);
+      const totalChunks = Math.max(1, Math.ceil(u8.byteLength / CHUNK_SIZE));
+      const subEl = document.getElementById('loaderModalSub');
+
+      for (let i = 0; i < totalChunks; i++) {
+        const start = i * CHUNK_SIZE;
+        const end = Math.min(u8.byteLength, start + CHUNK_SIZE);
+        const slice = u8.subarray(start, end);
+        const pct = Math.min(95, Math.round(((i + 1) / totalChunks) * 95));
+        if (subEl) {
+          subEl.textContent = `⚡ Direct PC transfer: chunk ${i + 1} of ${totalChunks} (${pct}%)`;
+        }
+
+        let chunkOk = false;
+        let lastChunkErr = null;
+        for (let attempt = 1; attempt <= 2; attempt++) {
+          try {
+            const cRes = await apiFetch(
+              `/api/uploads/chunk?uploadId=${encodeURIComponent(uploadId)}&index=${i}&total=${totalChunks}`,
+              {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/octet-stream' },
+                body: slice
+              }
+            );
+            const cData = await parseJsonSafe(cRes, 'Chunk ' + (i + 1));
+            if (!cRes.ok || cData.error) {
+              throw new Error(cData.message || ('Chunk HTTP ' + cRes.status));
+            }
+            chunkOk = true;
+            break;
+          } catch (err) {
+            lastChunkErr = err;
+            await new Promise(r => setTimeout(r, 600));
+          }
+        }
+        if (!chunkOk) {
+          throw lastChunkErr || new Error('Chunk transfer failed at part ' + (i + 1));
+        }
+      }
+
+      if (subEl) {
+        subEl.textContent = 'Finalizing & validating pages on station PC...';
+      }
+      const compRes = await apiFetch('/api/uploads/complete', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ uploadId, fileName, totalChunks })
+      });
+      const compData = await parseJsonSafe(compRes, 'Finalize upload');
+      if (!compRes.ok || compData.error) {
+        throw new Error(compData.message || ('Upload validation failed (HTTP ' + compRes.status + ')'));
+      }
+      return compData;
     }
 
     async function handleFileSelected(input) {
@@ -2948,28 +3078,20 @@
         try {
           const isDocx = /\.docx$/i.test(file.name || '');
           let uploadBytes, uploadName, uploadType;
-          if (isDocx) {
+          // Single-pass rule: process small .docx once client-side, or delegate larger/binary Office docs straight to station PC engine
+          if (isDocx && file.size <= 2 * 1024 * 1024) {
             const converted = await convertDocxClientSideToPdf(file);
             uploadBytes = converted.pdfBytes;
             uploadName = converted.pdfName;
             uploadType = converted.contentType || 'application/octet-stream';
           } else {
-            showMascotLoader('Converting Document...', 'Converting Word / Office file to printable A4 PDF');
+            showMascotLoader('Transferring Document...', 'Sending Office document directly to station PC engine for 1-pass conversion');
             uploadBytes = await file.arrayBuffer();
             uploadName = file.name;
             uploadType = 'application/octet-stream';
           }
-          const res = await apiFetch('/api/uploads?filename=' + encodeURIComponent(uploadName), {
-            method: 'POST',
-            headers: { 'Content-Type': uploadType, 'X-File-Name': uploadName },
-            body: uploadBytes
-          });
-          const data = await res.json();
+          const data = await uploadDocumentSmart(uploadBytes, uploadName, uploadType);
           hideMascotLoader();
-          if (!res.ok || data.error) {
-            showError(data.message || 'Document upload failed.');
-            return;
-          }
           const btnReCrop = document.getElementById('btnReAdjustCrop');
           if (btnReCrop) btnReCrop.classList.add('hidden');
           const lblBadge = document.getElementById('lblDocBadge');
@@ -2986,19 +3108,15 @@
 
       if (isTextDoc(file)) {
         try {
-          const converted = await convertTextFileToPdf(file);
-          const cType = converted.contentType || 'application/pdf';
-          const res = await apiFetch('/api/uploads?filename=' + encodeURIComponent(converted.pdfName), {
-            method: 'POST',
-            headers: { 'Content-Type': cType, 'X-File-Name': converted.pdfName },
-            body: converted.pdfBytes
-          });
-          const data = await res.json();
-          hideMascotLoader();
-          if (!res.ok || data.error) {
-            showError(data.message || 'Upload validation failed.');
-            return;
+          let converted;
+          if (file.size <= 1024 * 1024) {
+            converted = await convertTextFileToPdf(file);
+          } else {
+            showMascotLoader('Transferring Text Document...', 'Sending file directly to station PC engine');
+            converted = { pdfBytes: await file.arrayBuffer(), pdfName: file.name, contentType: 'text/plain' };
           }
+          const data = await uploadDocumentSmart(converted.pdfBytes, converted.pdfName, converted.contentType || 'application/pdf');
+          hideMascotLoader();
           const btnReCrop = document.getElementById('btnReAdjustCrop');
           if (btnReCrop) btnReCrop.classList.add('hidden');
           const lblBadge = document.getElementById('lblDocBadge');
@@ -3013,20 +3131,11 @@
         }
       }
 
-      showMascotLoader('Validating Document...', 'Analyzing pages and PDF security signatures');
+      showMascotLoader('Uploading & Validating PDF...', 'Checking pages (up to 500 pages / 50 MB) and security signatures');
       try {
         const buf = await file.arrayBuffer();
-        const res = await apiFetch('/api/uploads?filename=' + encodeURIComponent(file.name), {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/pdf', 'X-File-Name': file.name },
-          body: buf
-        });
-        const data = await res.json();
+        const data = await uploadDocumentSmart(buf, file.name, 'application/pdf');
         hideMascotLoader();
-        if (!res.ok || data.error) {
-          showError(data.message || 'Upload validation failed.');
-          return;
-        }
         const btnReCrop = document.getElementById('btnReAdjustCrop');
         if (btnReCrop) btnReCrop.classList.add('hidden');
         const lblBadge = document.getElementById('lblDocBadge');

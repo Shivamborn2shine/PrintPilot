@@ -775,7 +775,7 @@ namespace PrintAway.Engine
                             }
                             curChunk.Add(item);
                             curY += lh;
-                            if (pageChunks.Count >= 99) break;
+                            if (pageChunks.Count >= 499) break;
                         }
                         if (curChunk.Count > 0) pageChunks.Add(curChunk);
                     }
@@ -1014,7 +1014,7 @@ namespace PrintAway.Engine
             }
         }
 
-        public static PdfValidationResult ValidatePdf(byte[] fileBytes, long maxFileSizeBytes = 20L * 1024L * 1024L, int maxPageCount = 100)
+        public static PdfValidationResult ValidatePdf(byte[] fileBytes, long maxFileSizeBytes = 50L * 1024L * 1024L, int maxPageCount = 500)
         {
             var result = new PdfValidationResult();
             if (fileBytes == null || fileBytes.Length == 0)
@@ -1117,7 +1117,7 @@ namespace PrintAway.Engine
                 result.IsValid = false;
                 result.PageCount = detectedPages;
                 result.ErrorCode = "PAGE_LIMIT_EXCEEDED";
-                result.ErrorMessage = string.Format(CultureInfo.InvariantCulture, "PDF has {0} pages, exceeding the pilot maximum of {1} pages per order.", detectedPages, maxPageCount);
+                result.ErrorMessage = string.Format(CultureInfo.InvariantCulture, "PDF has {0} pages, exceeding the maximum of {1} pages per order.", detectedPages, maxPageCount);
                 return result;
             }
 

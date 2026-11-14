@@ -3130,5 +3130,185 @@ CREATE TABLE IF NOT EXISTS audit_events (
                 { "recentAuditEvents", recentAudits }
             };
         }
+
+        private static string SanitizeChunkUploadId(string uploadId)
+        {
+            if (string.IsNullOrWhiteSpace(uploadId)) return "";
+            var sb = new StringBuilder();
+            foreach (char c in uploadId.Trim())
+            {
+                if (char.IsLetterOrDigit(c) || c == '_' || c == '-')
+                    sb.Append(c);
+                if (sb.Length >= 64) break;
+            }
+            return sb.ToString();
+        }
+
+        /// <summary>
+        /// Saves a single binary chunk to the local vault's temporary chunk staging folder
+        /// (ScanDrop-inspired chunked local transfer to prevent tunnel timeouts on large files).
+        /// </summary>
+        public Dictionary<string, object> SaveUploadChunk(string uploadId, int chunkIndex, int totalChunks, byte[] chunkBytes, out string errorCode, out string errorMsg)
+        {
+            errorCode = null;
+            errorMsg = null;
+
+            string safeId = SanitizeChunkUploadId(uploadId);
+            if (string.IsNullOrEmpty(safeId) || chunkIndex < 0 || totalChunks < 1 || chunkIndex >= totalChunks || totalChunks > 200)
+            {
+                errorCode = "INVALID_CHUNK_PARAMS";
+                errorMsg = "Invalid chunk upload parameters.";
+                return null;
+            }
+            if (chunkBytes == null || chunkBytes.Length == 0 || chunkBytes.Length > 10 * 1024 * 1024)
+            {
+                errorCode = "INVALID_CHUNK_SIZE";
+                errorMsg = "Chunk payload is empty or exceeds 10 MB.";
+                return null;
+            }
+
+            string chunkRoot = Path.Combine(_vaultDirectory, "_chunks");
+            string uploadDir = Path.Combine(chunkRoot, safeId);
+            if (!Directory.Exists(uploadDir))
+            {
+                Directory.CreateDirectory(uploadDir);
+            }
+
+            string partPath = Path.Combine(uploadDir, string.Format(CultureInfo.InvariantCulture, "chunk_{0:0000}.part", chunkIndex));
+            File.WriteAllBytes(partPath, chunkBytes);
+
+            return new Dictionary<string, object>
+            {
+                { "ok", true },
+                { "uploadId", safeId },
+                { "chunkIndex", chunkIndex },
+                { "totalChunks", totalChunks },
+                { "bytesReceived", chunkBytes.Length }
+            };
+        }
+
+        /// <summary>
+        /// Reassembles uploaded binary chunks cleanly on local SSD and processes/validates the file once.
+        /// </summary>
+        public Dictionary<string, object> CompleteChunkedUpload(string uploadId, string originalFilename, int totalChunks, out string errorCode, out string errorMsg)
+        {
+            errorCode = null;
+            errorMsg = null;
+
+            string safeId = SanitizeChunkUploadId(uploadId);
+            if (string.IsNullOrEmpty(safeId) || totalChunks < 1 || totalChunks > 200)
+            {
+                errorCode = "INVALID_CHUNK_COMPLETE";
+                errorMsg = "Invalid chunk completion request.";
+                return null;
+            }
+
+            string uploadDir = Path.Combine(Path.Combine(_vaultDirectory, "_chunks"), safeId);
+            if (!Directory.Exists(uploadDir))
+            {
+                errorCode = "UPLOAD_SESSION_MISSING";
+                errorMsg = "Chunk upload session not found or already finalized.";
+                return null;
+            }
+
+            byte[] combinedBytes;
+            try
+            {
+                using (var ms = new MemoryStream())
+                {
+                    for (int i = 0; i < totalChunks; i++)
+                    {
+                        string partPath = Path.Combine(uploadDir, string.Format(CultureInfo.InvariantCulture, "chunk_{0:0000}.part", i));
+                        if (!File.Exists(partPath))
+                        {
+                            errorCode = "MISSING_CHUNK";
+                            errorMsg = string.Format(CultureInfo.InvariantCulture, "Missing upload chunk {0} of {1}. Please retry upload.", i + 1, totalChunks);
+                            return null;
+                        }
+                        byte[] partBytes = File.ReadAllBytes(partPath);
+                        ms.Write(partBytes, 0, partBytes.Length);
+                        if (ms.Length > 52L * 1024L * 1024L)
+                        {
+                            errorCode = "FILE_TOO_LARGE";
+                            errorMsg = "Assembled file exceeds maximum 50 MB limit.";
+                            return null;
+                        }
+                    }
+                    combinedBytes = ms.ToArray();
+                }
+            }
+            finally
+            {
+                try { Directory.Delete(uploadDir, true); } catch { }
+            }
+
+            return SaveValidatedPdf(originalFilename, combinedBytes, out errorCode, out errorMsg);
+        }
+
+        public byte[] GetOrderPdfBytesForAdmin(long orderId, out string fileName, out string errorMsg)
+        {
+            fileName = "document.pdf";
+            errorMsg = null;
+            var row = _db.QuerySingle(
+                @"SELECT f.original_filename_redacted, f.storage_relative_path, f.is_deleted
+                  FROM orders o
+                  JOIN files f ON o.file_id = f.id
+                  WHERE o.id = @oid;",
+                new Dictionary<string, object> { { "oid", orderId } });
+
+            if (row == null)
+            {
+                errorMsg = "Order or attached document not found.";
+                return null;
+            }
+            if (Convert.ToInt64(row["is_deleted"]) != 0)
+            {
+                errorMsg = "Source PDF has already been purged after handover/expiry.";
+                return null;
+            }
+            fileName = Convert.ToString(row["original_filename_redacted"] ?? "document.pdf");
+            string fullPath = Path.Combine(_vaultDirectory, Convert.ToString(row["storage_relative_path"]));
+            if (!File.Exists(fullPath))
+            {
+                errorMsg = "Source PDF file is missing from host vault.";
+                return null;
+            }
+            return File.ReadAllBytes(fullPath);
+        }
+
+        public byte[] GetFilePdfBytesByToken(string fileToken, out string fileName, out string errorMsg)
+        {
+            fileName = "document.pdf";
+            errorMsg = null;
+            if (string.IsNullOrWhiteSpace(fileToken))
+            {
+                errorMsg = "Missing file token.";
+                return null;
+            }
+            var row = _db.QuerySingle(
+                @"SELECT original_filename_redacted, storage_relative_path, is_deleted
+                  FROM files
+                  WHERE file_token = @ft;",
+                new Dictionary<string, object> { { "ft", fileToken.Trim() } });
+
+            if (row == null)
+            {
+                errorMsg = "File not found.";
+                return null;
+            }
+            if (Convert.ToInt64(row["is_deleted"]) != 0)
+            {
+                errorMsg = "File has already been purged.";
+                return null;
+            }
+            fileName = Convert.ToString(row["original_filename_redacted"] ?? "document.pdf");
+            string fullPath = Path.Combine(_vaultDirectory, Convert.ToString(row["storage_relative_path"]));
+            if (!File.Exists(fullPath))
+            {
+                errorMsg = "File is missing from host vault.";
+                return null;
+            }
+            return File.ReadAllBytes(fullPath);
+        }
     }
 }

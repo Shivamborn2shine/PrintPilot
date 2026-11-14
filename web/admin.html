@@ -538,6 +538,75 @@
           </div>
         </div>
 
+        <!-- Counter Quick Upload: Multi-File Upload, Instant Preview & Batch Print -->
+        <div class="card" id="counterMultiUploadCard" style="border-left:5px solid #10b981;background:#f8fafc;margin-bottom:14px;">
+          <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:10px;">
+            <div>
+              <h3 style="font-size:1rem;color:#0f172a;margin:0;display:flex;align-items:center;gap:6px;">
+                ⚡ Counter Quick Upload &amp; File Preview (Multiple Files)
+              </h3>
+              <p style="font-size:0.76rem;color:var(--muted);margin:2px 0 0;">
+                Drop or select multiple PDFs, photos, Word (.docx/.doc/.rtf), or text files at once (up to 500 pages / 50 MB each). Preview &amp; print in batch!
+              </p>
+            </div>
+            <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;">
+              <input type="file" id="adminMultiFileInput" multiple
+                accept=".pdf,application/pdf,image/*,.png,.jpg,.jpeg,.webp,.bmp,.docx,.doc,.rtf,.odt,.html,.htm,.txt,.csv,.md"
+                style="display:none;" onchange="handleAdminMultiFiles(this.files); try{this.value='';}catch(e){}" />
+              <button type="button" class="btn btn-primary" onclick="document.getElementById('adminMultiFileInput').click()" style="background:#059669;border-color:#059669;">
+                📂 Select Multiple Files
+              </button>
+              <button type="button" class="btn btn-secondary hidden" id="btnClearBatchQueue" onclick="clearAdminBatchQueue()" style="font-size:0.78rem;">
+                Clear List
+              </button>
+            </div>
+          </div>
+
+          <div id="adminDropZone"
+            ondragover="event.preventDefault(); this.style.borderColor='#059669'; this.style.background='#ecfdf5';"
+            ondragleave="this.style.borderColor='#94a3b8'; this.style.background='#ffffff';"
+            ondrop="event.preventDefault(); this.style.borderColor='#94a3b8'; this.style.background='#ffffff'; handleAdminMultiFiles(event.dataTransfer.files);"
+            onclick="document.getElementById('adminMultiFileInput').click()"
+            style="margin-top:10px;border:2px dashed #94a3b8;border-radius:10px;padding:12px;text-align:center;background:#ffffff;cursor:pointer;font-size:0.82rem;color:#475569;transition:all 0.15s;">
+            📄 Drag &amp; drop multiple files here or click to browse (supports chunked local transfer)
+          </div>
+
+          <div id="adminBatchContainer" class="hidden" style="margin-top:12px;">
+            <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:flex-end;background:#ffffff;border:1px solid #cbd5e1;border-radius:8px;padding:10px;margin-bottom:10px;">
+              <div>
+                <label style="font-size:0.72rem;font-weight:700;display:block;color:#334155;">Customer Name</label>
+                <input type="text" id="batchCustomerName" value="Walk-in Counter" style="padding:5px 8px;font-size:0.8rem;width:150px;" />
+              </div>
+              <div>
+                <label style="font-size:0.72rem;font-weight:700;display:block;color:#334155;">Color Mode</label>
+                <select id="batchColorMode" style="padding:5px 8px;font-size:0.8rem;">
+                  <option value="bw">⚫ B&amp;W</option>
+                  <option value="color">🎨 Color</option>
+                </select>
+              </div>
+              <div>
+                <label style="font-size:0.72rem;font-weight:700;display:block;color:#334155;">Duplex</label>
+                <select id="batchDuplexMode" style="padding:5px 8px;font-size:0.8rem;">
+                  <option value="OneSided">Simplex (1-Sided)</option>
+                  <option value="TwoSidedLongEdge">Duplex (Long Edge)</option>
+                  <option value="TwoSidedShortEdge">Duplex (Short Edge)</option>
+                </select>
+              </div>
+              <div>
+                <label style="font-size:0.72rem;font-weight:700;display:block;color:#334155;">Copies</label>
+                <input type="number" id="batchCopies" min="1" max="50" value="1" style="padding:5px 8px;font-size:0.8rem;width:70px;" />
+              </div>
+              <label style="display:flex;align-items:center;gap:5px;font-size:0.78rem;font-weight:600;color:#0f172a;padding-bottom:6px;cursor:pointer;">
+                <input type="checkbox" id="chkBatchAutoApprove" checked /> Auto-Approve &amp; Print Now
+              </label>
+              <button type="button" class="btn btn-success" id="btnPrintAllBatch" onclick="submitAdminBatchPrint()" style="margin-left:auto;">
+                🖨️ Queue &amp; Print All Ready Files
+              </button>
+            </div>
+            <div id="adminBatchList" style="display:flex;flex-direction:column;gap:6px;"></div>
+          </div>
+        </div>
+
         <div class="card" id="ordersCard">
           <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:10px;margin-bottom:12px;">
             <div>
@@ -1082,6 +1151,26 @@
     </div>
   </div>
 
+  <!-- Modal: Document / Order File Preview -->
+  <div id="modalFilePreview" class="modal-backdrop hidden">
+    <div class="modal-card" style="max-width:920px;width:95vw;max-height:92vh;display:flex;flex-direction:column;padding:18px;">
+      <div style="display:flex;justify-content:space-between;align-items:center;gap:10px;margin-bottom:10px;flex-wrap:wrap;">
+        <div>
+          <h3 style="font-size:1.05rem;margin:0;">👁️ Document Preview: <span id="lblPreviewTitle">document.pdf</span></h3>
+          <div id="lblPreviewMeta" style="font-size:0.76rem;color:var(--muted);margin-top:2px;">Loading PDF from station vault...</div>
+        </div>
+        <div style="display:flex;gap:8px;align-items:center;">
+          <a id="lnkPreviewDownload" href="#" download="document.pdf" class="btn btn-secondary hidden" style="font-size:0.8rem;text-decoration:none;">⬇️ Download</a>
+          <button type="button" class="btn btn-secondary" onclick="closeFilePreviewModal()" style="font-size:0.85rem;">✕ Close</button>
+        </div>
+      </div>
+      <div id="previewStatusBox" style="padding:18px;text-align:center;color:var(--muted);font-size:0.9rem;">
+        ⏳ Loading PDF preview from local PrintAway station...
+      </div>
+      <iframe id="previewPdfFrame" class="hidden" style="width:100%;height:72vh;border:1px solid #cbd5e1;border-radius:8px;background:#f8fafc;"></iframe>
+    </div>
+  </div>
+
   <script>
     // Tab switching support
     let currentAdminTab = localStorage.getItem('printaway_admin_tab') || 'orders';
@@ -1160,7 +1249,7 @@
       const badgeEl = document.getElementById('lblAdminShopBadge');
       if (badgeEl) badgeEl.textContent = shopId;
 
-      // Helper to ping candidate tunnel before trusting it (zero custom headers = zero CORS preflight overhead)
+      // Helper to ping candidate tunnel before trusting it (verifies JSON response, never HTML splash/SPA page)
       async function isTunnelAlive(candidateUrl) {
         if (!candidateUrl || !candidateUrl.startsWith('https://')) return false;
         if (candidateUrl.includes('api.trycloudflare.com') || candidateUrl.includes('pkg.trycloudflare.com') ||
@@ -1170,17 +1259,22 @@
           const tid = setTimeout(() => ctrl.abort(), 3000);
           const res = await fetch(candidateUrl + '/api/health', { signal: ctrl.signal });
           clearTimeout(tid);
-          if (res.ok) return true;
+          if (res.ok) {
+            const txt = await res.text();
+            if (txt && txt.trimStart().startsWith('{')) return true;
+          }
         } catch { }
         try {
           const ctrl2 = new AbortController();
           const tid2 = setTimeout(() => ctrl2.abort(), 2500);
           const res2 = await fetch(candidateUrl + '/api/shop/status', { signal: ctrl2.signal });
           clearTimeout(tid2);
-          return res2.ok;
-        } catch {
-          return false;
-        }
+          if (res2.ok) {
+            const txt2 = await res2.text();
+            if (txt2 && txt2.trimStart().startsWith('{')) return true;
+          }
+        } catch { }
+        return false;
       }
 
       if (!force && cached && cached.startsWith('https://') && (await isTunnelAlive(cached))) {
@@ -1189,7 +1283,6 @@
       localStorage.removeItem('printaway_api_base');
 
       // Priority 1: Supabase lookup for live tunnel URL
-      let sbCandidate = '';
       try {
         const sbRes = await fetch(`https://zduoifzakiojfqbtxqqm.supabase.co/rest/v1/shops?shop_id=eq.${encodeURIComponent(shopId)}&select=live_tunnel_url`, {
           headers: {
@@ -1203,7 +1296,6 @@
           if (list && list.length > 0 && list[0].live_tunnel_url && list[0].live_tunnel_url.startsWith('https://')) {
             const cleanUrl = list[0].live_tunnel_url.trim().replace(/\/+$/, '');
             if (!cleanUrl.includes('api.trycloudflare.com') && !cleanUrl.includes('pkg.trycloudflare.com')) {
-              sbCandidate = cleanUrl;
               if (await isTunnelAlive(cleanUrl)) {
                 localStorage.setItem('printaway_api_base', cleanUrl);
                 return cleanUrl;
@@ -1232,7 +1324,7 @@
         }
       } catch (e) { }
 
-      return sbCandidate || DEFAULT_STATION_URL;
+      return DEFAULT_STATION_URL;
     }
 
     autoDiscoverLiveStation();
@@ -1244,6 +1336,19 @@
       }
       if (!base) return path;
       return base.replace(/\/+$/, '') + path;
+    }
+
+    async function isAdminHtmlResponse(res, urlStr) {
+      if (!res) return false;
+      if (urlStr && (urlStr.includes('/file') || urlStr.includes('/api/admin/files/'))) return false;
+      const ctype = (res.headers && res.headers.get('content-type') ? res.headers.get('content-type') : '').toLowerCase();
+      if (ctype.includes('text/html') || ctype.includes('application/xhtml')) return true;
+      try {
+        const txt = await res.clone().text();
+        const t = (txt || '').trimStart();
+        if (t.startsWith('<!DOCTYPE') || t.startsWith('<!doctype') || t.startsWith('<html')) return true;
+      } catch { }
+      return false;
     }
 
     // Transparent auto-healing fetch wrapper for station API calls over dynamic tunnels
@@ -1276,8 +1381,12 @@
         let firstErr = null;
         try {
           res = await nativeFetch(urlStr, init);
-          if (![502, 503, 504, 530].includes(res.status)) {
+          const htmlFallback = await isAdminHtmlResponse(res, urlStr);
+          if (![502, 503, 504, 530].includes(res.status) && !htmlFallback) {
             return res;
+          }
+          if (htmlFallback) {
+            firstErr = new Error('Station tunnel returned HTML page instead of JSON API');
           }
         } catch (err) {
           firstErr = err;
@@ -1292,7 +1401,7 @@
           }
         } catch { }
 
-        if (res) return res;
+        if (res && !(await isAdminHtmlResponse(res, urlStr))) return res;
         throw firstErr || new Error('Station tunnel unreachable. Check that PrintAway.exe is running and Online.');
       };
     })();
@@ -1899,6 +2008,7 @@
             <strong>${o.customerName || 'Walk-in Customer'}</strong><br/>
             <span style="font-size:0.78rem;color:var(--muted);">File: ${o.fileName} ${o.fileDeleted ? '[Deleted]' : ''}</span><br/>
             <span style="font-size:0.74rem;color:var(--muted);">SHA256: <code>${o.sha256Prefix}</code></span>
+            ${!o.fileDeleted ? `<div style="margin-top:4px;"><button class="btn btn-secondary" style="font-size:0.72rem;padding:2px 8px;" onclick="previewOrderFile(${o.id}, '${(o.fileName || 'document.pdf').replace(/'/g, "\\'")}', '${o.orderCode}')">👁️ Preview PDF</button></div>` : ''}
           </td>
           <td>
             <div>${colorBadge} <strong>${o.paperSize || 'A4'}</strong>${nUp} | <strong>${o.duplexMode}</strong></div>
@@ -1992,6 +2102,7 @@
           <div class="moc-customer">
             <strong>${o.customerName || 'Walk-in Customer'}</strong>
             <span class="moc-file">📄 ${o.fileName} ${o.fileDeleted ? '[Deleted]' : ''}</span>
+            ${!o.fileDeleted ? `<div style="margin-top:6px;"><button class="btn btn-secondary" style="font-size:0.76rem;padding:4px 10px;" onclick="previewOrderFile(${o.id}, '${(o.fileName || 'document.pdf').replace(/'/g, "\\'")}', '${o.orderCode}')">👁️ Preview PDF</button></div>` : ''}
           </div>
 
           <div class="moc-spec">
@@ -2464,6 +2575,313 @@
       }
       alert(`Thank you! Your ${plan === 'annual' ? 'Annual (₹149/mo)' : 'Monthly (₹249/mo)'} Pro activation request (UTR: ${utr}) has been submitted to the PrintAway founder. Your account will be upgraded shortly.`);
       closeProUpgradeModal();
+    }
+
+    // =========================================================================
+    // ADMIN FILE PREVIEW MODAL + COUNTER MULTI-FILE UPLOAD (SCANDROP WORKFLOW)
+    // =========================================================================
+    let activePreviewBlobUrl = null;
+    let adminBatchItems = [];
+
+    function closeFilePreviewModal() {
+      const modal = document.getElementById('modalFilePreview');
+      const frame = document.getElementById('previewPdfFrame');
+      if (modal) modal.classList.add('hidden');
+      if (frame) {
+        frame.src = 'about:blank';
+        frame.classList.add('hidden');
+      }
+      if (activePreviewBlobUrl) {
+        try { URL.revokeObjectURL(activePreviewBlobUrl); } catch { }
+        activePreviewBlobUrl = null;
+      }
+    }
+
+    async function loadPdfIntoPreviewModal(endpointPath, title, metaText) {
+      const modal = document.getElementById('modalFilePreview');
+      const frame = document.getElementById('previewPdfFrame');
+      const statusBox = document.getElementById('previewStatusBox');
+      const titleEl = document.getElementById('lblPreviewTitle');
+      const metaEl = document.getElementById('lblPreviewMeta');
+      const dlEl = document.getElementById('lnkPreviewDownload');
+
+      closeFilePreviewModal();
+      if (titleEl) titleEl.textContent = title || 'document.pdf';
+      if (metaEl) metaEl.textContent = metaText || 'Fetching PDF from station vault...';
+      if (statusBox) {
+        statusBox.textContent = '⏳ Loading PDF preview from station...';
+        statusBox.classList.remove('hidden');
+      }
+      if (dlEl) dlEl.classList.add('hidden');
+      if (modal) modal.classList.remove('hidden');
+
+      try {
+        const res = await fetch(apiUrl(endpointPath), {
+          method: 'GET',
+          headers: {
+            'X-Admin-Session': adminSessionToken || '',
+            'X-CSRF-Token': adminCsrfToken || ''
+          }
+        });
+        if (!res.ok) {
+          let errText = 'Preview failed (HTTP ' + res.status + ')';
+          try {
+            const errJson = await res.json();
+            if (errJson && errJson.message) errText = errJson.message;
+          } catch { }
+          throw new Error(errText);
+        }
+        const blob = await res.blob();
+        activePreviewBlobUrl = URL.createObjectURL(new Blob([blob], { type: 'application/pdf' }));
+        if (frame) {
+          frame.src = activePreviewBlobUrl;
+          frame.classList.remove('hidden');
+        }
+        if (statusBox) statusBox.classList.add('hidden');
+        if (dlEl) {
+          dlEl.href = activePreviewBlobUrl;
+          dlEl.download = title || 'document.pdf';
+          dlEl.classList.remove('hidden');
+        }
+      } catch (err) {
+        if (statusBox) {
+          statusBox.innerHTML = '<span style="color:#b91c1c;font-weight:700;">Preview unavailable: ' + (err.message || err) + '</span>';
+          statusBox.classList.remove('hidden');
+        }
+      }
+    }
+
+    function previewOrderFile(orderId, fileName, orderCode) {
+      loadPdfIntoPreviewModal(
+        '/api/admin/orders/' + encodeURIComponent(orderId) + '/file',
+        fileName || ('Order_' + orderCode + '.pdf'),
+        'Order Reference: ' + (orderCode || ('#' + orderId))
+      );
+    }
+
+    function previewBatchFile(fileToken, fileName, pageCount) {
+      loadPdfIntoPreviewModal(
+        '/api/admin/files/' + encodeURIComponent(fileToken),
+        fileName || 'counter_file.pdf',
+        'Counter File Preview — ' + (pageCount || '?') + ' page(s)'
+      );
+    }
+
+    async function parseAdminJsonSafe(res, label) {
+      const txt = await res.text();
+      if ((txt || '').trimStart().startsWith('<')) {
+        throw new Error((label || 'Request') + ': Received HTML instead of JSON from station tunnel.');
+      }
+      if (!txt) return {};
+      return JSON.parse(txt);
+    }
+
+    async function uploadSingleAdminFileSmart(file, onProgressText) {
+      const buf = new Uint8Array(await file.arrayBuffer());
+      if (buf.byteLength > 50 * 1024 * 1024) {
+        throw new Error('File exceeds 50 MB limit');
+      }
+      const CHUNK_THRESHOLD = 1500 * 1024;
+      const CHUNK_SIZE = 1024 * 1024;
+
+      if (buf.byteLength <= CHUNK_THRESHOLD) {
+        if (onProgressText) onProgressText('Uploading...');
+        const res = await fetch(apiUrl('/api/uploads?filename=' + encodeURIComponent(file.name)), {
+          method: 'POST',
+          headers: { 'Content-Type': file.type || 'application/octet-stream', 'X-File-Name': file.name },
+          body: buf
+        });
+        const data = await parseAdminJsonSafe(res, file.name);
+        if (!res.ok || data.error) throw new Error(data.message || ('HTTP ' + res.status));
+        return data;
+      }
+
+      const uploadId = 'adm_' + Date.now() + '_' + Math.random().toString(36).slice(2, 8);
+      const totalChunks = Math.max(1, Math.ceil(buf.byteLength / CHUNK_SIZE));
+      for (let i = 0; i < totalChunks; i++) {
+        const slice = buf.subarray(i * CHUNK_SIZE, Math.min(buf.byteLength, (i + 1) * CHUNK_SIZE));
+        const pct = Math.min(95, Math.round(((i + 1) / totalChunks) * 95));
+        if (onProgressText) onProgressText(`Uploading chunk ${i + 1}/${totalChunks} (${pct}%)`);
+        const cRes = await fetch(
+          apiUrl(`/api/uploads/chunk?uploadId=${encodeURIComponent(uploadId)}&index=${i}&total=${totalChunks}`),
+          {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/octet-stream' },
+            body: slice
+          }
+        );
+        const cData = await parseAdminJsonSafe(cRes, file.name);
+        if (!cRes.ok || cData.error) throw new Error(cData.message || ('Chunk HTTP ' + cRes.status));
+      }
+
+      if (onProgressText) onProgressText('Finalizing PDF...');
+      const compRes = await fetch(apiUrl('/api/uploads/complete'), {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ uploadId, fileName: file.name, totalChunks })
+      });
+      const compData = await parseAdminJsonSafe(compRes, file.name);
+      if (!compRes.ok || compData.error) throw new Error(compData.message || ('Finalize HTTP ' + compRes.status));
+      return compData;
+    }
+
+    function renderAdminBatchList() {
+      const container = document.getElementById('adminBatchContainer');
+      const listEl = document.getElementById('adminBatchList');
+      const clearBtn = document.getElementById('btnClearBatchQueue');
+      if (!container || !listEl) return;
+
+      if (adminBatchItems.length === 0) {
+        container.classList.add('hidden');
+        if (clearBtn) clearBtn.classList.add('hidden');
+        listEl.innerHTML = '';
+        return;
+      }
+
+      container.classList.remove('hidden');
+      if (clearBtn) clearBtn.classList.remove('hidden');
+
+      listEl.innerHTML = adminBatchItems.map((item, idx) => {
+        const sizeStr = item.sizeBytes >= 1024 * 1024
+          ? (item.sizeBytes / (1024 * 1024)).toFixed(2) + ' MB'
+          : (item.sizeBytes / 1024).toFixed(1) + ' KB';
+
+        let statusBadge = '';
+        if (item.status === 'uploading') {
+          statusBadge = `<span class="badge" style="background:#dbeafe;color:#1e40af;">⏳ ${item.statusText || 'Uploading...'}</span>`;
+        } else if (item.status === 'ready') {
+          statusBadge = `<span class="badge" style="background:#dcfce7;color:#15803d;">✓ Ready (${item.pageCount}p)</span>`;
+        } else if (item.status === 'printed') {
+          statusBadge = `<span class="badge" style="background:#e0e7ff;color:#4338ca;">🖨️ Queued (${item.orderCode})</span>`;
+        } else if (item.status === 'error') {
+          statusBadge = `<span class="badge" style="background:#fee2e2;color:#b91c1c;">✗ ${item.errorMessage || 'Error'}</span>`;
+        }
+
+        const safeName = (item.displayName || item.name).replace(/'/g, "\\'");
+        return `<div style="display:flex;align-items:center;justify-content:space-between;gap:8px;flex-wrap:wrap;background:#ffffff;border:1px solid #cbd5e1;border-radius:8px;padding:8px 12px;">
+          <div style="min-width:200px;flex:1;">
+            <strong style="font-size:0.84rem;color:#0f172a;">${item.displayName || item.name}</strong>
+            <div style="font-size:0.74rem;color:var(--muted);margin-top:2px;">Size: ${sizeStr}</div>
+          </div>
+          <div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap;">
+            ${statusBadge}
+            ${item.fileToken ? `<button type="button" class="btn btn-secondary" style="font-size:0.74rem;padding:4px 9px;" onclick="previewBatchFile('${item.fileToken}', '${safeName}', ${item.pageCount || 1})">👁️ Preview</button>` : ''}
+            ${item.status === 'ready' ? `<button type="button" class="btn btn-success" style="font-size:0.74rem;padding:4px 9px;" onclick="printSingleBatchItem(${idx})">🖨️ Print</button>` : ''}
+            <button type="button" class="btn btn-secondary" style="font-size:0.74rem;padding:4px 8px;color:#b91c1c;" onclick="removeAdminBatchItem(${idx})">✕</button>
+          </div>
+        </div>`;
+      }).join('');
+    }
+
+    function removeAdminBatchItem(idx) {
+      adminBatchItems.splice(idx, 1);
+      renderAdminBatchList();
+    }
+
+    function clearAdminBatchQueue() {
+      adminBatchItems = [];
+      renderAdminBatchList();
+    }
+
+    async function handleAdminMultiFiles(fileList) {
+      if (!fileList || fileList.length === 0) return;
+      const incoming = Array.from(fileList);
+      const startIdx = adminBatchItems.length;
+      incoming.forEach(f => {
+        adminBatchItems.push({
+          file: f,
+          name: f.name,
+          displayName: f.name,
+          sizeBytes: f.size,
+          status: 'uploading',
+          statusText: 'Waiting...',
+          fileToken: null,
+          pageCount: 0,
+          errorMessage: ''
+        });
+      });
+      renderAdminBatchList();
+
+      for (let i = 0; i < incoming.length; i++) {
+        const entry = adminBatchItems[startIdx + i];
+        if (!entry) continue;
+        try {
+          const uploaded = await uploadSingleAdminFileSmart(entry.file, txt => {
+            entry.statusText = txt;
+            renderAdminBatchList();
+          });
+          entry.status = 'ready';
+          entry.fileToken = uploaded.fileToken;
+          entry.displayName = uploaded.displayName || entry.name;
+          entry.pageCount = uploaded.pageCount || 1;
+          entry.statusText = 'Ready';
+        } catch (err) {
+          entry.status = 'error';
+          entry.errorMessage = err.message || 'Upload failed';
+        }
+        renderAdminBatchList();
+      }
+    }
+
+    async function printSingleBatchItem(idx) {
+      const item = adminBatchItems[idx];
+      if (!item || !item.fileToken || item.status !== 'ready') return;
+      const customerName = (document.getElementById('batchCustomerName') && document.getElementById('batchCustomerName').value.trim()) || 'Walk-in Counter';
+      const colorMode = (document.getElementById('batchColorMode') && document.getElementById('batchColorMode').value) || 'bw';
+      const duplexMode = (document.getElementById('batchDuplexMode') && document.getElementById('batchDuplexMode').value) || 'OneSided';
+      const copies = parseInt((document.getElementById('batchCopies') && document.getElementById('batchCopies').value) || '1', 10) || 1;
+      const autoApprove = !document.getElementById('chkBatchAutoApprove') || document.getElementById('chkBatchAutoApprove').checked;
+
+      try {
+        item.status = 'uploading';
+        item.statusText = 'Creating order...';
+        renderAdminBatchList();
+        const res = await fetch(apiUrl('/api/admin/counter-order'), {
+          method: 'POST',
+          headers: adminHeaders(),
+          body: JSON.stringify({
+            fileToken: item.fileToken,
+            customerName,
+            colorMode,
+            duplexMode,
+            copies,
+            autoApprove
+          })
+        });
+        const data = await parseAdminJsonSafe(res, 'Counter Print');
+        if (!res.ok || data.error) {
+          throw new Error(data.message || ('Order failed HTTP ' + res.status));
+        }
+        item.status = 'printed';
+        item.orderCode = data.orderCode || ('#' + data.orderId);
+        renderAdminBatchList();
+        await loadDashboard();
+      } catch (err) {
+        item.status = 'error';
+        item.errorMessage = err.message || 'Failed to print';
+        renderAdminBatchList();
+      }
+    }
+
+    async function submitAdminBatchPrint() {
+      const readyIndices = [];
+      adminBatchItems.forEach((it, idx) => {
+        if (it.status === 'ready' && it.fileToken) readyIndices.push(idx);
+      });
+      if (readyIndices.length === 0) {
+        showNotice('No ready uploaded files to queue/print.', true);
+        return;
+      }
+      const btn = document.getElementById('btnPrintAllBatch');
+      if (btn) btn.disabled = true;
+      try {
+        for (const idx of readyIndices) {
+          await printSingleBatchItem(idx);
+        }
+        showNotice(`Batch complete: ${readyIndices.length} file(s) sent to print queue.`, false);
+      } finally {
+        if (btn) btn.disabled = false;
+      }
     }
 
     // Auto-resume admin session on startup if valid token stored

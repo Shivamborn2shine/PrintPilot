@@ -494,10 +494,10 @@ namespace PrintAway.Web
                     }
                 }
 
-                // Customer PDF/Document Upload (POST /api/uploads)
+                // Customer & Counter PDF/Document Upload (POST /api/uploads)
                 if (method == "POST" && path == "/api/uploads")
                 {
-                    if (!CheckRateLimit("upload", 60))
+                    if (!CheckRateLimit("upload", 240))
                     {
                         WriteError(res, 429, "RATE_LIMITED", "Too many upload requests. Please wait a moment.");
                         return;
@@ -521,10 +521,83 @@ namespace PrintAway.Web
                             req.InputStream.CopyTo(ms);
                             rawBytes = ms.ToArray();
                         }
+                        if (contentType.IndexOf("multipart/form-data", StringComparison.OrdinalIgnoreCase) >= 0)
+                        {
+                            string mpName;
+                            byte[] mpBytes = ExtractMultipartSingleFile(rawBytes, contentType, out mpName);
+                            if (mpBytes != null && mpBytes.Length > 0)
+                            {
+                                rawBytes = mpBytes;
+                                if (!string.IsNullOrWhiteSpace(mpName)) fileName = mpName;
+                            }
+                        }
                     }
 
                     string errCode, errMsg;
                     var saved = _repo.SaveValidatedPdf(fileName, rawBytes, out errCode, out errMsg);
+                    if (saved == null)
+                    {
+                        int status = errCode == "SHOP_UNAVAILABLE" ? 503 : 400;
+                        WriteError(res, status, errCode, errMsg);
+                        return;
+                    }
+                    WriteJson(res, 200, saved);
+                    return;
+                }
+
+                // ScanDrop-Style Chunked Binary Upload (POST /api/uploads/chunk & POST /api/uploads/complete)
+                if (method == "POST" && path == "/api/uploads/chunk")
+                {
+                    if (!CheckRateLimit("upload_chunk", 1200))
+                    {
+                        WriteError(res, 429, "RATE_LIMITED", "Too many chunk upload requests.");
+                        return;
+                    }
+
+                    string uploadId = req.QueryString["uploadId"] ?? req.Headers["X-Upload-Id"] ?? "";
+                    int chunkIndex = 0;
+                    int totalChunks = 1;
+                    int.TryParse(req.QueryString["index"] ?? req.Headers["X-Chunk-Index"] ?? "0", NumberStyles.Integer, CultureInfo.InvariantCulture, out chunkIndex);
+                    int.TryParse(req.QueryString["total"] ?? req.Headers["X-Total-Chunks"] ?? "1", NumberStyles.Integer, CultureInfo.InvariantCulture, out totalChunks);
+
+                    byte[] chunkBytes;
+                    using (var ms = new MemoryStream())
+                    {
+                        req.InputStream.CopyTo(ms);
+                        chunkBytes = ms.ToArray();
+                    }
+
+                    string contentType = req.ContentType ?? "";
+                    if (contentType.IndexOf("multipart/form-data", StringComparison.OrdinalIgnoreCase) >= 0)
+                    {
+                        string unusedName;
+                        byte[] mpChunk = ExtractMultipartSingleFile(chunkBytes, contentType, out unusedName);
+                        if (mpChunk != null && mpChunk.Length > 0)
+                        {
+                            chunkBytes = mpChunk;
+                        }
+                    }
+
+                    string errCode, errMsg;
+                    var chunkRes = _repo.SaveUploadChunk(uploadId, chunkIndex, totalChunks, chunkBytes, out errCode, out errMsg);
+                    if (chunkRes == null)
+                    {
+                        WriteError(res, 400, errCode, errMsg);
+                        return;
+                    }
+                    WriteJson(res, 200, chunkRes);
+                    return;
+                }
+
+                if (method == "POST" && path == "/api/uploads/complete")
+                {
+                    var body = ReadJsonBody(req);
+                    string uploadId = GetString(body, "uploadId", req.QueryString["uploadId"] ?? "");
+                    string fileName = GetString(body, "fileName", req.QueryString["filename"] ?? "document.pdf");
+                    int totalChunks = GetInt(body, "totalChunks", 1);
+
+                    string errCode, errMsg;
+                    var saved = _repo.CompleteChunkedUpload(uploadId, fileName, totalChunks, out errCode, out errMsg);
                     if (saved == null)
                     {
                         int status = errCode == "SHOP_UNAVAILABLE" ? 503 : 400;
@@ -908,6 +981,102 @@ namespace PrintAway.Web
                         string dateFilter = req.QueryString["date"] ?? "today";
                         string shopFilter = req.QueryString["shop"] ?? null;
                         WriteJson(res, 200, _repo.GetAdminDashboardSummary(stateFilter, search, dateFilter, shopFilter));
+                        return;
+                    }
+
+                    // Admin File Preview for Order (GET /api/admin/orders/{id}/file)
+                    if (method == "GET" && path.StartsWith("/api/admin/orders/") && path.EndsWith("/file"))
+                    {
+                        string[] segs = path.Split(new[] { '/' }, StringSplitOptions.RemoveEmptyEntries);
+                        long orderId;
+                        if (segs.Length == 5 && long.TryParse(segs[3], NumberStyles.Integer, CultureInfo.InvariantCulture, out orderId))
+                        {
+                            string fileName, fErr;
+                            byte[] pdfBytes = _repo.GetOrderPdfBytesForAdmin(orderId, out fileName, out fErr);
+                            if (pdfBytes == null)
+                            {
+                                WriteError(res, 404, "FILE_NOT_FOUND", fErr);
+                                return;
+                            }
+                            string safeHeaderName = (fileName ?? "document.pdf").Replace("\"", "");
+                            res.Headers["Content-Disposition"] = "inline; filename=\"" + safeHeaderName + "\"";
+                            WriteBytes(res, 200, "application/pdf", pdfBytes);
+                            return;
+                        }
+                    }
+
+                    // Admin File Preview for Uploaded Counter File Token (GET /api/admin/files/{fileToken})
+                    if (method == "GET" && path.StartsWith("/api/admin/files/"))
+                    {
+                        string fileToken = path.Substring("/api/admin/files/".Length).Trim('/');
+                        string fileName, fErr;
+                        byte[] pdfBytes = _repo.GetFilePdfBytesByToken(fileToken, out fileName, out fErr);
+                        if (pdfBytes == null)
+                        {
+                            WriteError(res, 404, "FILE_NOT_FOUND", fErr);
+                            return;
+                        }
+                        string safeHeaderName = (fileName ?? "document.pdf").Replace("\"", "");
+                        res.Headers["Content-Disposition"] = "inline; filename=\"" + safeHeaderName + "\"";
+                        WriteBytes(res, 200, "application/pdf", pdfBytes);
+                        return;
+                    }
+
+                    // Admin Walk-In Counter Quick Print Order (POST /api/admin/counter-order)
+                    if (method == "POST" && path == "/api/admin/counter-order")
+                    {
+                        var body = ReadJsonBody(req);
+                        string fileToken = GetString(body, "fileToken", "");
+                        string customerName = GetString(body, "customerName", "Walk-in Counter");
+                        string customerPhone = GetString(body, "customerPhone", "");
+                        int copies = GetInt(body, "copies", 1);
+                        string duplexMode = GetString(body, "duplexMode", "OneSided");
+                        string pageRange = GetString(body, "pageRange", "all");
+                        string colorMode = GetString(body, "colorMode", "bw");
+                        string paperSize = GetString(body, "paperSize", "A4");
+                        string orientation = GetString(body, "orientation", "auto");
+                        int pagesPerSheet = GetInt(body, "pagesPerSheet", 1);
+                        bool collate = GetBool(body, "collate", true);
+                        bool autoApprove = GetBool(body, "autoApprove", true);
+                        string targetQueueName = GetString(body, "targetQueueName", null);
+
+                        string qErr;
+                        var quote = _repo.CreateServerQuote(fileToken, copies, duplexMode, pageRange, out qErr,
+                            colorMode, paperSize, orientation, pagesPerSheet, collate);
+                        if (quote == null)
+                        {
+                            WriteError(res, 400, "QUOTE_FAILED", qErr);
+                            return;
+                        }
+
+                        string oErr;
+                        var order = _repo.CreateOrderAndPaymentIntent(
+                            Convert.ToString(quote["quoteToken"]), customerName, customerPhone, true, out oErr, "cash");
+                        if (order == null)
+                        {
+                            WriteError(res, 400, "ORDER_FAILED", oErr);
+                            return;
+                        }
+
+                        long orderId = Convert.ToInt64(order["orderId"], CultureInfo.InvariantCulture);
+                        if (autoApprove)
+                        {
+                            int st;
+                            string appErr;
+                            var appRes = _repo.AdminApproveOrder(orderId, adminSess, "Counter multi-file print", out st, out appErr, targetQueueName);
+                            if (appRes == null)
+                            {
+                                WriteError(res, st, "APPROVAL_REJECTED", appErr);
+                                return;
+                            }
+                            order["state"] = appRes["state"];
+                            ThreadPool.QueueUserWorkItem(_ => { try { _worker.RunSingleCycle(); } catch { } });
+                        }
+
+                        order["totalAmountInr"] = quote["totalAmountInr"];
+                        order["printedSides"] = quote["printedSides"];
+                        order["physicalSheets"] = quote["physicalSheets"];
+                        WriteJson(res, 200, order);
                         return;
                     }
 
@@ -1354,6 +1523,82 @@ namespace PrintAway.Web
             {
                 return sr.ReadToEnd();
             }
+        }
+
+        private static byte[] ExtractMultipartSingleFile(byte[] body, string contentType, out string fileName)
+        {
+            fileName = null;
+            if (body == null || body.Length == 0 || string.IsNullOrEmpty(contentType)) return null;
+            int bIdx = contentType.IndexOf("boundary=", StringComparison.OrdinalIgnoreCase);
+            if (bIdx < 0) return null;
+            string rawBoundary = contentType.Substring(bIdx + 9).Trim();
+            int semi = rawBoundary.IndexOf(';');
+            if (semi >= 0) rawBoundary = rawBoundary.Substring(0, semi).Trim();
+            rawBoundary = rawBoundary.Trim('"');
+            if (string.IsNullOrEmpty(rawBoundary)) return null;
+
+            byte[] boundaryBytes = Encoding.ASCII.GetBytes("--" + rawBoundary);
+            byte[] headerSep = new byte[] { 13, 10, 13, 10 };
+
+            int pos = IndexOfBytes(body, boundaryBytes, 0);
+            while (pos >= 0)
+            {
+                pos += boundaryBytes.Length;
+                if (pos + 1 < body.Length && body[pos] == 45 && body[pos + 1] == 45) break;
+                if (pos + 1 < body.Length && body[pos] == 13 && body[pos + 1] == 10) pos += 2;
+
+                int next = IndexOfBytes(body, boundaryBytes, pos);
+                if (next < 0) break;
+
+                int partEnd = next;
+                if (partEnd >= 2 && body[partEnd - 2] == 13 && body[partEnd - 1] == 10) partEnd -= 2;
+
+                int hdrEnd = IndexOfBytes(body, headerSep, pos);
+                if (hdrEnd > pos && hdrEnd < partEnd)
+                {
+                    string hdrText = Encoding.UTF8.GetString(body, pos, hdrEnd - pos);
+                    int fnIdx = hdrText.IndexOf("filename=\"", StringComparison.OrdinalIgnoreCase);
+                    if (fnIdx >= 0)
+                    {
+                        fnIdx += 10;
+                        int fnEnd = hdrText.IndexOf('"', fnIdx);
+                        if (fnEnd > fnIdx)
+                        {
+                            fileName = Path.GetFileName(hdrText.Substring(fnIdx, fnEnd - fnIdx));
+                        }
+                        int dataStart = hdrEnd + 4;
+                        int dataLen = partEnd - dataStart;
+                        if (dataLen > 0)
+                        {
+                            var fileBuf = new byte[dataLen];
+                            Buffer.BlockCopy(body, dataStart, fileBuf, 0, dataLen);
+                            return fileBuf;
+                        }
+                    }
+                }
+                pos = next;
+            }
+            return null;
+        }
+
+        private static int IndexOfBytes(byte[] haystack, byte[] needle, int startIndex)
+        {
+            if (haystack == null || needle == null || needle.Length == 0 || startIndex < 0) return -1;
+            int max = haystack.Length - needle.Length;
+            for (int i = startIndex; i <= max; i++)
+            {
+                bool match = true;
+                for (int j = 0; j < needle.Length; j++)
+                {
+                    if (haystack[i + j] != needle[j])
+                    {
+                        match = false;
+                        break;
+                    }
+                }
+                if (match) return i;
+            }
+            return -1;
         }
 
         private Dictionary<string, object> ReadJsonBody(HttpListenerRequest req)
