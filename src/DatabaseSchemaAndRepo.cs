@@ -732,7 +732,7 @@ CREATE TABLE IF NOT EXISTS audit_events (
                 return null;
             }
 
-            // Way 3: Automatic fallback conversion for raw image & text uploads (JPEG, PNG, WEBP, BMP, GIF, TXT)
+            // Way 3: Automatic fallback conversion for raw image, text & Office/Word documents (.docx, .doc, .rtf, .odt, .html, TXT)
             if (PdfAndPrinterEngine.IsImageBytes(pdfBytes) || PdfAndPrinterEngine.IsImageExtension(originalFilename))
             {
                 byte[] convertedPdf = PdfAndPrinterEngine.ConvertImageToA4Pdf(pdfBytes);
@@ -743,6 +743,25 @@ CREATE TABLE IF NOT EXISTS audit_events (
                     {
                         originalFilename = Path.GetFileNameWithoutExtension(originalFilename) + "_A4.pdf";
                     }
+                }
+            }
+            else if (PdfAndPrinterEngine.IsOfficeDocExtension(originalFilename) ||
+                     PdfAndPrinterEngine.IsRtfBytes(pdfBytes) ||
+                     (PdfAndPrinterEngine.IsZipArchiveBytes(pdfBytes) && !originalFilename.EndsWith(".pdf", StringComparison.OrdinalIgnoreCase)))
+            {
+                string convErr;
+                byte[] convertedPdf = PdfAndPrinterEngine.ConvertDocumentToA4Pdf(originalFilename, pdfBytes, out convErr);
+                if (convertedPdf != null && convertedPdf.Length > 0)
+                {
+                    pdfBytes = convertedPdf;
+                    originalFilename = Path.GetFileNameWithoutExtension(originalFilename) + "_Doc.pdf";
+                }
+                else if (!string.IsNullOrEmpty(convErr))
+                {
+                    errorCode = "DOC_CONVERSION_FAILED";
+                    errorMsg = convErr;
+                    LogAudit(null, "customer", "anonymous", "UPLOAD_REJECTED", "draft", "rejected", errorCode + ": " + errorMsg);
+                    return null;
                 }
             }
             else if (PdfAndPrinterEngine.IsTextExtension(originalFilename))

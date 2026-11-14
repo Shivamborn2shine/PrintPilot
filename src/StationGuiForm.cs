@@ -91,9 +91,10 @@ namespace PrintAway.Gui
                     {
                         this.BeginInvoke((MethodInvoker)(() =>
                         {
-                            if (_lblTunnelUrl != null)
+                            if (_lblTunnelUrl != null && TunnelManager.IsValidPublicTunnelUrl(url))
                             {
-                                _lblTunnelUrl.Text = "🟢 Live (Cloudflare Tunnel): " + url;
+                                string provider = (_tunnel != null && !string.IsNullOrEmpty(_tunnel.ActiveProviderName)) ? _tunnel.ActiveProviderName : "Tunnel";
+                                _lblTunnelUrl.Text = "🟢 Live (" + provider + "): " + url;
                                 _lblTunnelUrl.ForeColor = Color.FromArgb(21, 128, 61);
                             }
                         }));
@@ -917,7 +918,7 @@ namespace PrintAway.Gui
                 }
                 if (_lblTunnelUrl != null && (_tunnel == null || string.IsNullOrEmpty(_tunnel.LiveTunnelUrl)))
                 {
-                    _lblTunnelUrl.Text = "Tunnel: " + msg;
+                    _lblTunnelUrl.Text = "⏳ Tunnel: " + msg;
                     _lblTunnelUrl.ForeColor = Color.FromArgb(180, 83, 9);
                 }
             }
@@ -934,9 +935,16 @@ namespace PrintAway.Gui
                     this.BeginInvoke(new Action<string>(OnTunnelCaptured), url);
                     return;
                 }
-                if (string.IsNullOrEmpty(url) ||
-                    url.IndexOf("api.trycloudflare.com", StringComparison.OrdinalIgnoreCase) >= 0 ||
-                    url.IndexOf("pkg.trycloudflare.com", StringComparison.OrdinalIgnoreCase) >= 0)
+                if (string.IsNullOrWhiteSpace(url))
+                {
+                    if (_lblTunnelUrl != null)
+                    {
+                        _lblTunnelUrl.Text = "⏳ Tunnel reconnecting automatically...";
+                        _lblTunnelUrl.ForeColor = Color.FromArgb(180, 83, 9);
+                    }
+                    return;
+                }
+                if (!TunnelManager.IsValidPublicTunnelUrl(url))
                 {
                     return;
                 }
@@ -954,8 +962,8 @@ namespace PrintAway.Gui
         {
             using (var dlg = new Form())
             {
-                dlg.Text = "PrintAway Multi-Provider Tunnel Engine";
-                dlg.ClientSize = new Size(520, 310);
+                dlg.Text = "PrintAway Resilient Tunnel Engine (Self-Healing + Permanent Mode)";
+                dlg.ClientSize = new Size(540, 355);
                 dlg.StartPosition = FormStartPosition.CenterParent;
                 dlg.FormBorderStyle = FormBorderStyle.FixedDialog;
                 dlg.MaximizeBox = false;
@@ -965,7 +973,7 @@ namespace PrintAway.Gui
 
                 var lblTitle = new Label
                 {
-                    Text = "Secure Station Tunnel Configuration",
+                    Text = "Permanent & Self-Healing Tunnel Configuration",
                     Font = new Font("Segoe UI", 11f, FontStyle.Bold),
                     ForeColor = Color.FromArgb(15, 23, 42),
                     Location = new Point(18, 14),
@@ -974,25 +982,26 @@ namespace PrintAway.Gui
 
                 var lblDesc = new Label
                 {
-                    Text = "Auto mode uses Cloudflare HTTP/2 with instant OpenSSH fallback when rate-limited.\nConfigure a Cloudflare Named Token for permanent subdomains and 100% SLA.",
+                    Text = "Auto mode probes every 30s & cascades Cloudflare -> localhost.run -> Pinggy SSH automatically.\nFor heavy print load (100% uptime, fixed URL, zero 429 rate-limits), paste a free Cloudflare Named Token:",
                     Font = new Font("Segoe UI", 8.25f),
                     ForeColor = Color.FromArgb(100, 116, 139),
                     Location = new Point(20, 42),
-                    Size = new Size(480, 35)
+                    Size = new Size(500, 36)
                 };
 
                 var lblMode = new Label { Text = "Tunnel Provider Mode:", Location = new Point(20, 85), AutoSize = true, Font = new Font("Segoe UI", 8.5f, FontStyle.Bold) };
-                var cmbMode = new ComboBox { Location = new Point(20, 105), Width = 475, DropDownStyle = ComboBoxStyle.DropDownList };
-                cmbMode.Items.Add("Auto: Cloudflare Quick Tunnel + Built-in OpenSSH Fallback (Recommended)");
-                cmbMode.Items.Add("Cloudflare Named Tunnel (Requires Token below - Zero Rate Limit)");
+                var cmbMode = new ComboBox { Location = new Point(20, 105), Width = 495, DropDownStyle = ComboBoxStyle.DropDownList };
+                cmbMode.Items.Add("Auto Cascade: Cloudflare -> OpenSSH (localhost.run) -> Pinggy SSH (Recommended)");
+                cmbMode.Items.Add("Cloudflare Named Tunnel (Requires Token + Domain below - Permanent & Unlimited)");
                 cmbMode.Items.Add("Built-in Windows OpenSSH Only (localhost.run - Zero Config)");
+                cmbMode.Items.Add("Pinggy SSH Tunnel Only (a.pinggy.io:443 - Zero Config)");
                 cmbMode.Items.Add("Custom Static Domain / Reverse Proxy");
 
-                var lblToken = new Label { Text = "Cloudflare Tunnel Token (Optional, from Cloudflare Zero Trust):", Location = new Point(20, 140), AutoSize = true, Font = new Font("Segoe UI", 8.5f, FontStyle.Bold) };
-                var txtToken = new TextBox { Location = new Point(20, 160), Width = 475 };
+                var lblToken = new Label { Text = "Cloudflare Named Tunnel Token (Free from Cloudflare Zero Trust -> Tunnels -> http://127.0.0.1:8080):", Location = new Point(20, 140), AutoSize = true, Font = new Font("Segoe UI", 8.5f, FontStyle.Bold) };
+                var txtToken = new TextBox { Location = new Point(20, 160), Width = 495 };
 
-                var lblCustom = new Label { Text = "Custom / Static Domain (Optional, e.g. https://midtown.printaway.live):", Location = new Point(20, 195), AutoSize = true, Font = new Font("Segoe UI", 8.5f, FontStyle.Bold) };
-                var txtCustom = new TextBox { Location = new Point(20, 215), Width = 475 };
+                var lblCustom = new Label { Text = "Public Hostname for Named Tunnel / Custom Proxy (e.g. https://station1.yourdomain.com):", Location = new Point(20, 195), AutoSize = true, Font = new Font("Segoe UI", 8.5f, FontStyle.Bold) };
+                var txtCustom = new TextBox { Location = new Point(20, 215), Width = 495 };
 
                 // Pre-populate from station.json
                 string curToken = "";
@@ -1020,13 +1029,34 @@ namespace PrintAway.Gui
                 txtCustom.Text = curCustom;
                 if (curMode == "cloudflare") cmbMode.SelectedIndex = 1;
                 else if (curMode == "openssh") cmbMode.SelectedIndex = 2;
-                else if (curMode == "custom") cmbMode.SelectedIndex = 3;
+                else if (curMode == "pinggy") cmbMode.SelectedIndex = 3;
+                else if (curMode == "custom") cmbMode.SelectedIndex = 4;
                 else cmbMode.SelectedIndex = 0;
+
+                var btnTest = new Button
+                {
+                    Text = "🧪 Test Active Link",
+                    Location = new Point(20, 300),
+                    Size = new Size(140, 32),
+                    FlatStyle = FlatStyle.System,
+                    Cursor = Cursors.Hand
+                };
+                btnTest.Click += (s, e) =>
+                {
+                    if (_tunnel == null)
+                    {
+                        MessageBox.Show("Tunnel manager is not initialized.", "Tunnel Probe", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                        return;
+                    }
+                    string detail;
+                    bool ok = _tunnel.RunManualProbe(out detail);
+                    MessageBox.Show(detail, ok ? "Tunnel Healthy" : "Tunnel Check Failed", MessageBoxButtons.OK, ok ? MessageBoxIcon.Information : MessageBoxIcon.Warning);
+                };
 
                 var btnSave = new Button
                 {
                     Text = "💾 Save & Reconnect",
-                    Location = new Point(335, 260),
+                    Location = new Point(355, 300),
                     Size = new Size(160, 32),
                     BackColor = Color.FromArgb(79, 70, 229),
                     ForeColor = Color.White,
@@ -1037,7 +1067,7 @@ namespace PrintAway.Gui
                 var btnCancel = new Button
                 {
                     Text = "Cancel",
-                    Location = new Point(235, 260),
+                    Location = new Point(255, 300),
                     Size = new Size(90, 32),
                     FlatStyle = FlatStyle.System
                 };
@@ -1048,16 +1078,20 @@ namespace PrintAway.Gui
                     string selectedMode = "auto";
                     if (cmbMode.SelectedIndex == 1) selectedMode = "cloudflare";
                     else if (cmbMode.SelectedIndex == 2) selectedMode = "openssh";
-                    else if (cmbMode.SelectedIndex == 3) selectedMode = "custom";
+                    else if (cmbMode.SelectedIndex == 3) selectedMode = "pinggy";
+                    else if (cmbMode.SelectedIndex == 4) selectedMode = "custom";
 
                     UpdateStationJson("tunnelProvider", selectedMode);
                     UpdateStationJson("cloudflareTunnelToken", txtToken.Text.Trim());
                     UpdateStationJson("customTunnelUrl", txtCustom.Text.Trim());
 
                     dlg.Close();
-                    _lblTunnelUrl.Text = "Tunnel: Reconnecting with new configuration...";
+                    _lblTunnelUrl.Text = "⏳ Tunnel: Reconnecting with new configuration...";
                     _lblTunnelUrl.ForeColor = Color.FromArgb(180, 83, 9);
-                    ThreadPool.QueueUserWorkItem(state => _tunnel.Restart());
+                    if (_tunnel != null)
+                    {
+                        ThreadPool.QueueUserWorkItem(state => _tunnel.Restart());
+                    }
                 };
 
                 dlg.Controls.Add(lblTitle);
@@ -1068,6 +1102,7 @@ namespace PrintAway.Gui
                 dlg.Controls.Add(txtToken);
                 dlg.Controls.Add(lblCustom);
                 dlg.Controls.Add(txtCustom);
+                dlg.Controls.Add(btnTest);
                 dlg.Controls.Add(btnSave);
                 dlg.Controls.Add(btnCancel);
 

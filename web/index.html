@@ -9,6 +9,8 @@
   <link rel="apple-touch-icon" href="/assets/logo.png" />
   <script src="https://checkout.razorpay.com/v1/checkout.js"></script>
   <script src="/assets/pdf-lib.min.js"></script>
+  <script src="/assets/mammoth.browser.min.js"></script>
+  <script src="/assets/html2canvas.min.js"></script>
   <script>
     if (typeof PDFLib === 'undefined') {
       document.write('<script src="https://cdn.jsdelivr.net/npm/pdf-lib/dist/pdf-lib.min.js"><\/script>');
@@ -1483,20 +1485,20 @@
     <!-- ORDER CREATION WIZARD -->
     <div id="orderWizard">
 
-      <!-- STEP 1: Upload PDF / Image -->
+      <!-- STEP 1: Upload PDF / Image / Document -->
       <div class="card">
         <h2><span class="step-badge" style="background:linear-gradient(135deg,#4f46e5,#6366f1);color:#fff;">1</span> Select Document or Image to Print</h2>
         <div class="upload-zone" id="uploadDropZone" onclick="document.getElementById('pdfInput').click()">
-          <input type="file" id="pdfInput" accept=".pdf,application/pdf,image/*,.png,.jpg,.jpeg,.webp,.bmp,.jfif,.txt,.csv" class="hidden"
+          <input type="file" id="pdfInput" accept=".pdf,application/pdf,image/*,.png,.jpg,.jpeg,.webp,.bmp,.jfif,.docx,.doc,.rtf,.odt,.html,.htm,.txt,.csv,.md,application/msword,application/vnd.openxmlformats-officedocument.wordprocessingml.document,application/rtf" class="hidden"
             onchange="handleFileSelected(this)" />
           <div class="upload-icon-circle">
             📄
           </div>
           <div style="font-weight:800;font-size:1.15rem;margin-bottom:6px;color:#0f172a;">
-            Tap to Upload or Drop PDF / Photos / Documents Here
+            Tap to Upload or Drop PDF / Word Docs / Photos Here
           </div>
-          <div style="font-size:0.86rem;color:var(--muted);max-width:520px;margin:0 auto 12px;line-height:1.5;">
-            Supports <strong>PDF, Photos (JPG, PNG, WEBP) &amp; Text Docs</strong> (up to 20 MB). Includes interactive A4 page cropping, centering &amp; margins studio!
+          <div style="font-size:0.86rem;color:var(--muted);max-width:560px;margin:0 auto 12px;line-height:1.5;">
+            Supports <strong>PDF, Word (.DOCX, .DOC, .RTF, .ODT), Photos (JPG, PNG, WEBP) &amp; Text Docs</strong> (up to 20 MB). Word &amp; photos auto-convert to crisp A4 PDFs with interactive cropping!
           </div>
           <div>
             <button type="button" class="btn" style="pointer-events:none;padding:10px 22px;">
@@ -1838,28 +1840,52 @@
     const DEFAULT_STATION_URL = '';
 
     /* ==========================================================================
-       ROBUST NETWORK LAYER (AUTO-RETRY & TUNNEL RE-DISCOVERY)
+       ROBUST NETWORK LAYER (AUTO-RETRY ON 502/503/504 & TUNNEL RE-DISCOVERY)
        ========================================================================== */
+    function withTunnelHeaders(options = {}) {
+      const nextOpts = Object.assign({}, options);
+      const hdrs = Object.assign({}, options.headers || {}, { 'X-Pinggy-No-Screen': 'true' });
+      nextOpts.headers = hdrs;
+      return nextOpts;
+    }
+
     async function apiFetch(path, options = {}) {
+      const reqOpts = withTunnelHeaders(options);
       let targetUrl = apiUrl(path);
+      let lastErr = null;
       try {
-        const res = await fetch(targetUrl, options);
-        return res;
+        const res = await fetch(targetUrl, reqOpts);
+        if (![502, 503, 504, 530].includes(res.status)) {
+          return res;
+        }
+        lastErr = new Error('Tunnel edge returned HTTP ' + res.status);
+        console.warn(`[PrintAway Network] Transient tunnel HTTP ${res.status} for ${targetUrl}. Re-discovering live station...`);
       } catch (err) {
+        lastErr = err;
         console.warn(`[PrintAway Network] Fetch failed for ${targetUrl} (${err.message}). Attempting automatic tunnel discovery...`);
+      }
+
+      // Auto-heal: re-discover freshest live tunnel and retry cleanly up to 2 times
+      for (let attempt = 1; attempt <= 2; attempt++) {
         try {
+          if (attempt > 1) {
+            await new Promise(r => setTimeout(r, 1800));
+          }
           const freshTunnel = await autoDiscoverLiveStation(true);
-          if (freshTunnel) {
+          if (freshTunnel || window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1') {
             targetUrl = apiUrl(path);
-            console.log(`[PrintAway Network] Retrying fetch with live station: ${targetUrl}`);
-            const retryRes = await fetch(targetUrl, options);
-            return retryRes;
+            console.log(`[PrintAway Network] Retry #${attempt} via live station: ${targetUrl}`);
+            const retryRes = await fetch(targetUrl, reqOpts);
+            if (![502, 503, 504, 530].includes(retryRes.status)) {
+              return retryRes;
+            }
           }
         } catch (retryErr) {
-          console.error('[PrintAway Network] Retry failed:', retryErr);
+          lastErr = retryErr;
+          console.error(`[PrintAway Network] Retry #${attempt} failed:`, retryErr);
         }
-        throw new Error(`Station connection paused (${err.message}). The cloud tunnel is refreshing. Please retry in a few seconds.`);
       }
+      throw new Error(`Station tunnel is auto-refreshing (${lastErr ? lastErr.message : 'reconnecting'}). Please retry in a few seconds.`);
     }
 
     /* ==========================================================================
@@ -2125,13 +2151,26 @@
         // Helper to ping candidate tunnel before trusting it
         async function isTunnelAlive(candidateUrl) {
           if (!candidateUrl || !candidateUrl.startsWith('https://')) return false;
-          if (candidateUrl.includes('api.trycloudflare.com') || candidateUrl.includes('pkg.trycloudflare.com')) return false;
+          if (candidateUrl.includes('api.trycloudflare.com') || candidateUrl.includes('pkg.trycloudflare.com') ||
+              candidateUrl.includes('update.trycloudflare.com') || candidateUrl.includes('staging.trycloudflare.com')) return false;
           try {
             const ctrl = new AbortController();
-            const tid = setTimeout(() => ctrl.abort(), 2500);
-            const res = await fetch(candidateUrl + '/api/shop/status', { signal: ctrl.signal });
+            const tid = setTimeout(() => ctrl.abort(), 3000);
+            const res = await fetch(candidateUrl + '/api/health', {
+              signal: ctrl.signal,
+              headers: { 'X-Pinggy-No-Screen': 'true' }
+            });
             clearTimeout(tid);
-            return res.ok;
+            if (res.ok) return true;
+            // Fallback check for older station binaries without /api/health
+            const ctrl2 = new AbortController();
+            const tid2 = setTimeout(() => ctrl2.abort(), 2500);
+            const res2 = await fetch(candidateUrl + '/api/shop/status', {
+              signal: ctrl2.signal,
+              headers: { 'X-Pinggy-No-Screen': 'true' }
+            });
+            clearTimeout(tid2);
+            return res2.ok;
           } catch {
             return false;
           }
@@ -2144,7 +2183,7 @@
               'apikey': 'sb_publishable_rhmUZZbKhXiJxrChcPTbsg_gFIH9FdO',
               'Accept': 'application/json'
             },
-            cache: force ? 'no-cache' : 'default'
+            cache: 'no-store'
           });
           if (sbRes.ok) {
             const list = await sbRes.json();
@@ -2160,7 +2199,7 @@
           }
         } catch (sbErr) { }
 
-        // Priority 2: ntfy.sh registry topic
+        // Priority 2: ntfy.sh registry topic (check newest entries first)
         try {
           const topic = getRegistryTopicForShop(shopId);
           const res = await fetch('https://ntfy.sh/' + topic + '/raw?poll=1&since=12h', { cache: 'no-store' });
@@ -2169,35 +2208,15 @@
             const lines = text.split(/\r?\n/)
               .map(l => l.trim())
               .filter(l => l.startsWith('https://') && !l.includes('api.trycloudflare.com') && !l.includes('pkg.trycloudflare.com'));
-            if (lines.length > 0) {
-              const latest = lines[lines.length - 1].replace(/\/+$/, '');
-              if (!force || (await isTunnelAlive(latest))) {
-                localStorage.setItem('printaway_api_base', latest);
-                return latest;
+            for (let i = lines.length - 1; i >= Math.max(0, lines.length - 3); i--) {
+              const candidate = lines[i].replace(/\/+$/, '');
+              if (!force || (await isTunnelAlive(candidate))) {
+                localStorage.setItem('printaway_api_base', candidate);
+                return candidate;
               }
             }
           }
         } catch (e) { }
-
-        // Priority 3: Fallback bridge if station is currently registered under 'pilot'
-        if (shopId !== 'pilot') {
-          try {
-            const pRes = await fetch('https://zduoifzakiojfqbtxqqm.supabase.co/rest/v1/shops?shop_id=eq.pilot&select=live_tunnel_url', {
-              headers: { 'apikey': 'sb_publishable_rhmUZZbKhXiJxrChcPTbsg_gFIH9FdO' }
-            });
-            if (pRes.ok) {
-              const pList = await pRes.json();
-              if (pList && pList.length > 0 && pList[0].live_tunnel_url) {
-                const pTunnel = pList[0].live_tunnel_url.trim().replace(/\/+$/, '');
-                if (await isTunnelAlive(pTunnel)) {
-                  console.log('[AutoDiscover] Station is connected via pilot tunnel bridge:', pTunnel);
-                  localStorage.setItem('printaway_api_base', pTunnel);
-                  return pTunnel;
-                }
-              }
-            }
-          } catch (e) { }
-        }
       } catch (e) {
         console.warn('Live station registry lookup skipped:', e);
       }
@@ -2383,67 +2402,184 @@
       return /\.(txt|csv|log|md|json|tsv)$/i.test(name);
     }
 
+    function isOfficeDoc(file) {
+      if (!file) return false;
+      const name = (file.name || '').toLowerCase();
+      return /\.(docx|doc|rtf|odt|html?|pptx|xlsx)$/i.test(name);
+    }
+
+    async function convertDocxClientSideToPdf(file) {
+      showMascotLoader('Converting Word Document...', 'Formatting clean ISO A4 pages for crisp printing');
+      const rawBuf = await file.arrayBuffer();
+      const baseName = file.name.replace(/\.[^/.]+$/, '');
+      if (typeof mammoth === 'undefined' || typeof html2canvas === 'undefined' || typeof PDFLib === 'undefined' || !PDFLib.PDFDocument) {
+        return { pdfBytes: rawBuf, pdfName: file.name, contentType: 'application/octet-stream' };
+      }
+
+      try {
+        const result = await mammoth.convertToHtml({ arrayBuffer: rawBuf });
+        const htmlContent = (result && result.value) ? result.value : '';
+        if (!htmlContent.trim()) {
+          return { pdfBytes: rawBuf, pdfName: file.name, contentType: 'application/octet-stream' };
+        }
+
+        // Create hidden offscreen A4 container (794px ~ A4 @ 96 DPI)
+        const a4WidthPx = 794;
+        const a4HeightPx = 1123;
+        const host = document.createElement('div');
+        host.style.cssText = 'position:fixed;left:-10000px;top:0;width:' + a4WidthPx + 'px;background:#ffffff;color:#0f172a;font-family:"Segoe UI",Arial,sans-serif;font-size:14px;line-height:1.55;padding:48px 54px;box-sizing:border-box;z-index:-1;';
+        host.innerHTML = `<style>
+          .pa-doc h1{font-size:22px;font-weight:800;margin:0 0 12px;color:#0f172a;}
+          .pa-doc h2{font-size:18px;font-weight:700;margin:14px 0 8px;color:#1e293b;}
+          .pa-doc h3{font-size:15px;font-weight:700;margin:12px 0 6px;color:#1e293b;}
+          .pa-doc p{margin:0 0 10px;}
+          .pa-doc ul,.pa-doc ol{margin:0 0 10px;padding-left:24px;}
+          .pa-doc li{margin-bottom:4px;}
+          .pa-doc table{width:100%;border-collapse:collapse;margin:10px 0 14px;font-size:13px;}
+          .pa-doc th,.pa-doc td{border:1px solid #cbd5e1;padding:6px 8px;text-align:left;vertical-align:top;}
+          .pa-doc th{background:#f8fafc;font-weight:700;}
+          .pa-doc img{max-width:100%;height:auto;display:block;margin:8px 0;}
+        </style><div class="pa-doc">${htmlContent}</div>`;
+        document.body.appendChild(host);
+
+        try {
+          // Wait for embedded images inside DOCX to decode
+          const imgs = Array.from(host.querySelectorAll('img'));
+          await Promise.all(imgs.map(im => im.complete ? Promise.resolve() : new Promise(res => { im.onload = res; im.onerror = res; setTimeout(res, 3000); })));
+
+          // Smart pagination: push block elements cleanly past A4 boundaries so text lines are never sliced mid-line
+          const hostTop = host.getBoundingClientRect().top;
+          const blocks = host.querySelectorAll('.pa-doc p, .pa-doc h1, .pa-doc h2, .pa-doc h3, .pa-doc h4, .pa-doc li, .pa-doc tr, .pa-doc img');
+          for (const el of blocks) {
+            const rect = el.getBoundingClientRect();
+            const relTop = rect.top - hostTop;
+            const relBot = rect.bottom - hostTop;
+            const startPage = Math.floor(relTop / a4HeightPx);
+            const endPage = Math.floor((relBot - 2) / a4HeightPx);
+            if (endPage > startPage && (rect.height < a4HeightPx * 0.85)) {
+              const nextBoundary = (startPage + 1) * a4HeightPx;
+              const pushPx = Math.ceil(nextBoundary - relTop + 36);
+              const curMargin = parseFloat(window.getComputedStyle(el).marginTop) || 0;
+              el.style.marginTop = (curMargin + pushPx) + 'px';
+            }
+          }
+
+          const renderScale = 2.1; // Crisp high-resolution render (~200 DPI A4)
+          const fullCanvas = await html2canvas(host, {
+            scale: renderScale,
+            useCORS: true,
+            backgroundColor: '#ffffff',
+            logging: false
+          });
+
+          const pageWpx = fullCanvas.width;
+          const pageHpx = Math.round(a4HeightPx * renderScale);
+          const totalPages = Math.min(100, Math.max(1, Math.ceil(fullCanvas.height / pageHpx)));
+
+          const pdfDoc = await PDFLib.PDFDocument.create();
+          const ptW = 595.28;
+          const ptH = 841.89;
+
+          for (let p = 0; p < totalPages; p++) {
+            const sliceCanvas = document.createElement('canvas');
+            sliceCanvas.width = pageWpx;
+            sliceCanvas.height = pageHpx;
+            const sCtx = sliceCanvas.getContext('2d');
+            sCtx.fillStyle = '#ffffff';
+            sCtx.fillRect(0, 0, pageWpx, pageHpx);
+
+            const srcY = p * pageHpx;
+            const srcH = Math.min(pageHpx, fullCanvas.height - srcY);
+            if (srcH > 0) {
+              sCtx.drawImage(fullCanvas, 0, srcY, pageWpx, srcH, 0, 0, pageWpx, srcH);
+            }
+            const jpgDataUrl = sliceCanvas.toDataURL('image/jpeg', 0.92);
+            const jpgBytes = await (await fetch(jpgDataUrl)).arrayBuffer();
+            const embeddedImg = await pdfDoc.embedJpg(jpgBytes);
+            const page = pdfDoc.addPage([ptW, ptH]);
+            page.drawImage(embeddedImg, { x: 0, y: 0, width: ptW, height: ptH });
+          }
+
+          const pdfBytes = await pdfDoc.save();
+          return { pdfBytes, pdfName: baseName + '_Doc.pdf', contentType: 'application/pdf' };
+        } finally {
+          if (host.parentNode) host.parentNode.removeChild(host);
+        }
+      } catch (err) {
+        console.warn('[PrintAway] Client DOCX conversion falling back to station engine:', err);
+        return { pdfBytes: rawBuf, pdfName: file.name, contentType: 'application/octet-stream' };
+      }
+    }
+
     async function convertTextFileToPdf(file) {
       showMascotLoader('Formatting Document...', 'Converting text document to standard A4 PDF pages');
+      const rawBuf = await file.arrayBuffer();
       if (typeof PDFLib === 'undefined' || !PDFLib.PDFDocument) {
         // Direct backend fallback: PrintAway station engine auto-converts text to A4 PDF
-        const rawBuf = await file.arrayBuffer();
         return { pdfBytes: rawBuf, pdfName: file.name, contentType: 'text/plain' };
       }
       const text = await file.text();
-      const pdfDoc = await PDFLib.PDFDocument.create();
-      const font = await pdfDoc.embedFont(PDFLib.StandardFonts.Courier);
-      const fontSize = 10;
-      const lineHeight = 14;
-      const margin = 40;
-      const pageW = 595.28;
-      const pageH = 841.89;
-      const printableW = pageW - (margin * 2);
-      const printableH = pageH - (margin * 2);
-      const maxLinesPerPage = Math.floor(printableH / lineHeight);
-
-      const rawLines = text.split(/\r?\n/);
-      const wrappedLines = [];
-      const maxCharsPerLine = Math.floor(printableW / (fontSize * 0.6));
-
-      for (const rawLine of rawLines) {
-        if (rawLine.length === 0) {
-          wrappedLines.push('');
-          continue;
-        }
-        for (let i = 0; i < rawLine.length; i += maxCharsPerLine) {
-          wrappedLines.push(rawLine.substring(i, i + maxCharsPerLine));
-        }
+      // If text has non-WinAnsi Unicode characters (e.g. Hindi/₹/emojis), delegate cleanly to backend 300-DPI GDI+ renderer
+      if (/[^\x00-\xFF]/.test(text)) {
+        return { pdfBytes: rawBuf, pdfName: file.name, contentType: 'text/plain' };
       }
+      try {
+        const pdfDoc = await PDFLib.PDFDocument.create();
+        const font = await pdfDoc.embedFont(PDFLib.StandardFonts.Courier);
+        const fontSize = 10;
+        const lineHeight = 14;
+        const margin = 40;
+        const pageW = 595.28;
+        const pageH = 841.89;
+        const printableW = pageW - (margin * 2);
+        const printableH = pageH - (margin * 2);
+        const maxLinesPerPage = Math.floor(printableH / lineHeight);
 
-      const totalPages = Math.ceil(wrappedLines.length / maxLinesPerPage) || 1;
-      for (let p = 0; p < totalPages; p++) {
-        const page = pdfDoc.addPage([pageW, pageH]);
-        const startIdx = p * maxLinesPerPage;
-        const pageLines = wrappedLines.slice(startIdx, startIdx + maxLinesPerPage);
-        let y = pageH - margin;
-        for (const line of pageLines) {
-          page.drawText(line, {
-            x: margin,
-            y: y,
-            size: fontSize,
+        const rawLines = text.split(/\r?\n/);
+        const wrappedLines = [];
+        const maxCharsPerLine = Math.floor(printableW / (fontSize * 0.6));
+
+        for (const rawLine of rawLines) {
+          if (rawLine.length === 0) {
+            wrappedLines.push('');
+            continue;
+          }
+          for (let i = 0; i < rawLine.length; i += maxCharsPerLine) {
+            wrappedLines.push(rawLine.substring(i, i + maxCharsPerLine));
+          }
+        }
+
+        const totalPages = Math.min(100, Math.ceil(wrappedLines.length / maxLinesPerPage) || 1);
+        for (let p = 0; p < totalPages; p++) {
+          const page = pdfDoc.addPage([pageW, pageH]);
+          const startIdx = p * maxLinesPerPage;
+          const pageLines = wrappedLines.slice(startIdx, startIdx + maxLinesPerPage);
+          let y = pageH - margin;
+          for (const line of pageLines) {
+            page.drawText(line, {
+              x: margin,
+              y: y,
+              size: fontSize,
+              font: font,
+              color: PDFLib.rgb(0.1, 0.1, 0.1)
+            });
+            y -= lineHeight;
+          }
+          page.drawText(`Page ${p + 1} of ${totalPages}`, {
+            x: pageW - margin - 70,
+            y: margin / 2,
+            size: 8,
             font: font,
-            color: PDFLib.rgb(0.1, 0.1, 0.1)
+            color: PDFLib.rgb(0.5, 0.5, 0.5)
           });
-          y -= lineHeight;
         }
-        page.drawText(`Page ${p + 1} of ${totalPages}`, {
-          x: pageW - margin - 70,
-          y: margin / 2,
-          size: 8,
-          font: font,
-          color: PDFLib.rgb(0.5, 0.5, 0.5)
-        });
-      }
 
-      const pdfBytes = await pdfDoc.save();
-      const pdfName = file.name.replace(/\.[^/.]+$/, '') + '_Doc.pdf';
-      return { pdfBytes, pdfName, contentType: 'application/pdf' };
+        const pdfBytes = await pdfDoc.save();
+        const pdfName = file.name.replace(/\.[^/.]+$/, '') + '_Doc.pdf';
+        return { pdfBytes, pdfName, contentType: 'application/pdf' };
+      } catch (winAnsiErr) {
+        return { pdfBytes: rawBuf, pdfName: file.name, contentType: 'text/plain' };
+      }
     }
 
     function openA4CropStudio(file) {
@@ -2805,6 +2941,46 @@
       if (isImageFile(file)) {
         openA4CropStudio(file);
         return;
+      }
+
+      if (isOfficeDoc(file)) {
+        try {
+          const isDocx = /\.docx$/i.test(file.name || '');
+          let uploadBytes, uploadName, uploadType;
+          if (isDocx) {
+            const converted = await convertDocxClientSideToPdf(file);
+            uploadBytes = converted.pdfBytes;
+            uploadName = converted.pdfName;
+            uploadType = converted.contentType || 'application/octet-stream';
+          } else {
+            showMascotLoader('Converting Document...', 'Converting Word / Office file to printable A4 PDF');
+            uploadBytes = await file.arrayBuffer();
+            uploadName = file.name;
+            uploadType = 'application/octet-stream';
+          }
+          const res = await apiFetch('/api/uploads?filename=' + encodeURIComponent(uploadName), {
+            method: 'POST',
+            headers: { 'Content-Type': uploadType, 'X-File-Name': uploadName },
+            body: uploadBytes
+          });
+          const data = await res.json();
+          hideMascotLoader();
+          if (!res.ok || data.error) {
+            showError(data.message || 'Document upload failed.');
+            return;
+          }
+          const btnReCrop = document.getElementById('btnReAdjustCrop');
+          if (btnReCrop) btnReCrop.classList.add('hidden');
+          const lblBadge = document.getElementById('lblDocBadge');
+          if (lblBadge) lblBadge.textContent = 'WORD / DOC';
+          onFileValidated(data);
+          return;
+        } catch (err) {
+          hideMascotLoader();
+          console.error('Office doc conversion error:', err);
+          showError('Could not process document: ' + err.message);
+          return;
+        }
       }
 
       if (isTextDoc(file)) {

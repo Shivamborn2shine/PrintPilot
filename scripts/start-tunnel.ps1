@@ -58,10 +58,10 @@ Write-Host "==========================================================" -Foregro
 Write-Host "       PRINTAWAY 1-CLICK STATION & TUNNEL LAUNCHER        " -ForegroundColor Cyan
 Write-Host "==========================================================" -ForegroundColor Cyan
 
-# Terminate any duplicate orphan tunnel processes so they don't collide or cause HTTP 429 rate-limits
-$orphans = Get-Process -Name cloudflared, ssh -ErrorAction SilentlyContinue
+# Terminate any duplicate orphan cloudflared processes so they don't collide or cause HTTP 429 rate-limits
+$orphans = Get-Process -Name cloudflared -ErrorAction SilentlyContinue
 if ($orphans) {
-    Write-Host "[!] Cleaning up $($orphans.Count) orphan background tunnel process(es)..." -ForegroundColor DarkYellow
+    Write-Host "[!] Cleaning up $($orphans.Count) orphan background cloudflared process(es)..." -ForegroundColor DarkYellow
     $orphans | Stop-Process -Force -ErrorAction SilentlyContinue
     Start-Sleep -Milliseconds 600
 }
@@ -232,7 +232,7 @@ if (-not $tunnelUrl) {
 
     $sshInfo = New-Object System.Diagnostics.ProcessStartInfo
     $sshInfo.FileName = $sshExe
-    $sshInfo.Arguments = "-o StrictHostKeyChecking=no -o ServerAliveInterval=30 -R 80:127.0.0.1:$LocalPort nokey@localhost.run"
+    $sshInfo.Arguments = "-T -o StrictHostKeyChecking=no -o UserKnownHostsFile=NUL -o ServerAliveInterval=15 -o ServerAliveCountMax=3 -o ExitOnForwardFailure=yes -o ConnectTimeout=10 -o TCPKeepAlive=yes -R 80:127.0.0.1:$LocalPort nokey@localhost.run"
     $sshInfo.RedirectStandardOutput = $true
     $sshInfo.RedirectStandardError = $true
     $sshInfo.UseShellExecute = $false
@@ -253,6 +253,45 @@ if (-not $tunnelUrl) {
                 if ($line -match "https://([a-zA-Z0-9-]+\.lhr\.(life|rocks|pro))") {
                     $tunnelUrl = "https://" + $matches[1]
                     Write-Host "  [OK] Resilient OpenSSH Fallback Tunnel Live: $tunnelUrl" -ForegroundColor Green
+                    break
+                }
+            }
+            Start-Sleep -Milliseconds 100
+        }
+    } finally {
+        $logWriter.Close()
+    }
+}
+
+if (-not $tunnelUrl) {
+    Write-Host "Activating backup Pinggy SSH Tunnel (a.pinggy.io)..." -ForegroundColor Yellow
+    try { if ($tunnelProcess -and -not $tunnelProcess.HasExited) { $tunnelProcess.Kill() } } catch { }
+    $sshExe = "C:\Windows\System32\OpenSSH\ssh.exe"
+    if (-not (Test-Path $sshExe)) { $sshExe = "ssh.exe" }
+
+    $pinggyInfo = New-Object System.Diagnostics.ProcessStartInfo
+    $pinggyInfo.FileName = $sshExe
+    $pinggyInfo.Arguments = "-T -p 443 -o StrictHostKeyChecking=no -o UserKnownHostsFile=NUL -o ServerAliveInterval=15 -o ServerAliveCountMax=3 -o ExitOnForwardFailure=yes -o ConnectTimeout=10 -R0:127.0.0.1:$LocalPort qr@a.pinggy.io"
+    $pinggyInfo.RedirectStandardOutput = $true
+    $pinggyInfo.RedirectStandardError = $true
+    $pinggyInfo.UseShellExecute = $false
+    $pinggyInfo.CreateNoWindow = $true
+
+    $tunnelProcess = New-Object System.Diagnostics.Process
+    $tunnelProcess.StartInfo = $pinggyInfo
+    $null = $tunnelProcess.Start()
+
+    $deadline = (Get-Date).AddSeconds(15)
+    $logWriter = [System.IO.File]::AppendText($tunnelLog)
+    try {
+        while ((Get-Date) -lt $deadline -and -not $tunnelUrl -and -not $tunnelProcess.HasExited) {
+            $line = $tunnelProcess.StandardOutput.ReadLine()
+            if ($line) {
+                $logWriter.WriteLine($line)
+                $logWriter.Flush()
+                if ($line -match "https://([a-zA-Z0-9.-]+\.(?:free\.pinggy\.link|pinggy\.link|pinggy\.io))") {
+                    $tunnelUrl = "https://" + $matches[1]
+                    Write-Host "  [OK] Backup Pinggy SSH Tunnel Live: $tunnelUrl" -ForegroundColor Green
                     break
                 }
             }
@@ -313,13 +352,6 @@ if ($tunnelUrl -and $tunnelUrl -notmatch "api\.trycloudflare\.com" -and $tunnelU
             $null = Invoke-RestMethod -Uri $postUrl -Method Post -Headers $postHeaders -Body $postBody -TimeoutSec 5
         }
         Write-Host "  [OK] Supabase Control Plane updated with live tunnel URL!" -ForegroundColor Green
-
-        if ($activeShopId -ne "pilot") {
-            try {
-                $sbPilotUrl = "https://zduoifzakiojfqbtxqqm.supabase.co/rest/v1/shops?shop_id=eq.pilot"
-                $null = Invoke-RestMethod -Uri $sbPilotUrl -Method Patch -Headers $sbHeaders -Body $body -TimeoutSec 3 -ErrorAction SilentlyContinue
-            } catch { }
-        }
     } catch { }
 }
 

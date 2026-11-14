@@ -432,12 +432,66 @@ namespace PrintAway
                     Assert(Convert.ToInt32(savedImg["pageCount"]) == 1, "Image must convert into a 1-page A4 document");
                     Assert(Convert.ToString(savedImg["displayName"]).EndsWith("_A4.pdf", StringComparison.OrdinalIgnoreCase), "Output displayName must end with _A4.pdf");
 
-                    // Verify plain text document auto-conversion
-                    byte[] txtBytes = System.Text.Encoding.UTF8.GetBytes("PrintAway Test Receipt\nOrder: #TEST-123\nDate: 2026-11-12\nTotal: INR 50.00\nThank you for printing with PrintAway!");
+                    // Verify plain text document auto-conversion (including multi-page pagination)
+                    var sbLong = new System.Text.StringBuilder();
+                    sbLong.AppendLine("PrintAway Test Receipt & Multi-Page Verification");
+                    for (int li = 1; li <= 90; li++)
+                    {
+                        sbLong.AppendLine("Line " + li + ": PrintAway automatic multi-page A4 document rendering verification entry.");
+                    }
+                    byte[] txtBytes = System.Text.Encoding.UTF8.GetBytes(sbLong.ToString());
                     var savedTxt = repo.SaveValidatedPdf("receipt.txt", txtBytes, out errCode, out errMsg);
                     Assert(savedTxt != null, "SaveValidatedPdf must succeed for text file: " + errMsg);
-                    Assert(Convert.ToInt32(savedTxt["pageCount"]) >= 1, "Text must convert into at least 1-page PDF");
+                    Assert(Convert.ToInt32(savedTxt["pageCount"]) >= 2, "Long text must paginate into at least 2 A4 PDF pages");
                     Assert(Convert.ToString(savedTxt["displayName"]).EndsWith("_Doc.pdf", StringComparison.OrdinalIgnoreCase), "Output displayName must end with _Doc.pdf");
+
+                    // Verify in-memory OOXML (.docx) ZIP conversion without MS Office/LibreOffice
+                    byte[] docxBytes;
+                    using (var zms = new System.IO.MemoryStream())
+                    {
+                        using (var arch = new System.IO.Compression.ZipArchive(zms, System.IO.Compression.ZipArchiveMode.Create, true))
+                        {
+                            var ctEntry = arch.CreateEntry("[Content_Types].xml");
+                            using (var sw = new System.IO.StreamWriter(ctEntry.Open(), System.Text.Encoding.UTF8))
+                            {
+                                sw.Write("<?xml version=\"1.0\" encoding=\"UTF-8\"?><Types xmlns=\"http://schemas.openxmlformats.org/package/2006/content-types\"></Types>");
+                            }
+                            var docEntry = arch.CreateEntry("word/document.xml");
+                            using (var sw = new System.IO.StreamWriter(docEntry.Open(), System.Text.Encoding.UTF8))
+                            {
+                                sw.Write("<?xml version=\"1.0\" encoding=\"UTF-8\" standalone=\"yes\"?>" +
+                                         "<w:document xmlns:w=\"http://schemas.openxmlformats.org/wordprocessingml/2006/main\">" +
+                                         "<w:body>" +
+                                         "<w:p><w:pPr><w:pStyle w:val=\"Heading1\"/></w:pPr><w:r><w:t>PrintAway DOCX Heading</w:t></w:r></w:p>" +
+                                         "<w:p><w:r><w:t>Hello from native OOXML Word conversion test.</w:t></w:r></w:p>" +
+                                         "<w:tbl><w:tr><w:tc><w:p><w:r><w:t>Item</w:t></w:r></w:p></w:tc><w:tc><w:p><w:r><w:t>Price</w:t></w:r></w:p></w:tc></w:tr></w:tbl>" +
+                                         "</w:body></w:document>");
+                            }
+                        }
+                        docxBytes = zms.ToArray();
+                    }
+                    var savedDocx = repo.SaveValidatedPdf("customer_assignment.docx", docxBytes, out errCode, out errMsg);
+                    Assert(savedDocx != null, "SaveValidatedPdf must succeed for .docx file: " + errMsg);
+                    Assert(Convert.ToInt32(savedDocx["pageCount"]) >= 1, "DOCX must convert into >= 1 PDF page");
+                    Assert(Convert.ToString(savedDocx["displayName"]).EndsWith("_Doc.pdf", StringComparison.OrdinalIgnoreCase), "DOCX output displayName must end with _Doc.pdf");
+
+                    // Verify RTF auto-conversion
+                    byte[] rtfBytes = System.Text.Encoding.ASCII.GetBytes(@"{\rtf1\ansi\deff0 {\b PrintAway RTF Test}\par Second line of RTF document.}");
+                    var savedRtf = repo.SaveValidatedPdf("notes.rtf", rtfBytes, out errCode, out errMsg);
+                    Assert(savedRtf != null, "SaveValidatedPdf must succeed for .rtf file: " + errMsg);
+                    Assert(Convert.ToInt32(savedRtf["pageCount"]) >= 1, "RTF must convert into >= 1 PDF page");
+                });
+
+                // Test 12: Tunnel URL validation (no placeholder leak, valid Cloudflare/OpenSSH/Pinggy/Custom hosts)
+                runTest("T12: Tunnel URL sanitization & multi-provider validator rejects placeholders", () =>
+                {
+                    Assert(!PrintAway.Tunnel.TunnelManager.IsValidPublicTunnelUrl("https://api.trycloudflare.com"), "api.trycloudflare.com must be rejected");
+                    Assert(!PrintAway.Tunnel.TunnelManager.IsValidPublicTunnelUrl("https://pkg.trycloudflare.com"), "pkg.trycloudflare.com must be rejected");
+                    Assert(!PrintAway.Tunnel.TunnelManager.IsValidPublicTunnelUrl("http://insecure.trycloudflare.com"), "HTTP (non-HTTPS) must be rejected");
+                    Assert(PrintAway.Tunnel.TunnelManager.IsValidPublicTunnelUrl("https://bright-river-station.trycloudflare.com"), "Valid trycloudflare.com must be accepted");
+                    Assert(PrintAway.Tunnel.TunnelManager.IsValidPublicTunnelUrl("https://abc123.lhr.life"), "Valid localhost.run must be accepted");
+                    Assert(PrintAway.Tunnel.TunnelManager.IsValidPublicTunnelUrl("https://xyz.a.free.pinggy.link"), "Valid Pinggy link must be accepted");
+                    Assert(PrintAway.Tunnel.TunnelManager.IsValidPublicTunnelUrl("https://shop1.printaway.in"), "Custom HTTPS domain must be accepted");
                 });
             }
 

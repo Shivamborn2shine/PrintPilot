@@ -1,7 +1,7 @@
 {
-  "version": "2.2.9",
-  "releaseDate": "2026-11-12",
-  "releaseNotes": "Add founder Remove Shop capability in Super-Admin with cascading cloud & proxy deletion, and upgrade print rasterization pipeline to Ultra-HD 300 DPI native laser-sharp resolution without downsampling blur.",
+  "version": "2.3.0",
+  "releaseDate": "2026-11-14",
+  "releaseNotes": "Self-healing multi-provider tunnel watchdog (30s active probe + HTTP/1.1 KeepAlive + Cloudflare Named Tunnel / OpenSSH / Pinggy cascade + frontend 502/503 auto-recovery) and full Word/Office document printing (.docx, .doc, .rtf, .odt, .html, multi-page .txt) to ISO A4 PDF.",
   "downloadUrl": "https://raw.githubusercontent.com/Shivamborn2shine/PrintPilot/main/bin/PrintAway.exe",
   "fallbackUrl": "https://printitaway.netlify.app/downloads/PrintAway.exe"
 }

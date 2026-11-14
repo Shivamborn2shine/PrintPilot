@@ -26,6 +26,7 @@ namespace PrintAway.Web
         private readonly ConcurrentDictionary<string, List<long>> _rateLimitBuckets;
         private volatile bool _running;
         private Thread _acceptThread;
+        private DateTime _startedAtUtc = DateTime.UtcNow;
 
         public PrintAwayHttpServer(int port, PrintAwayRepository repo, LocalPrintWorker worker, string webRoot)
             : this(port, repo, worker, webRoot, null)
@@ -53,6 +54,15 @@ namespace PrintAway.Web
         public void Start()
         {
             if (_running) return;
+            try
+            {
+                ServicePointManager.DefaultConnectionLimit = 64;
+                int minWorker, minIo;
+                ThreadPool.GetMinThreads(out minWorker, out minIo);
+                ThreadPool.SetMinThreads(Math.Max(minWorker, 32), Math.Max(minIo, 32));
+            }
+            catch { }
+            _startedAtUtc = DateTime.UtcNow;
             _listener.Start();
             _running = true;
             _acceptThread = new Thread(AcceptLoop)
@@ -118,7 +128,7 @@ namespace PrintAway.Web
             res.Headers["X-Frame-Options"] = "DENY";
             res.Headers["Referrer-Policy"] = "no-referrer";
             res.Headers["Cache-Control"] = "no-store";
-            res.KeepAlive = false;
+            res.KeepAlive = true;
             res.Headers["Access-Control-Allow-Origin"] = "*";
             res.Headers["Access-Control-Allow-Methods"] = "GET, POST, OPTIONS, PUT, DELETE";
             res.Headers["Access-Control-Allow-Headers"] = "Content-Type, X-Admin-Session, X-CSRF-Token, X-Worker-Token, X-File-Name, X-PrintAway-Signature, Authorization";
@@ -137,6 +147,29 @@ namespace PrintAway.Web
 
             try
             {
+                // Ultra-fast lock-free health probe for tunnel watchdog & load resilience
+                if ((method == "GET" || method == "HEAD") && path == "/api/health")
+                {
+                    if (method == "HEAD")
+                    {
+                        res.StatusCode = 200;
+                        res.ContentType = "application/json; charset=utf-8";
+                        res.ContentLength64 = 0;
+                        res.OutputStream.Close();
+                        return;
+                    }
+                    long uptimeSec = (long)Math.Max(0, (DateTime.UtcNow - _startedAtUtc).TotalSeconds);
+                    WriteJson(res, 200, new Dictionary<string, object>
+                    {
+                        { "ok", true },
+                        { "port", _port },
+                        { "uptimeSeconds", uptimeSec },
+                        { "liveTunnelUrl", _repo.GetLiveTunnelUrl() ?? "" },
+                        { "ts", DateTime.UtcNow.ToString("o", CultureInfo.InvariantCulture) }
+                    });
+                    return;
+                }
+
                 // Static UI routes
                 if (method == "GET" && (path == "/" || path == "/index.html" || path.StartsWith("/track/")))
                 {
@@ -424,8 +457,11 @@ namespace PrintAway.Web
                         if (!string.IsNullOrWhiteSpace(tUrl))
                         {
                             string cleanUrl = tUrl.Trim().TrimEnd('/');
-                            if (cleanUrl.IndexOf("api.trycloudflare.com", StringComparison.OrdinalIgnoreCase) < 0 &&
-                                cleanUrl.IndexOf("pkg.trycloudflare.com", StringComparison.OrdinalIgnoreCase) < 0)
+                            if (cleanUrl.StartsWith("https://", StringComparison.OrdinalIgnoreCase) &&
+                                cleanUrl.IndexOf("api.trycloudflare.com", StringComparison.OrdinalIgnoreCase) < 0 &&
+                                cleanUrl.IndexOf("pkg.trycloudflare.com", StringComparison.OrdinalIgnoreCase) < 0 &&
+                                cleanUrl.IndexOf("update.trycloudflare.com", StringComparison.OrdinalIgnoreCase) < 0 &&
+                                cleanUrl.IndexOf("staging.trycloudflare.com", StringComparison.OrdinalIgnoreCase) < 0)
                             {
                                 _repo.SetLiveTunnelUrl(cleanUrl);
                                 var handler = OnTunnelUrlRegistered;
@@ -453,10 +489,10 @@ namespace PrintAway.Web
                     }
                 }
 
-                // Customer PDF Upload (POST /api/uploads)
+                // Customer PDF/Document Upload (POST /api/uploads)
                 if (method == "POST" && path == "/api/uploads")
                 {
-                    if (!CheckRateLimit("upload", 30))
+                    if (!CheckRateLimit("upload", 60))
                     {
                         WriteError(res, 429, "RATE_LIMITED", "Too many upload requests. Please wait a moment.");
                         return;

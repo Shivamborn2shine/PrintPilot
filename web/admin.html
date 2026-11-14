@@ -1163,13 +1163,25 @@
       // Helper to test candidate tunnel before trusting it
       async function isTunnelAlive(candidateUrl) {
         if (!candidateUrl || !candidateUrl.startsWith('https://')) return false;
-        if (candidateUrl.includes('api.trycloudflare.com') || candidateUrl.includes('pkg.trycloudflare.com')) return false;
+        if (candidateUrl.includes('api.trycloudflare.com') || candidateUrl.includes('pkg.trycloudflare.com') ||
+            candidateUrl.includes('update.trycloudflare.com') || candidateUrl.includes('staging.trycloudflare.com')) return false;
         try {
           const ctrl = new AbortController();
-          const tid = setTimeout(() => ctrl.abort(), 2500);
-          const res = await fetch(candidateUrl + '/api/shop/status', { signal: ctrl.signal });
+          const tid = setTimeout(() => ctrl.abort(), 3000);
+          const res = await fetch(candidateUrl + '/api/health', {
+            signal: ctrl.signal,
+            headers: { 'X-Pinggy-No-Screen': 'true' }
+          });
           clearTimeout(tid);
-          return res.ok;
+          if (res.ok) return true;
+          const ctrl2 = new AbortController();
+          const tid2 = setTimeout(() => ctrl2.abort(), 2500);
+          const res2 = await fetch(candidateUrl + '/api/shop/status', {
+            signal: ctrl2.signal,
+            headers: { 'X-Pinggy-No-Screen': 'true' }
+          });
+          clearTimeout(tid2);
+          return res2.ok;
         } catch {
           return false;
         }
@@ -1182,7 +1194,7 @@
             'apikey': 'sb_publishable_rhmUZZbKhXiJxrChcPTbsg_gFIH9FdO',
             'Accept': 'application/json'
           },
-          cache: force ? 'no-cache' : 'default'
+          cache: 'no-store'
         });
         if (sbRes.ok) {
           const list = await sbRes.json();
@@ -1198,7 +1210,7 @@
         }
       } catch (err) { }
 
-      // Priority 2: ntfy registry lookup
+      // Priority 2: ntfy registry lookup (newest entries first)
       try {
         const topic = getRegistryTopicForShop(shopId);
         const res = await fetch('https://ntfy.sh/' + topic + '/raw?poll=1&since=12h', { cache: 'no-store' });
@@ -1207,35 +1219,15 @@
           const lines = text.split(/\r?\n/)
             .map(l => l.trim())
             .filter(l => l.startsWith('https://') && !l.includes('api.trycloudflare.com') && !l.includes('pkg.trycloudflare.com'));
-          if (lines.length > 0) {
-            const latest = lines[lines.length - 1].replace(/\/+$/, '');
-            if (!force || (await isTunnelAlive(latest))) {
-              localStorage.setItem('printaway_api_base', latest);
-              return latest;
+          for (let i = lines.length - 1; i >= Math.max(0, lines.length - 3); i--) {
+            const candidate = lines[i].replace(/\/+$/, '');
+            if (!force || (await isTunnelAlive(candidate))) {
+              localStorage.setItem('printaway_api_base', candidate);
+              return candidate;
             }
           }
         }
       } catch (e) { }
-
-      // Priority 3: Fallback bridge if station is currently registered under 'pilot'
-      if (shopId !== 'pilot') {
-        try {
-          const pRes = await fetch('https://zduoifzakiojfqbtxqqm.supabase.co/rest/v1/shops?shop_id=eq.pilot&select=live_tunnel_url', {
-            headers: { 'apikey': 'sb_publishable_rhmUZZbKhXiJxrChcPTbsg_gFIH9FdO' }
-          });
-          if (pRes.ok) {
-            const pList = await pRes.json();
-            if (pList && pList.length > 0 && pList[0].live_tunnel_url) {
-              const pTunnel = pList[0].live_tunnel_url.trim().replace(/\/+$/, '');
-              if (await isTunnelAlive(pTunnel)) {
-                console.log('[AutoDiscover] Station is connected via pilot tunnel bridge:', pTunnel);
-                localStorage.setItem('printaway_api_base', pTunnel);
-                return pTunnel;
-              }
-            }
-          }
-        } catch (e) { }
-      }
 
       return localStorage.getItem('printaway_api_base') || DEFAULT_STATION_URL;
     }
@@ -1250,6 +1242,50 @@
       if (!base) return path;
       return base.replace(/\/+$/, '') + path;
     }
+
+    // Transparent auto-healing fetch wrapper for station API calls over dynamic tunnels
+    (function installStationFetchAutoHeal() {
+      const nativeFetch = window.fetch.bind(window);
+      window.fetch = async function(input, init) {
+        const urlStr = typeof input === 'string' ? input : (input && input.url ? input.url : '');
+        const isStationApiCall = typeof input === 'string' &&
+          urlStr.includes('/api/') &&
+          !urlStr.endsWith('/api/health') &&
+          !urlStr.endsWith('/api/shop/status') &&
+          !urlStr.includes('supabase.co') &&
+          !urlStr.includes('ntfy.sh');
+
+        if (!isStationApiCall) {
+          return nativeFetch(input, init);
+        }
+
+        const nextInit = Object.assign({}, init || {});
+        nextInit.headers = Object.assign({}, (init && init.headers) || {}, { 'X-Pinggy-No-Screen': 'true' });
+
+        let res = null;
+        let firstErr = null;
+        try {
+          res = await nativeFetch(urlStr, nextInit);
+          if (![502, 503, 504, 530].includes(res.status)) {
+            return res;
+          }
+        } catch (err) {
+          firstErr = err;
+        }
+
+        try {
+          const fresh = await autoDiscoverLiveStation(true);
+          if (fresh && fresh.startsWith('https://')) {
+            const pathOnly = urlStr.replace(/^https?:\/\/[^/]+/, '');
+            const retryUrl = fresh.replace(/\/+$/, '') + pathOnly;
+            return await nativeFetch(retryUrl, nextInit);
+          }
+        } catch { }
+
+        if (res) return res;
+        throw firstErr || new Error('Station tunnel unreachable');
+      };
+    })();
 
     function configureStationUrl() {
       const cur = localStorage.getItem('printaway_api_base') || '';

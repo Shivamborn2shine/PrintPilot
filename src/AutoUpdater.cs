@@ -9,7 +9,7 @@ namespace PrintAway.Updater
 {
     public static class AutoUpdater
     {
-        public const string CurrentVersion = "2.2.9";
+        public const string CurrentVersion = "2.3.0";
         private const string VersionEndpoint = "https://raw.githubusercontent.com/Shivamborn2shine/PrintPilot/main/version.json";
 
         public static bool CheckForUpdate(out string latestVersion, out string downloadUrl, out string releaseNotes)

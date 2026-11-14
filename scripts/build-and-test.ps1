@@ -1,4 +1,4 @@
-<#
+﻿<#
 .SYNOPSIS
     Compiles PrintAway native Windows server/worker executable and runs the PRD §14 Automated Test Matrix.
 #>
@@ -66,18 +66,24 @@ if ($icoArg) {
         /r:System.dll `
         /r:System.Core.dll `
         /r:System.Drawing.dll `
+        /r:System.IO.Compression.dll `
+        /r:System.IO.Compression.FileSystem.dll `
         /r:System.Management.dll `
         /r:System.Web.Extensions.dll `
         /r:System.Windows.Forms.dll `
+        /r:System.Xml.dll `
         $sources
 } else {
     & $csc /nologo /target:winexe /platform:x64 /optimize+ /out:$outExe `
         /r:System.dll `
         /r:System.Core.dll `
         /r:System.Drawing.dll `
+        /r:System.IO.Compression.dll `
+        /r:System.IO.Compression.FileSystem.dll `
         /r:System.Management.dll `
         /r:System.Web.Extensions.dll `
         /r:System.Windows.Forms.dll `
+        /r:System.Xml.dll `
         $sources
 }
 

@@ -43,6 +43,8 @@ namespace PrintAway
         public static int Main(string[] args)
         {
             ServicePointManager.SecurityProtocol = SecurityProtocolType.Tls12 | SecurityProtocolType.Tls11 | SecurityProtocolType.Tls;
+            ServicePointManager.DefaultConnectionLimit = 64;
+            ServicePointManager.Expect100Continue = false;
             string baseDir = AppDomain.CurrentDomain.BaseDirectory;
             string repoRoot = baseDir;
             if (Directory.Exists(Path.Combine(baseDir, "web")))
@@ -313,6 +315,10 @@ namespace PrintAway
                         string activeShop = !string.IsNullOrWhiteSpace(configShopId) ? configShopId : "midtownstationary";
                         string activeName = !string.IsNullOrWhiteSpace(configShopName) ? configShopName : "Midtown Stationary";
                         tunnel = new TunnelManager(repoRoot, port, activeShop, activeName);
+                        tunnel.OnTunnelUrlCaptured += url =>
+                        {
+                            try { repo.SetLiveTunnelUrl(url ?? ""); } catch { }
+                        };
                         tunnel.Start();
                     }
 

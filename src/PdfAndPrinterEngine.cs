@@ -6,10 +6,15 @@ using System.Drawing.Imaging;
 using System.Drawing.Printing;
 using System.Globalization;
 using System.IO;
+using System.IO.Compression;
 using System.Management;
+using System.Net;
+using System.Reflection;
 using System.Security.Cryptography;
 using System.Text;
 using System.Text.RegularExpressions;
+using System.Threading;
+using System.Xml;
 
 namespace PrintAway.Engine
 {
@@ -121,7 +126,26 @@ namespace PrintAway.Engine
         {
             if (string.IsNullOrEmpty(filename)) return false;
             string ext = Path.GetExtension(filename).ToLowerInvariant();
-            return ext == ".txt" || ext == ".csv" || ext == ".log" || ext == ".tsv";
+            return ext == ".txt" || ext == ".csv" || ext == ".log" || ext == ".tsv" || ext == ".md" || ext == ".json";
+        }
+
+        public static bool IsOfficeDocExtension(string filename)
+        {
+            if (string.IsNullOrEmpty(filename)) return false;
+            string ext = Path.GetExtension(filename).ToLowerInvariant();
+            return ext == ".docx" || ext == ".doc" || ext == ".rtf" || ext == ".odt" || ext == ".html" || ext == ".htm" || ext == ".pptx" || ext == ".xlsx";
+        }
+
+        public static bool IsZipArchiveBytes(byte[] bytes)
+        {
+            return bytes != null && bytes.Length >= 4 && bytes[0] == 0x50 && bytes[1] == 0x4B && bytes[2] == 0x03 && bytes[3] == 0x04;
+        }
+
+        public static bool IsRtfBytes(byte[] bytes)
+        {
+            if (bytes == null || bytes.Length < 5) return false;
+            string head = Encoding.ASCII.GetString(bytes, 0, 5);
+            return string.Equals(head, "{\\rtf", StringComparison.OrdinalIgnoreCase);
         }
 
         private static ImageCodecInfo GetEncoder(ImageFormat format)
@@ -210,46 +234,40 @@ namespace PrintAway.Engine
             }
         }
 
+        private sealed class DocParagraphBlock
+        {
+            public string Text;
+            public bool IsHeading;
+            public bool IsSubHeading;
+            public bool IsBold;
+        }
+
+        private sealed class A4RenderedPage
+        {
+            public byte[] JpegBytes;
+            public int PixelWidth;
+            public int PixelHeight;
+            public double PageWidthPt;
+            public double PageHeightPt;
+            public double DrawWidthPt;
+            public double DrawHeightPt;
+            public double PosXPt;
+            public double PosYPt;
+        }
+
         public static byte[] ConvertTextToA4Pdf(byte[] textBytes)
         {
             if (textBytes == null || textBytes.Length == 0) return null;
             try
             {
                 string text = Encoding.UTF8.GetString(textBytes);
-                // Render text onto a clean ultra-HD A4 bitmap (300 DPI)
-                int dpi = 300;
-                int pageW = (int)(8.27 * dpi); // 2480 px
-                int pageH = (int)(11.69 * dpi); // 3508 px
-                using (var bmp = new Bitmap(pageW, pageH))
-                using (var g = Graphics.FromImage(bmp))
-                using (var brush = new SolidBrush(Color.Black))
-                using (var font = new Font("Courier New", 18.0f, FontStyle.Regular, GraphicsUnit.Point))
+                var blocks = new List<DocParagraphBlock>();
+                string[] lines = text.Replace("\r\n", "\n").Split('\n');
+                for (int i = 0; i < lines.Length; i++)
                 {
-                    g.Clear(Color.White);
-                    g.TextRenderingHint = System.Drawing.Text.TextRenderingHint.ClearTypeGridFit;
-                    int margin = (int)(0.5 * dpi); // 0.5 in margin
-                    var rect = new RectangleF(margin, margin, pageW - (margin * 2), pageH - (margin * 2));
-                    g.DrawString(text, font, brush, rect);
-
-                    using (var msJpeg = new MemoryStream())
-                    {
-                        ImageCodecInfo jpgEncoder = GetEncoder(ImageFormat.Jpeg);
-                        if (jpgEncoder != null)
-                        {
-                            using (var encParams = new EncoderParameters(1))
-                            {
-                                encParams.Param[0] = new EncoderParameter(System.Drawing.Imaging.Encoder.Quality, 92L);
-                                bmp.Save(msJpeg, jpgEncoder, encParams);
-                            }
-                        }
-                        else
-                        {
-                            bmp.Save(msJpeg, ImageFormat.Jpeg);
-                        }
-                        byte[] jpegBytes = msJpeg.ToArray();
-                        return GenerateSingleImageA4Pdf(jpegBytes, pageW, pageH, 595.28, 841.89, 595.28 - 40, 841.89 - 40, 20, 20);
-                    }
+                    blocks.Add(new DocParagraphBlock { Text = lines[i] });
                 }
+                return RenderDocBlocksToMultiPageA4Pdf(blocks, true);
             }
             catch (Exception ex)
             {
@@ -258,8 +276,665 @@ namespace PrintAway.Engine
             }
         }
 
+        public static byte[] ConvertDocumentToA4Pdf(string filename, byte[] docBytes, out string failureReason)
+        {
+            failureReason = null;
+            if (docBytes == null || docBytes.Length == 0)
+            {
+                failureReason = "Document file is empty.";
+                return null;
+            }
+
+            string ext = Path.GetExtension(filename ?? "").ToLowerInvariant();
+            if (string.IsNullOrEmpty(ext))
+            {
+                if (IsRtfBytes(docBytes)) ext = ".rtf";
+                else if (IsZipArchiveBytes(docBytes)) ext = ".docx";
+            }
+
+            // Tier 1: High-fidelity local Office converters if installed on the shop PC (LibreOffice headless or MS Word COM)
+            if (ext == ".docx" || ext == ".doc" || ext == ".odt" || ext == ".rtf" || ext == ".pptx" || ext == ".xlsx")
+            {
+                byte[] loPdf = TryConvertViaLibreOffice(ext, docBytes);
+                if (loPdf != null && loPdf.Length > 0) return loPdf;
+
+                if (ext == ".docx" || ext == ".doc" || ext == ".rtf" || ext == ".odt")
+                {
+                    byte[] wordPdf = TryConvertViaWordCom(ext, docBytes);
+                    if (wordPdf != null && wordPdf.Length > 0) return wordPdf;
+                }
+            }
+
+            // Tier 2: Built-in Zero-Dependency .NET 4.x converters (always available on Windows without Office!)
+            try
+            {
+                if (ext == ".docx" || (ext == "" && IsZipArchiveBytes(docBytes)))
+                {
+                    List<DocParagraphBlock> docxBlocks = ExtractDocxBlocks(docBytes);
+                    if (docxBlocks != null && docxBlocks.Count > 0)
+                    {
+                        byte[] pdf = RenderDocBlocksToMultiPageA4Pdf(docxBlocks, false);
+                        if (pdf != null && pdf.Length > 0) return pdf;
+                    }
+                    // Maybe an ODT inside a zip?
+                    List<DocParagraphBlock> odtFallback = ExtractOdtBlocks(docBytes);
+                    if (odtFallback != null && odtFallback.Count > 0)
+                    {
+                        byte[] pdf = RenderDocBlocksToMultiPageA4Pdf(odtFallback, false);
+                        if (pdf != null && pdf.Length > 0) return pdf;
+                    }
+                }
+                else if (ext == ".odt")
+                {
+                    List<DocParagraphBlock> odtBlocks = ExtractOdtBlocks(docBytes);
+                    if (odtBlocks != null && odtBlocks.Count > 0)
+                    {
+                        byte[] pdf = RenderDocBlocksToMultiPageA4Pdf(odtBlocks, false);
+                        if (pdf != null && pdf.Length > 0) return pdf;
+                    }
+                }
+                else if (ext == ".rtf" || IsRtfBytes(docBytes))
+                {
+                    string plain = ExtractRtfPlainText(docBytes);
+                    if (!string.IsNullOrWhiteSpace(plain))
+                    {
+                        byte[] pdf = ConvertTextToA4Pdf(Encoding.UTF8.GetBytes(plain));
+                        if (pdf != null && pdf.Length > 0) return pdf;
+                    }
+                }
+                else if (ext == ".html" || ext == ".htm")
+                {
+                    string rawHtml = Encoding.UTF8.GetString(docBytes);
+                    string plainHtml = ExtractHtmlPlainText(rawHtml);
+                    byte[] pdf = ConvertTextToA4Pdf(Encoding.UTF8.GetBytes(plainHtml));
+                    if (pdf != null && pdf.Length > 0) return pdf;
+                }
+                else if (ext == ".doc")
+                {
+                    failureReason = "Legacy binary .doc files require Microsoft Word or LibreOffice on the shop PC, or please re-save the file as .docx / .pdf before uploading.";
+                    return null;
+                }
+                else if (ext == ".pptx" || ext == ".xlsx")
+                {
+                    failureReason = "Presentations/spreadsheets (" + ext + ") require LibreOffice on the shop PC, or please export as .pdf / .docx before uploading.";
+                    return null;
+                }
+            }
+            catch (Exception ex)
+            {
+                Trace.WriteLine("[PdfAndPrinterEngine] ConvertDocumentToA4Pdf built-in fallback error: " + ex.Message);
+            }
+
+            failureReason = "Could not convert document format (" + ext + ") into a printable PDF. Please save as PDF or DOCX and try again.";
+            return null;
+        }
+
+        private static byte[] TryConvertViaLibreOffice(string ext, byte[] docBytes)
+        {
+            try
+            {
+                string[] candidates = new string[]
+                {
+                    @"C:\Program Files\LibreOffice\program\soffice.exe",
+                    @"C:\Program Files (x86)\LibreOffice\program\soffice.exe"
+                };
+                string soffice = null;
+                for (int i = 0; i < candidates.Length; i++)
+                {
+                    if (File.Exists(candidates[i])) { soffice = candidates[i]; break; }
+                }
+                if (soffice == null) return null;
+
+                string tempDir = Path.Combine(Path.GetTempPath(), "printaway_conv_" + Guid.NewGuid().ToString("N"));
+                Directory.CreateDirectory(tempDir);
+                try
+                {
+                    string inPath = Path.Combine(tempDir, "input" + ext);
+                    string outPdf = Path.Combine(tempDir, "input.pdf");
+                    File.WriteAllBytes(inPath, docBytes);
+
+                    var psi = new ProcessStartInfo
+                    {
+                        FileName = soffice,
+                        Arguments = string.Format(CultureInfo.InvariantCulture, "--headless --norestore --convert-to pdf --outdir \"{0}\" \"{1}\"", tempDir, inPath),
+                        CreateNoWindow = true,
+                        UseShellExecute = false
+                    };
+                    using (var proc = Process.Start(psi))
+                    {
+                        if (proc != null && proc.WaitForExit(25000) && proc.ExitCode == 0 && File.Exists(outPdf))
+                        {
+                            return File.ReadAllBytes(outPdf);
+                        }
+                        try { if (proc != null && !proc.HasExited) proc.Kill(); } catch { }
+                    }
+                }
+                finally
+                {
+                    try { Directory.Delete(tempDir, true); } catch { }
+                }
+            }
+            catch { }
+            return null;
+        }
+
+        private static byte[] TryConvertViaWordCom(string ext, byte[] docBytes)
+        {
+            Type wordType = null;
+            try { wordType = Type.GetTypeFromProgID("Word.Application"); } catch { }
+            if (wordType == null) return null;
+
+            byte[] resultBytes = null;
+            Exception threadEx = null;
+            var t = new Thread(() =>
+            {
+                object wordApp = null;
+                object docs = null;
+                object doc = null;
+                string tempDir = Path.Combine(Path.GetTempPath(), "printaway_word_" + Guid.NewGuid().ToString("N"));
+                try
+                {
+                    Directory.CreateDirectory(tempDir);
+                    string inPath = Path.Combine(tempDir, "input" + ext);
+                    string outPdf = Path.Combine(tempDir, "output.pdf");
+                    File.WriteAllBytes(inPath, docBytes);
+
+                    wordApp = Activator.CreateInstance(wordType);
+                    wordType.InvokeMember("Visible", BindingFlags.SetProperty, null, wordApp, new object[] { false });
+                    try { wordType.InvokeMember("DisplayAlerts", BindingFlags.SetProperty, null, wordApp, new object[] { 0 }); } catch { }
+
+                    docs = wordType.InvokeMember("Documents", BindingFlags.GetProperty, null, wordApp, null);
+                    doc = docs.GetType().InvokeMember("Open", BindingFlags.InvokeMethod, null, docs, new object[] { inPath, false, true });
+                    // 17 = wdExportFormatPDF
+                    doc.GetType().InvokeMember("ExportAsFixedFormat", BindingFlags.InvokeMethod, null, doc, new object[] { outPdf, 17 });
+                    doc.GetType().InvokeMember("Close", BindingFlags.InvokeMethod, null, doc, new object[] { false });
+                    doc = null;
+
+                    if (File.Exists(outPdf))
+                    {
+                        resultBytes = File.ReadAllBytes(outPdf);
+                    }
+                }
+                catch (Exception ex)
+                {
+                    threadEx = ex;
+                }
+                finally
+                {
+                    try { if (doc != null) doc.GetType().InvokeMember("Close", BindingFlags.InvokeMethod, null, doc, new object[] { false }); } catch { }
+                    try { if (wordApp != null) wordType.InvokeMember("Quit", BindingFlags.InvokeMethod, null, wordApp, new object[] { false }); } catch { }
+                    try { Directory.Delete(tempDir, true); } catch { }
+                }
+            });
+            t.SetApartmentState(ApartmentState.STA);
+            t.IsBackground = true;
+            t.Start();
+            t.Join(25000);
+            if (threadEx != null)
+            {
+                Trace.WriteLine("[PdfAndPrinterEngine] Word COM fallback error: " + threadEx.Message);
+            }
+            return resultBytes;
+        }
+
+        private static List<DocParagraphBlock> ExtractDocxBlocks(byte[] docxBytes)
+        {
+            var blocks = new List<DocParagraphBlock>();
+            using (var ms = new MemoryStream(docxBytes))
+            using (var archive = new ZipArchive(ms, ZipArchiveMode.Read))
+            {
+                ZipArchiveEntry docEntry = archive.GetEntry("word/document.xml");
+                if (docEntry == null) return null;
+
+                var xmlDoc = new XmlDocument();
+                using (var entryStream = docEntry.Open())
+                {
+                    xmlDoc.Load(entryStream);
+                }
+
+                var nsmgr = new XmlNamespaceManager(xmlDoc.NameTable);
+                nsmgr.AddNamespace("w", "http://schemas.openxmlformats.org/wordprocessingml/2006/main");
+
+                XmlNode bodyNode = xmlDoc.SelectSingleNode("//w:body", nsmgr);
+                if (bodyNode == null) return null;
+
+                foreach (XmlNode child in bodyNode.ChildNodes)
+                {
+                    if (child.LocalName == "p")
+                    {
+                        blocks.Add(ParseDocxParagraph(child, nsmgr));
+                    }
+                    else if (child.LocalName == "tbl")
+                    {
+                        XmlNodeList rows = child.SelectNodes("./w:tr", nsmgr);
+                        if (rows != null)
+                        {
+                            foreach (XmlNode row in rows)
+                            {
+                                var cellTexts = new List<string>();
+                                XmlNodeList cells = row.SelectNodes("./w:tc", nsmgr);
+                                if (cells != null)
+                                {
+                                    foreach (XmlNode cell in cells)
+                                    {
+                                        var sbCell = new StringBuilder();
+                                        XmlNodeList cellParas = cell.SelectNodes(".//w:p", nsmgr);
+                                        if (cellParas != null)
+                                        {
+                                            foreach (XmlNode cp in cellParas)
+                                            {
+                                                var parsed = ParseDocxParagraph(cp, nsmgr);
+                                                if (!string.IsNullOrWhiteSpace(parsed.Text))
+                                                {
+                                                    if (sbCell.Length > 0) sbCell.Append(" ");
+                                                    sbCell.Append(parsed.Text.Trim());
+                                                }
+                                            }
+                                        }
+                                        cellTexts.Add(sbCell.ToString());
+                                    }
+                                }
+                                blocks.Add(new DocParagraphBlock
+                                {
+                                    Text = string.Join("  |  ", cellTexts.ToArray())
+                                });
+                            }
+                            blocks.Add(new DocParagraphBlock { Text = "" });
+                        }
+                    }
+                }
+            }
+            if (blocks.Count == 0)
+            {
+                blocks.Add(new DocParagraphBlock { Text = "(Empty Word Document)" });
+            }
+            return blocks;
+        }
+
+        private static DocParagraphBlock ParseDocxParagraph(XmlNode pNode, XmlNamespaceManager nsmgr)
+        {
+            var block = new DocParagraphBlock();
+            XmlNode pStyle = pNode.SelectSingleNode("./w:pPr/w:pStyle/@w:val", nsmgr);
+            if (pStyle != null && !string.IsNullOrEmpty(pStyle.Value))
+            {
+                string st = pStyle.Value;
+                if (st.IndexOf("Title", StringComparison.OrdinalIgnoreCase) >= 0 || st.IndexOf("Heading1", StringComparison.OrdinalIgnoreCase) >= 0)
+                    block.IsHeading = true;
+                else if (st.IndexOf("Heading", StringComparison.OrdinalIgnoreCase) >= 0 || st.IndexOf("Subtitle", StringComparison.OrdinalIgnoreCase) >= 0)
+                    block.IsSubHeading = true;
+            }
+
+            bool allBold = false;
+            int nonEmptyRuns = 0;
+            int boldRuns = 0;
+            var sb = new StringBuilder();
+
+            XmlNodeList runs = pNode.SelectNodes("./w:r", nsmgr);
+            if (runs != null)
+            {
+                foreach (XmlNode r in runs)
+                {
+                    bool rBold = r.SelectSingleNode("./w:rPr/w:b", nsmgr) != null;
+                    var runSb = new StringBuilder();
+                    foreach (XmlNode rChild in r.ChildNodes)
+                    {
+                        if (rChild.LocalName == "t" || rChild.LocalName == "delText")
+                        {
+                            runSb.Append(rChild.InnerText);
+                        }
+                        else if (rChild.LocalName == "tab")
+                        {
+                            runSb.Append("    ");
+                        }
+                        else if (rChild.LocalName == "br" || rChild.LocalName == "cr")
+                        {
+                            runSb.Append("\n");
+                        }
+                    }
+                    string runTxt = runSb.ToString();
+                    if (!string.IsNullOrWhiteSpace(runTxt))
+                    {
+                        nonEmptyRuns++;
+                        if (rBold) boldRuns++;
+                    }
+                    sb.Append(runTxt);
+                }
+            }
+            if (nonEmptyRuns > 0 && boldRuns == nonEmptyRuns) allBold = true;
+
+            // Prefix bullet if paragraph has numbering property
+            if (pNode.SelectSingleNode("./w:pPr/w:numPr", nsmgr) != null && sb.Length > 0)
+            {
+                block.Text = "• " + sb.ToString();
+            }
+            else
+            {
+                block.Text = sb.ToString();
+            }
+            block.IsBold = allBold;
+            return block;
+        }
+
+        private static List<DocParagraphBlock> ExtractOdtBlocks(byte[] odtBytes)
+        {
+            var blocks = new List<DocParagraphBlock>();
+            using (var ms = new MemoryStream(odtBytes))
+            using (var archive = new ZipArchive(ms, ZipArchiveMode.Read))
+            {
+                ZipArchiveEntry contentEntry = archive.GetEntry("content.xml");
+                if (contentEntry == null) return null;
+
+                var xmlDoc = new XmlDocument();
+                using (var s = contentEntry.Open())
+                {
+                    xmlDoc.Load(s);
+                }
+                XmlNodeList nodes = xmlDoc.SelectNodes("//*[local-name()='h' or local-name()='p']");
+                if (nodes != null)
+                {
+                    foreach (XmlNode n in nodes)
+                    {
+                        blocks.Add(new DocParagraphBlock
+                        {
+                            Text = n.InnerText ?? "",
+                            IsHeading = (n.LocalName == "h")
+                        });
+                    }
+                }
+            }
+            return blocks.Count > 0 ? blocks : null;
+        }
+
+        private static string ExtractRtfPlainText(byte[] rtfBytes)
+        {
+            string rtf = Encoding.ASCII.GetString(rtfBytes);
+            string extracted = null;
+            try
+            {
+                var t = new Thread(() =>
+                {
+                    try
+                    {
+                        using (var rtb = new System.Windows.Forms.RichTextBox())
+                        {
+                            rtb.Rtf = rtf;
+                            extracted = rtb.Text;
+                        }
+                    }
+                    catch { }
+                });
+                t.SetApartmentState(ApartmentState.STA);
+                t.IsBackground = true;
+                t.Start();
+                t.Join(4000);
+            }
+            catch { }
+
+            if (!string.IsNullOrEmpty(extracted)) return extracted;
+
+            // Fallback regex RTF stripper
+            string stripped = Regex.Replace(rtf, @"\{\\\*[^}]+\}", "");
+            stripped = Regex.Replace(stripped, @"\\par\b\s?", "\n");
+            stripped = Regex.Replace(stripped, @"\\[a-zA-Z]+-?\d*\s?", "");
+            stripped = stripped.Replace("{", "").Replace("}", "");
+            return stripped.Trim();
+        }
+
+        private static string ExtractHtmlPlainText(string html)
+        {
+            if (string.IsNullOrEmpty(html)) return "";
+            string s = Regex.Replace(html, @"<(script|style)[^>]*>[\s\S]*?</\1>", "", RegexOptions.IgnoreCase);
+            s = Regex.Replace(s, @"<(br|p|div|li|tr|h[1-6])[^>]*>", "\n", RegexOptions.IgnoreCase);
+            s = Regex.Replace(s, @"<[^>]+>", " ");
+            s = WebUtility.HtmlDecode(s);
+            s = Regex.Replace(s, @"[ \t]+", " ");
+            return s.Trim();
+        }
+
+        private static byte[] RenderDocBlocksToMultiPageA4Pdf(List<DocParagraphBlock> blocks, bool monospaceMode)
+        {
+            const int dpi = 240; // Ultra-crisp 240 DPI (~1984 x 2806 px) balances razor sharpness & fast network upload
+            int pageW = (int)Math.Round(8.27 * dpi);
+            int pageH = (int)Math.Round(11.69 * dpi);
+            int marginX = (int)Math.Round(0.55 * dpi);
+            int marginTop = (int)Math.Round(0.55 * dpi);
+            int marginBottom = (int)Math.Round(0.55 * dpi);
+            int printableW = pageW - (marginX * 2);
+
+            string family = monospaceMode ? "Consolas" : "Segoe UI";
+            var pages = new List<A4RenderedPage>();
+
+            using (var fontTitle = new Font(family, 15.0f, FontStyle.Bold, GraphicsUnit.Point))
+            using (var fontSub = new Font(family, 12.5f, FontStyle.Bold, GraphicsUnit.Point))
+            using (var fontBold = new Font(family, 10.5f, FontStyle.Bold, GraphicsUnit.Point))
+            using (var fontBody = new Font(family, monospaceMode ? 9.5f : 10.5f, FontStyle.Regular, GraphicsUnit.Point))
+            using (var fontFooter = new Font("Segoe UI", 8.0f, FontStyle.Regular, GraphicsUnit.Point))
+            using (var brushBlack = new SolidBrush(Color.FromArgb(15, 23, 42)))
+            using (var brushGray = new SolidBrush(Color.FromArgb(100, 116, 139)))
+            {
+                var preppedLines = new List<KeyValuePair<string, Font>>();
+
+                using (var measureBmp = new Bitmap(16, 16))
+                {
+                    measureBmp.SetResolution(dpi, dpi);
+                    using (var measureG = Graphics.FromImage(measureBmp))
+                    {
+                        measureG.PageUnit = GraphicsUnit.Pixel;
+
+                        for (int i = 0; i < blocks.Count; i++)
+                        {
+                            DocParagraphBlock blk = blocks[i];
+                            Font f = blk.IsHeading ? fontTitle : (blk.IsSubHeading ? fontSub : (blk.IsBold ? fontBold : fontBody));
+                            string raw = (blk.Text ?? "").Replace("\r\n", "\n").Replace("\r", "\n");
+                            string[] subParas = raw.Split('\n');
+                            for (int s = 0; s < subParas.Length; s++)
+                            {
+                                List<string> wrapped = WrapTextToPixelWidth(measureG, subParas[s], f, printableW);
+                                for (int w = 0; w < wrapped.Count; w++)
+                                {
+                                    preppedLines.Add(new KeyValuePair<string, Font>(wrapped[w], f));
+                                }
+                            }
+                            if (!monospaceMode && !string.IsNullOrEmpty(raw))
+                            {
+                                // Subtle visual breathing room after paragraphs
+                                preppedLines.Add(new KeyValuePair<string, Font>("", fontBody));
+                            }
+                        }
+                    }
+                }
+
+                if (preppedLines.Count == 0)
+                {
+                    preppedLines.Add(new KeyValuePair<string, Font>(" ", fontBody));
+                }
+
+                // Paginate lines across A4 pages
+                var pageChunks = new List<List<KeyValuePair<string, Font>>>();
+                var curChunk = new List<KeyValuePair<string, Font>>();
+                float curY = marginTop;
+                float maxY = pageH - marginBottom - 40;
+
+                using (var measureBmp2 = new Bitmap(16, 16))
+                {
+                    measureBmp2.SetResolution(dpi, dpi);
+                    using (var g2 = Graphics.FromImage(measureBmp2))
+                    {
+                        for (int i = 0; i < preppedLines.Count; i++)
+                        {
+                            var item = preppedLines[i];
+                            float lh = string.IsNullOrEmpty(item.Key)
+                                ? (g2.MeasureString("Ag", item.Value).Height * 0.45f)
+                                : (g2.MeasureString("Ag", item.Value).Height * 1.18f);
+
+                            if (curY + lh > maxY && curChunk.Count > 0)
+                            {
+                                pageChunks.Add(curChunk);
+                                curChunk = new List<KeyValuePair<string, Font>>();
+                                curY = marginTop;
+                            }
+                            curChunk.Add(item);
+                            curY += lh;
+                            if (pageChunks.Count >= 99) break;
+                        }
+                        if (curChunk.Count > 0) pageChunks.Add(curChunk);
+                    }
+                }
+
+                ImageCodecInfo jpgEncoder = GetEncoder(ImageFormat.Jpeg);
+                for (int p = 0; p < pageChunks.Count; p++)
+                {
+                    using (var bmp = new Bitmap(pageW, pageH))
+                    {
+                        bmp.SetResolution(dpi, dpi);
+                        using (var g = Graphics.FromImage(bmp))
+                        {
+                            g.Clear(Color.White);
+                            g.TextRenderingHint = System.Drawing.Text.TextRenderingHint.AntiAliasGridFit;
+                            float y = marginTop;
+                            var chunk = pageChunks[p];
+                            for (int l = 0; l < chunk.Count; l++)
+                            {
+                                string txt = chunk[l].Key;
+                                Font f = chunk[l].Value;
+                                float baseH = g.MeasureString("Ag", f).Height;
+                                if (string.IsNullOrEmpty(txt))
+                                {
+                                    y += baseH * 0.45f;
+                                }
+                                else
+                                {
+                                    g.DrawString(txt, f, brushBlack, marginX, y);
+                                    y += baseH * 1.18f;
+                                }
+                            }
+
+                            if (pageChunks.Count > 1)
+                            {
+                                string footer = string.Format(CultureInfo.InvariantCulture, "Page {0} of {1}", p + 1, pageChunks.Count);
+                                SizeF fSz = g.MeasureString(footer, fontFooter);
+                                g.DrawString(footer, fontFooter, brushGray, (pageW - fSz.Width) / 2.0f, pageH - marginBottom + 8);
+                            }
+                        }
+
+                        using (var msJpeg = new MemoryStream())
+                        {
+                            if (jpgEncoder != null)
+                            {
+                                using (var encParams = new EncoderParameters(1))
+                                {
+                                    encParams.Param[0] = new EncoderParameter(System.Drawing.Imaging.Encoder.Quality, 90L);
+                                    bmp.Save(msJpeg, jpgEncoder, encParams);
+                                }
+                            }
+                            else
+                            {
+                                bmp.Save(msJpeg, ImageFormat.Jpeg);
+                            }
+
+                            pages.Add(new A4RenderedPage
+                            {
+                                JpegBytes = msJpeg.ToArray(),
+                                PixelWidth = pageW,
+                                PixelHeight = pageH,
+                                PageWidthPt = 595.28,
+                                PageHeightPt = 841.89,
+                                DrawWidthPt = 595.28,
+                                DrawHeightPt = 841.89,
+                                PosXPt = 0,
+                                PosYPt = 0
+                            });
+                        }
+                    }
+                }
+            }
+
+            return GenerateMultiImageA4Pdf(pages);
+        }
+
+        private static List<string> WrapTextToPixelWidth(Graphics g, string text, Font font, int maxWidthPx)
+        {
+            var result = new List<string>();
+            if (string.IsNullOrEmpty(text))
+            {
+                result.Add("");
+                return result;
+            }
+
+            string[] words = text.Split(' ');
+            var currentLine = new StringBuilder();
+
+            for (int i = 0; i < words.Length; i++)
+            {
+                string word = words[i];
+                string candidate = currentLine.Length == 0 ? word : (currentLine.ToString() + " " + word);
+                if (g.MeasureString(candidate, font).Width <= maxWidthPx)
+                {
+                    if (currentLine.Length > 0) currentLine.Append(' ');
+                    currentLine.Append(word);
+                }
+                else
+                {
+                    if (currentLine.Length > 0)
+                    {
+                        result.Add(currentLine.ToString());
+                        currentLine.Clear();
+                    }
+                    // Break ultra-long continuous tokens (URLs/hashes) across characters
+                    if (g.MeasureString(word, font).Width > maxWidthPx)
+                    {
+                        var charBuf = new StringBuilder();
+                        for (int c = 0; c < word.Length; c++)
+                        {
+                            charBuf.Append(word[c]);
+                            if (g.MeasureString(charBuf.ToString(), font).Width > maxWidthPx && charBuf.Length > 1)
+                            {
+                                char last = charBuf[charBuf.Length - 1];
+                                charBuf.Length -= 1;
+                                result.Add(charBuf.ToString());
+                                charBuf.Clear();
+                                charBuf.Append(last);
+                            }
+                        }
+                        if (charBuf.Length > 0) currentLine.Append(charBuf.ToString());
+                    }
+                    else
+                    {
+                        currentLine.Append(word);
+                    }
+                }
+            }
+            if (currentLine.Length > 0 || result.Count == 0)
+            {
+                result.Add(currentLine.ToString());
+            }
+            return result;
+        }
+
         private static byte[] GenerateSingleImageA4Pdf(byte[] jpegBytes, int imgW, int imgH, double pageW, double pageH, double drawW, double drawH, double posX, double posY)
         {
+            var list = new List<A4RenderedPage>
+            {
+                new A4RenderedPage
+                {
+                    JpegBytes = jpegBytes,
+                    PixelWidth = imgW,
+                    PixelHeight = imgH,
+                    PageWidthPt = pageW,
+                    PageHeightPt = pageH,
+                    DrawWidthPt = drawW,
+                    DrawHeightPt = drawH,
+                    PosXPt = posX,
+                    PosYPt = posY
+                }
+            };
+            return GenerateMultiImageA4Pdf(list);
+        }
+
+        private static byte[] GenerateMultiImageA4Pdf(List<A4RenderedPage> pages)
+        {
+            if (pages == null || pages.Count == 0) return null;
+
             using (var ms = new MemoryStream())
             {
                 var offsets = new List<long>();
@@ -278,31 +953,49 @@ namespace PrintAway.Engine
                 writeAscii("1 0 obj\n<< /Type /Catalog /Pages 2 0 R >>\nendobj\n");
 
                 // 2: Pages
+                var kids = new StringBuilder();
+                for (int i = 0; i < pages.Count; i++)
+                {
+                    int pageObjId = 3 + (i * 3);
+                    if (i > 0) kids.Append(' ');
+                    kids.Append(pageObjId.ToString(CultureInfo.InvariantCulture)).Append(" 0 R");
+                }
                 offsets.Add(ms.Position);
-                writeAscii("2 0 obj\n<< /Type /Pages /Kids [3 0 R] /Count 1 >>\nendobj\n");
+                writeAscii(string.Format(CultureInfo.InvariantCulture, "2 0 obj\n<< /Type /Pages /Kids [{0}] /Count {1} >>\nendobj\n", kids.ToString(), pages.Count));
 
-                // 3: Page
-                offsets.Add(ms.Position);
-                string mediaBox = string.Format(CultureInfo.InvariantCulture, "[0 0 {0:0.##} {1:0.##}]", pageW, pageH);
-                writeAscii("3 0 obj\n<< /Type /Page /Parent 2 0 R /MediaBox " + mediaBox + " /Contents 4 0 R /Resources << /XObject << /Im1 5 0 R >> /ProcSet [/PDF /ImageC] >> >>\nendobj\n");
+                // 3..N: Page, Content, Image XObject per page
+                for (int i = 0; i < pages.Count; i++)
+                {
+                    A4RenderedPage pg = pages[i];
+                    int pageObjId = 3 + (i * 3);
+                    int contentObjId = pageObjId + 1;
+                    int imageObjId = pageObjId + 2;
 
-                // 4: Contents (drawing stream)
-                offsets.Add(ms.Position);
-                string streamContent = string.Format(CultureInfo.InvariantCulture,
-                    "q\n{0:0.##} 0 0 {1:0.##} {2:0.##} {3:0.##} cm\n/Im1 Do\nQ\n",
-                    drawW, drawH, posX, posY);
-                byte[] contentBytes = ascii.GetBytes(streamContent);
-                writeAscii(string.Format(CultureInfo.InvariantCulture, "4 0 obj\n<< /Length {0} >>\nstream\n", contentBytes.Length));
-                ms.Write(contentBytes, 0, contentBytes.Length);
-                writeAscii("endstream\nendobj\n");
+                    // Page object
+                    offsets.Add(ms.Position);
+                    string mediaBox = string.Format(CultureInfo.InvariantCulture, "[0 0 {0:0.##} {1:0.##}]", pg.PageWidthPt, pg.PageHeightPt);
+                    writeAscii(string.Format(CultureInfo.InvariantCulture,
+                        "{0} 0 obj\n<< /Type /Page /Parent 2 0 R /MediaBox {1} /Contents {2} 0 R /Resources << /XObject << /Im1 {3} 0 R >> /ProcSet [/PDF /ImageC] >> >>\nendobj\n",
+                        pageObjId, mediaBox, contentObjId, imageObjId));
 
-                // 5: Image XObject
-                offsets.Add(ms.Position);
-                writeAscii(string.Format(CultureInfo.InvariantCulture,
-                    "5 0 obj\n<< /Type /XObject /Subtype /Image /Width {0} /Height {1} /ColorSpace /DeviceRGB /BitsPerComponent 8 /Filter /DCTDecode /Length {2} >>\nstream\n",
-                    imgW, imgH, jpegBytes.Length));
-                ms.Write(jpegBytes, 0, jpegBytes.Length);
-                writeAscii("\nendstream\nendobj\n");
+                    // Content stream object
+                    offsets.Add(ms.Position);
+                    string streamContent = string.Format(CultureInfo.InvariantCulture,
+                        "q\n{0:0.##} 0 0 {1:0.##} {2:0.##} {3:0.##} cm\n/Im1 Do\nQ\n",
+                        pg.DrawWidthPt, pg.DrawHeightPt, pg.PosXPt, pg.PosYPt);
+                    byte[] contentBytes = ascii.GetBytes(streamContent);
+                    writeAscii(string.Format(CultureInfo.InvariantCulture, "{0} 0 obj\n<< /Length {1} >>\nstream\n", contentObjId, contentBytes.Length));
+                    ms.Write(contentBytes, 0, contentBytes.Length);
+                    writeAscii("endstream\nendobj\n");
+
+                    // Image XObject
+                    offsets.Add(ms.Position);
+                    writeAscii(string.Format(CultureInfo.InvariantCulture,
+                        "{0} 0 obj\n<< /Type /XObject /Subtype /Image /Width {1} /Height {2} /ColorSpace /DeviceRGB /BitsPerComponent 8 /Filter /DCTDecode /Length {3} >>\nstream\n",
+                        imageObjId, pg.PixelWidth, pg.PixelHeight, pg.JpegBytes.Length));
+                    ms.Write(pg.JpegBytes, 0, pg.JpegBytes.Length);
+                    writeAscii("\nendstream\nendobj\n");
+                }
 
                 // xref
                 long startXref = ms.Position;
