@@ -117,6 +117,7 @@ namespace PrintAway.Gui
             this.Shown += (s, e) =>
             {
                 CheckFirstTimeOnboarding();
+                CheckForUpdatesAsync(silentWhenUpToDate: true);
             };
         }
 
@@ -1212,10 +1213,24 @@ namespace PrintAway.Gui
             File.Delete(tempVbs);
         }
 
-        private void OnCheckUpdatesClicked(object sender, EventArgs e)
+        private void CheckForUpdatesAsync(bool silentWhenUpToDate)
         {
-            string latestVer, dlUrl, notes;
-            bool updateAvailable = AutoUpdater.CheckForUpdate(out latestVer, out dlUrl, out notes);
+            System.Threading.ThreadPool.QueueUserWorkItem(_ =>
+            {
+                try
+                {
+                    if (silentWhenUpToDate) System.Threading.Thread.Sleep(3500);
+                    string latestVer, dlUrl, notes, checkErr;
+                    bool updateAvailable = AutoUpdater.CheckForUpdate(out latestVer, out dlUrl, out notes, out checkErr);
+                    if (this.IsDisposed || !this.IsHandleCreated) return;
+                    this.BeginInvoke((MethodInvoker)(() => PromptUpdateResult(updateAvailable, latestVer, dlUrl, notes, checkErr, silentWhenUpToDate)));
+                }
+                catch { }
+            });
+        }
+
+        private void PromptUpdateResult(bool updateAvailable, string latestVer, string dlUrl, string notes, string checkErr, bool silentWhenUpToDate)
+        {
             if (updateAvailable)
             {
                 var dr = MessageBox.Show(
@@ -1236,10 +1251,28 @@ namespace PrintAway.Gui
                     }
                 }
             }
-            else
+            else if (!silentWhenUpToDate)
             {
-                MessageBox.Show("Your PrintAway Station is up to date! (v" + AutoUpdater.CurrentVersion + ")", "PrintAway", MessageBoxButtons.OK, MessageBoxIcon.Information);
+                if (!string.IsNullOrEmpty(checkErr))
+                {
+                    MessageBox.Show(
+                        "Could not reach the PrintAway update server (" + checkErr + ").\nCurrent Version: v" + AutoUpdater.CurrentVersion,
+                        "PrintAway Update Check",
+                        MessageBoxButtons.OK,
+                        MessageBoxIcon.Warning);
+                }
+                else
+                {
+                    MessageBox.Show("Your PrintAway Station is up to date! (v" + AutoUpdater.CurrentVersion + ")", "PrintAway", MessageBoxButtons.OK, MessageBoxIcon.Information);
+                }
             }
+        }
+
+        private void OnCheckUpdatesClicked(object sender, EventArgs e)
+        {
+            string latestVer, dlUrl, notes, checkErr;
+            bool updateAvailable = AutoUpdater.CheckForUpdate(out latestVer, out dlUrl, out notes, out checkErr);
+            PromptUpdateResult(updateAvailable, latestVer, dlUrl, notes, checkErr, silentWhenUpToDate: false);
         }
 
         private void LaunchBrowser(string url)

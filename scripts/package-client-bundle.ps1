@@ -163,6 +163,10 @@ if (-not (Test-Path $webDlDir)) { New-Item -ItemType Directory -Path $webDlDir -
 $webDlZip = Join-Path $webDlDir "PrintAway-Station-Setup.zip"
 Copy-Item -Path $zipPath -Destination $webDlZip -Force
 Copy-Item -Path $binExe -Destination (Join-Path $webDlDir "PrintAway.exe") -Force
+if (Test-Path (Join-Path $rootDir "version.json")) {
+    Copy-Item -Path (Join-Path $rootDir "version.json") -Destination (Join-Path $webDlDir "version.json") -Force
+    Copy-Item -Path (Join-Path $rootDir "version.json") -Destination (Join-Path $OutputDir "version.json") -Force
+}
 Write-Host "  [OK] Copied to $webDlZip (hosted on Netlify CDN)." -ForegroundColor Green
 
 # 6. Security Audit Verification

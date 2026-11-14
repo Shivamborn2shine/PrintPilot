@@ -1,7 +1,7 @@
 {
-  "version": "2.4.0",
+  "version": "2.4.1",
   "releaseDate": "2026-11-14",
-  "releaseNotes": "Increase page limit from 100 to 500 pages (50 MB), add ScanDrop-style chunked binary upload & anti-HTML tunnel recovery to eliminate '<!DOCTYPE' upload errors, and add Admin Panel PDF preview & multi-file batch upload/print.",
+  "releaseNotes": "Fix silent self-updater failures (no-cache version probing, automatic startup check, retry-safe apply-update.bat & local web sync), raise page limit to 500 pages (50 MB), add ScanDrop chunked uploads & <!DOCTYPE fix, plus Admin PDF preview & multi-file batch upload.",
   "downloadUrl": "https://raw.githubusercontent.com/Shivamborn2shine/PrintPilot/main/bin/PrintAway.exe",
   "fallbackUrl": "https://printitaway.netlify.app/downloads/PrintAway.exe"
 }

@@ -251,7 +251,7 @@
               </li>
               <li class="flex items-center space-x-2.5">
                 <i class="fa-solid fa-check text-emerald-400"></i>
-                <span>Automatic 1-Click Updates to v2.2.5+</span>
+                <span>Automatic 1-Click Updates (Latest v2.4.1+)</span>
               </li>
             </ul>
           </div>
@@ -277,7 +277,7 @@
           <div class="space-y-5 text-left">
             <div class="inline-flex items-center space-x-2 px-3 py-1 rounded-full bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 text-xs font-bold">
               <i class="fa-solid fa-wand-magic-sparkles text-xs"></i>
-              <span>Zero-Config Native Windows Engine</span>
+              <span>Zero-Config Native Windows Engine • <span id="pricingLiveVer">v2.4.1</span></span>
             </div>
             
             <h2 class="text-3xl sm:text-4xl font-extrabold text-white tracking-tight">
@@ -287,16 +287,22 @@
             <p class="text-sm text-gray-300 leading-relaxed">
               No complex drivers, no IIS, no Apache, no Node.js required. PrintAway compiles with built-in Windows .NET 4.8 and runs standalone on any Windows 10 or 11 PC connected to your printer.
             </p>
+            <div id="pricingReleaseNotes" class="text-xs text-indigo-300/90 bg-indigo-950/40 border border-indigo-500/25 rounded-xl px-3.5 py-2.5">
+              <strong>Latest Release (<span id="pricingLiveVer2">v2.4.1</span>):</strong> Supports 500-page PDFs (50 MB), ScanDrop-style chunked transfers, reliable auto-updater, Admin PDF preview &amp; multi-file batch upload.
+            </div>
 
             <div class="flex flex-col sm:flex-row gap-3 pt-2">
-              <a href="/downloads/PrintAway-Station-Setup.zip" download class="px-6 py-3.5 rounded-2xl bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-white text-xs font-extrabold shadow-lg shadow-emerald-600/25 flex items-center justify-center space-x-2 transition">
+              <a id="lnkDownloadSetupZip" href="https://github.com/Shivamborn2shine/PrintPilot/raw/main/releases/PrintAway-Station-Setup.zip" download class="px-6 py-3.5 rounded-2xl bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-white text-xs font-extrabold shadow-lg shadow-emerald-600/25 flex items-center justify-center space-x-2 transition">
                 <i class="fa-solid fa-file-zipper text-sm"></i>
-                <span>Download PrintAway-Station-Setup.zip (18.8 MB)</span>
+                <span>Download PrintAway-Station-Setup.zip (v2.4.1)</span>
               </a>
-              <a href="/downloads/PrintAway.exe" download class="px-5 py-3.5 rounded-2xl bg-gray-900 hover:bg-gray-800 text-gray-200 text-xs font-bold border border-gray-700 flex items-center justify-center space-x-2 transition">
+              <a id="lnkDownloadExe" href="https://raw.githubusercontent.com/Shivamborn2shine/PrintPilot/main/bin/PrintAway.exe" download class="px-5 py-3.5 rounded-2xl bg-gray-900 hover:bg-gray-800 text-gray-200 text-xs font-bold border border-gray-700 flex items-center justify-center space-x-2 transition">
                 <i class="fa-solid fa-microchip text-indigo-400"></i>
-                <span>Download Standalone PrintAway.exe</span>
+                <span>Download Standalone PrintAway.exe (<span id="pricingLiveVer3">v2.4.1</span>)</span>
               </a>
+            </div>
+            <div class="text-[11px] text-gray-400 pt-1">
+              Mirror: <a href="/downloads/PrintAway-Station-Setup.zip" class="text-indigo-400 hover:underline">Netlify CDN ZIP</a> • <a href="/downloads/PrintAway.exe" class="text-indigo-400 hover:underline">Netlify CDN EXE</a>
             </div>
           </div>
 
@@ -426,6 +432,42 @@
       </div>
     </div>
   </footer>
+
+  <script>
+    (async function syncLatestVersion() {
+      const endpoints = [
+        'https://raw.githubusercontent.com/Shivamborn2shine/PrintPilot/main/version.json?t=' + Date.now(),
+        '/downloads/version.json?t=' + Date.now()
+      ];
+      for (const ep of endpoints) {
+        try {
+          const res = await fetch(ep, { cache: 'no-store' });
+          if (!res.ok) continue;
+          const data = await res.json();
+          if (data && data.version) {
+            const vLabel = 'v' + String(data.version).replace(/^v/i, '');
+            ['pricingLiveVer', 'pricingLiveVer2', 'pricingLiveVer3'].forEach(id => {
+              const el = document.getElementById(id);
+              if (el) el.textContent = vLabel;
+            });
+            const notesEl = document.getElementById('pricingReleaseNotes');
+            if (notesEl && data.releaseNotes) {
+              notesEl.innerHTML = '<strong>Latest Release (' + vLabel + '):</strong> ' + data.releaseNotes;
+            }
+            const zipBtn = document.getElementById('lnkDownloadSetupZip');
+            if (zipBtn) {
+              zipBtn.querySelector('span').textContent = 'Download PrintAway-Station-Setup.zip (' + vLabel + ')';
+            }
+            if (data.downloadUrl) {
+              const exeBtn = document.getElementById('lnkDownloadExe');
+              if (exeBtn) exeBtn.href = data.downloadUrl;
+            }
+            break;
+          }
+        } catch { }
+      }
+    })();
+  </script>
 
 </body>
 </html>

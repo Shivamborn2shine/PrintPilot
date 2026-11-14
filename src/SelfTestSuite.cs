@@ -531,6 +531,10 @@ namespace PrintAway
                     byte[] previewBytes = repo.GetFilePdfBytesByToken(fToken, out outName, out outErr);
                     Assert(previewBytes != null && previewBytes.Length == pdf500.Length,
                         "Admin file preview bytes must match assembled PDF length: " + outErr);
+
+                    Assert(PrintAway.Updater.AutoUpdater.IsVersionNewer("2.3.1", "2.4.1"), "AutoUpdater must treat 2.4.1 as newer than 2.3.1");
+                    Assert(!PrintAway.Updater.AutoUpdater.IsVersionNewer("2.4.1", "2.4.1"), "AutoUpdater must not flag identical version as newer");
+                    Assert(!PrintAway.Updater.AutoUpdater.IsVersionNewer("2.4.1", "2.2.9"), "AutoUpdater must never downgrade to 2.2.9");
                 });
             }
 
