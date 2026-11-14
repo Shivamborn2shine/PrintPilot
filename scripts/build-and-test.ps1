@@ -1,4 +1,4 @@
-﻿<#
+<#
 .SYNOPSIS
     Compiles PrintAway native Windows server/worker executable and runs the PRD §14 Automated Test Matrix.
 #>

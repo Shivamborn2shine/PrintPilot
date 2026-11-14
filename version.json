@@ -1,7 +1,7 @@
 {
-  "version": "2.3.0",
+  "version": "2.3.1",
   "releaseDate": "2026-11-14",
-  "releaseNotes": "Self-healing multi-provider tunnel watchdog (30s active probe + HTTP/1.1 KeepAlive + Cloudflare Named Tunnel / OpenSSH / Pinggy cascade + frontend 502/503 auto-recovery) and full Word/Office document printing (.docx, .doc, .rtf, .odt, .html, multi-page .txt) to ISO A4 PDF.",
+  "releaseNotes": "Fix OpenSSH (*.app.lhr.life) regex capture, remove custom X-Pinggy-No-Screen browser CORS preflight header causing Failed to fetch, echo dynamic CORS preflight headers in local HTTP server, and enforce live tunnel probing on admin login.",
   "downloadUrl": "https://raw.githubusercontent.com/Shivamborn2shine/PrintPilot/main/bin/PrintAway.exe",
   "fallbackUrl": "https://printitaway.netlify.app/downloads/PrintAway.exe"
 }

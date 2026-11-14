@@ -1160,7 +1160,7 @@
       const badgeEl = document.getElementById('lblAdminShopBadge');
       if (badgeEl) badgeEl.textContent = shopId;
 
-      // Helper to test candidate tunnel before trusting it
+      // Helper to ping candidate tunnel before trusting it (zero custom headers = zero CORS preflight overhead)
       async function isTunnelAlive(candidateUrl) {
         if (!candidateUrl || !candidateUrl.startsWith('https://')) return false;
         if (candidateUrl.includes('api.trycloudflare.com') || candidateUrl.includes('pkg.trycloudflare.com') ||
@@ -1168,18 +1168,14 @@
         try {
           const ctrl = new AbortController();
           const tid = setTimeout(() => ctrl.abort(), 3000);
-          const res = await fetch(candidateUrl + '/api/health', {
-            signal: ctrl.signal,
-            headers: { 'X-Pinggy-No-Screen': 'true' }
-          });
+          const res = await fetch(candidateUrl + '/api/health', { signal: ctrl.signal });
           clearTimeout(tid);
           if (res.ok) return true;
+        } catch { }
+        try {
           const ctrl2 = new AbortController();
           const tid2 = setTimeout(() => ctrl2.abort(), 2500);
-          const res2 = await fetch(candidateUrl + '/api/shop/status', {
-            signal: ctrl2.signal,
-            headers: { 'X-Pinggy-No-Screen': 'true' }
-          });
+          const res2 = await fetch(candidateUrl + '/api/shop/status', { signal: ctrl2.signal });
           clearTimeout(tid2);
           return res2.ok;
         } catch {
@@ -1187,7 +1183,13 @@
         }
       }
 
+      if (!force && cached && cached.startsWith('https://') && (await isTunnelAlive(cached))) {
+        return cached;
+      }
+      localStorage.removeItem('printaway_api_base');
+
       // Priority 1: Supabase lookup for live tunnel URL
+      let sbCandidate = '';
       try {
         const sbRes = await fetch(`https://zduoifzakiojfqbtxqqm.supabase.co/rest/v1/shops?shop_id=eq.${encodeURIComponent(shopId)}&select=live_tunnel_url`, {
           headers: {
@@ -1201,7 +1203,8 @@
           if (list && list.length > 0 && list[0].live_tunnel_url && list[0].live_tunnel_url.startsWith('https://')) {
             const cleanUrl = list[0].live_tunnel_url.trim().replace(/\/+$/, '');
             if (!cleanUrl.includes('api.trycloudflare.com') && !cleanUrl.includes('pkg.trycloudflare.com')) {
-              if (!force || (await isTunnelAlive(cleanUrl))) {
+              sbCandidate = cleanUrl;
+              if (await isTunnelAlive(cleanUrl)) {
                 localStorage.setItem('printaway_api_base', cleanUrl);
                 return cleanUrl;
               }
@@ -1219,9 +1222,9 @@
           const lines = text.split(/\r?\n/)
             .map(l => l.trim())
             .filter(l => l.startsWith('https://') && !l.includes('api.trycloudflare.com') && !l.includes('pkg.trycloudflare.com'));
-          for (let i = lines.length - 1; i >= Math.max(0, lines.length - 3); i--) {
+          for (let i = lines.length - 1; i >= Math.max(0, lines.length - 4); i--) {
             const candidate = lines[i].replace(/\/+$/, '');
-            if (!force || (await isTunnelAlive(candidate))) {
+            if (await isTunnelAlive(candidate)) {
               localStorage.setItem('printaway_api_base', candidate);
               return candidate;
             }
@@ -1229,7 +1232,7 @@
         }
       } catch (e) { }
 
-      return localStorage.getItem('printaway_api_base') || DEFAULT_STATION_URL;
+      return sbCandidate || DEFAULT_STATION_URL;
     }
 
     autoDiscoverLiveStation();
@@ -1247,7 +1250,7 @@
     (function installStationFetchAutoHeal() {
       const nativeFetch = window.fetch.bind(window);
       window.fetch = async function(input, init) {
-        const urlStr = typeof input === 'string' ? input : (input && input.url ? input.url : '');
+        let urlStr = typeof input === 'string' ? input : (input && input.url ? input.url : '');
         const isStationApiCall = typeof input === 'string' &&
           urlStr.includes('/api/') &&
           !urlStr.endsWith('/api/health') &&
@@ -1259,13 +1262,20 @@
           return nativeFetch(input, init);
         }
 
-        const nextInit = Object.assign({}, init || {});
-        nextInit.headers = Object.assign({}, (init && init.headers) || {}, { 'X-Pinggy-No-Screen': 'true' });
+        const isCloudHosted = window.location.hostname !== 'localhost' && window.location.hostname !== '127.0.0.1';
+        if (isCloudHosted && urlStr.startsWith('/api/')) {
+          const freshBase = await autoDiscoverLiveStation(true);
+          if (freshBase && freshBase.startsWith('https://')) {
+            urlStr = freshBase.replace(/\/+$/, '') + urlStr;
+          } else {
+            throw new Error('Shop station tunnel is offline or still connecting. Verify PrintAway.exe is running on the shop PC.');
+          }
+        }
 
         let res = null;
         let firstErr = null;
         try {
-          res = await nativeFetch(urlStr, nextInit);
+          res = await nativeFetch(urlStr, init);
           if (![502, 503, 504, 530].includes(res.status)) {
             return res;
           }
@@ -1278,12 +1288,12 @@
           if (fresh && fresh.startsWith('https://')) {
             const pathOnly = urlStr.replace(/^https?:\/\/[^/]+/, '');
             const retryUrl = fresh.replace(/\/+$/, '') + pathOnly;
-            return await nativeFetch(retryUrl, nextInit);
+            return await nativeFetch(retryUrl, init);
           }
         } catch { }
 
         if (res) return res;
-        throw firstErr || new Error('Station tunnel unreachable');
+        throw firstErr || new Error('Station tunnel unreachable. Check that PrintAway.exe is running and Online.');
       };
     })();
 
@@ -1409,7 +1419,12 @@
       }
 
       try {
-        await autoDiscoverLiveStation();
+        localStorage.setItem('printaway_shop_id', shopId);
+        const liveBase = await autoDiscoverLiveStation(true);
+        if (window.location.hostname !== 'localhost' && window.location.hostname !== '127.0.0.1' && !liveBase) {
+          showNotice(`Station "${shopId}" appears offline or tunnel is reconnecting. Ensure PrintAway.exe is running on the counter PC.`, true);
+          return;
+        }
         const res = await fetch(apiUrl('/api/admin/login'), {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },

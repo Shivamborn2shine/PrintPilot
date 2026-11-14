@@ -131,7 +131,11 @@ namespace PrintAway.Web
             res.KeepAlive = true;
             res.Headers["Access-Control-Allow-Origin"] = "*";
             res.Headers["Access-Control-Allow-Methods"] = "GET, POST, OPTIONS, PUT, DELETE";
-            res.Headers["Access-Control-Allow-Headers"] = "Content-Type, X-Admin-Session, X-CSRF-Token, X-Worker-Token, X-File-Name, X-PrintAway-Signature, Authorization";
+            string reqCorsHeaders = req.Headers["Access-Control-Request-Headers"];
+            res.Headers["Access-Control-Allow-Headers"] = !string.IsNullOrWhiteSpace(reqCorsHeaders)
+                ? reqCorsHeaders
+                : "Content-Type, X-Admin-Session, X-CSRF-Token, X-Worker-Token, X-File-Name, X-PrintAway-Signature, Authorization, X-Pinggy-No-Screen";
+            res.Headers["Access-Control-Max-Age"] = "86400";
 
             string path = (req.Url.AbsolutePath ?? "/").TrimEnd('/');
             if (path.Length == 0) path = "/";
@@ -141,7 +145,8 @@ namespace PrintAway.Web
             if (method == "OPTIONS")
             {
                 res.StatusCode = 204;
-                res.Close();
+                res.ContentLength64 = 0;
+                res.OutputStream.Close();
                 return;
             }
 

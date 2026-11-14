@@ -14,7 +14,7 @@ namespace PrintAway.Tunnel
     public sealed class TunnelManager : IDisposable
     {
         private static readonly Regex CloudflareUrlRegex = new Regex(@"https://(?!api\.|pkg\.|update\.|staging\.|www\.)([a-zA-Z0-9-]{5,}\.trycloudflare\.com)", RegexOptions.Compiled | RegexOptions.IgnoreCase);
-        private static readonly Regex SshUrlRegex = new Regex(@"https://[a-zA-Z0-9-]+\.lhr\.(life|rocks|pro)", RegexOptions.Compiled | RegexOptions.IgnoreCase);
+        private static readonly Regex SshUrlRegex = new Regex(@"https://[a-zA-Z0-9.-]+\.lhr\.(?:life|rocks|pro)", RegexOptions.Compiled | RegexOptions.IgnoreCase);
         private static readonly Regex PinggyUrlRegex = new Regex(@"https://[a-zA-Z0-9.-]+\.(?:free\.pinggy\.link|pinggy\.link|pinggy\.io)", RegexOptions.Compiled | RegexOptions.IgnoreCase);
 
         private readonly string _rootDir;

@@ -250,7 +250,7 @@ if (-not $tunnelUrl) {
             if ($line) {
                 $logWriter.WriteLine($line)
                 $logWriter.Flush()
-                if ($line -match "https://([a-zA-Z0-9-]+\.lhr\.(life|rocks|pro))") {
+                if ($line -match "https://([a-zA-Z0-9.-]+\.lhr\.(life|rocks|pro))") {
                     $tunnelUrl = "https://" + $matches[1]
                     Write-Host "  [OK] Resilient OpenSSH Fallback Tunnel Live: $tunnelUrl" -ForegroundColor Green
                     break

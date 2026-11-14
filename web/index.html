@@ -1842,19 +1842,17 @@
     /* ==========================================================================
        ROBUST NETWORK LAYER (AUTO-RETRY ON 502/503/504 & TUNNEL RE-DISCOVERY)
        ========================================================================== */
-    function withTunnelHeaders(options = {}) {
-      const nextOpts = Object.assign({}, options);
-      const hdrs = Object.assign({}, options.headers || {}, { 'X-Pinggy-No-Screen': 'true' });
-      nextOpts.headers = hdrs;
-      return nextOpts;
-    }
-
     async function apiFetch(path, options = {}) {
-      const reqOpts = withTunnelHeaders(options);
+      const isCloudHosted = window.location.hostname !== 'localhost' && window.location.hostname !== '127.0.0.1';
       let targetUrl = apiUrl(path);
+      if (isCloudHosted && targetUrl.startsWith('/api/')) {
+        await autoDiscoverLiveStation(true);
+        targetUrl = apiUrl(path);
+      }
+
       let lastErr = null;
       try {
-        const res = await fetch(targetUrl, reqOpts);
+        const res = await fetch(targetUrl, options);
         if (![502, 503, 504, 530].includes(res.status)) {
           return res;
         }
@@ -1872,10 +1870,10 @@
             await new Promise(r => setTimeout(r, 1800));
           }
           const freshTunnel = await autoDiscoverLiveStation(true);
-          if (freshTunnel || window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1') {
+          if (freshTunnel || !isCloudHosted) {
             targetUrl = apiUrl(path);
             console.log(`[PrintAway Network] Retry #${attempt} via live station: ${targetUrl}`);
-            const retryRes = await fetch(targetUrl, reqOpts);
+            const retryRes = await fetch(targetUrl, options);
             if (![502, 503, 504, 530].includes(retryRes.status)) {
               return retryRes;
             }
@@ -2148,7 +2146,7 @@
           badgeEl.textContent = shopId;
         }
 
-        // Helper to ping candidate tunnel before trusting it
+        // Helper to ping candidate tunnel before trusting it (zero custom headers = zero CORS preflight overhead)
         async function isTunnelAlive(candidateUrl) {
           if (!candidateUrl || !candidateUrl.startsWith('https://')) return false;
           if (candidateUrl.includes('api.trycloudflare.com') || candidateUrl.includes('pkg.trycloudflare.com') ||
@@ -2156,19 +2154,14 @@
           try {
             const ctrl = new AbortController();
             const tid = setTimeout(() => ctrl.abort(), 3000);
-            const res = await fetch(candidateUrl + '/api/health', {
-              signal: ctrl.signal,
-              headers: { 'X-Pinggy-No-Screen': 'true' }
-            });
+            const res = await fetch(candidateUrl + '/api/health', { signal: ctrl.signal });
             clearTimeout(tid);
             if (res.ok) return true;
-            // Fallback check for older station binaries without /api/health
+          } catch { }
+          try {
             const ctrl2 = new AbortController();
             const tid2 = setTimeout(() => ctrl2.abort(), 2500);
-            const res2 = await fetch(candidateUrl + '/api/shop/status', {
-              signal: ctrl2.signal,
-              headers: { 'X-Pinggy-No-Screen': 'true' }
-            });
+            const res2 = await fetch(candidateUrl + '/api/shop/status', { signal: ctrl2.signal });
             clearTimeout(tid2);
             return res2.ok;
           } catch {
@@ -2176,7 +2169,13 @@
           }
         }
 
+        if (!force && cached && cached.startsWith('https://') && (await isTunnelAlive(cached))) {
+          return cached;
+        }
+        localStorage.removeItem('printaway_api_base');
+
         // Priority 1: Supabase Fleet Lookup
+        let sbCandidate = '';
         try {
           const sbRes = await fetch(`https://zduoifzakiojfqbtxqqm.supabase.co/rest/v1/shops?shop_id=eq.${encodeURIComponent(shopId)}&select=live_tunnel_url,shop_name,upi_vpa`, {
             headers: {
@@ -2190,7 +2189,8 @@
             if (list && list.length > 0 && list[0].live_tunnel_url) {
               const live = list[0].live_tunnel_url.trim().replace(/\/+$/, '');
               if (live.startsWith('https://') && !live.includes('api.trycloudflare.com') && !live.includes('pkg.trycloudflare.com')) {
-                if (!force || (await isTunnelAlive(live))) {
+                sbCandidate = live;
+                if (await isTunnelAlive(live)) {
                   localStorage.setItem('printaway_api_base', live);
                   return live;
                 }
@@ -2208,15 +2208,16 @@
             const lines = text.split(/\r?\n/)
               .map(l => l.trim())
               .filter(l => l.startsWith('https://') && !l.includes('api.trycloudflare.com') && !l.includes('pkg.trycloudflare.com'));
-            for (let i = lines.length - 1; i >= Math.max(0, lines.length - 3); i--) {
+            for (let i = lines.length - 1; i >= Math.max(0, lines.length - 4); i--) {
               const candidate = lines[i].replace(/\/+$/, '');
-              if (!force || (await isTunnelAlive(candidate))) {
+              if (await isTunnelAlive(candidate)) {
                 localStorage.setItem('printaway_api_base', candidate);
                 return candidate;
               }
             }
           }
         } catch (e) { }
+        if (sbCandidate) return sbCandidate;
       } catch (e) {
         console.warn('Live station registry lookup skipped:', e);
       }

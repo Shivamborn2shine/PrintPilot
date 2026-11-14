@@ -490,6 +490,7 @@ namespace PrintAway
                     Assert(!PrintAway.Tunnel.TunnelManager.IsValidPublicTunnelUrl("http://insecure.trycloudflare.com"), "HTTP (non-HTTPS) must be rejected");
                     Assert(PrintAway.Tunnel.TunnelManager.IsValidPublicTunnelUrl("https://bright-river-station.trycloudflare.com"), "Valid trycloudflare.com must be accepted");
                     Assert(PrintAway.Tunnel.TunnelManager.IsValidPublicTunnelUrl("https://abc123.lhr.life"), "Valid localhost.run must be accepted");
+                    Assert(PrintAway.Tunnel.TunnelManager.IsValidPublicTunnelUrl("https://ec48a85ffbf6af.app.lhr.life"), "Valid multi-label localhost.run app.lhr.life must be accepted");
                     Assert(PrintAway.Tunnel.TunnelManager.IsValidPublicTunnelUrl("https://xyz.a.free.pinggy.link"), "Valid Pinggy link must be accepted");
                     Assert(PrintAway.Tunnel.TunnelManager.IsValidPublicTunnelUrl("https://shop1.printaway.in"), "Custom HTTPS domain must be accepted");
                 });
