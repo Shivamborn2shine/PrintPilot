@@ -116,7 +116,6 @@ namespace PrintAway.Gui
 
             this.Shown += (s, e) =>
             {
-                CheckFirstTimeOnboarding();
                 CheckForUpdatesAsync(silentWhenUpToDate: true);
             };
         }
@@ -720,8 +719,8 @@ namespace PrintAway.Gui
             try
             {
                 var status = _repo.GetShopAndAvailabilityStatus();
-                string shopId = status.ContainsKey("shopId") && status["shopId"] != null ? Convert.ToString(status["shopId"]) : "midtownstationary";
-                string shopName = status.ContainsKey("shopName") && status["shopName"] != null ? Convert.ToString(status["shopName"]) : "Midtown Stationary";
+                string shopId = status.ContainsKey("shopId") && status["shopId"] != null ? Convert.ToString(status["shopId"]) : "";
+                string shopName = status.ContainsKey("shopName") && status["shopName"] != null ? Convert.ToString(status["shopName"]) : shopId;
                 string activeQueue = Convert.ToString(status["activeQueueName"]);
                 bool accepting = (bool)status["acceptingOrders"];
 
@@ -1199,18 +1198,7 @@ namespace PrintAway.Gui
 
         private void CreateWindowsShortcut(string shortcutPath, string targetExe)
         {
-            string vbsScript = "Set oWS = WScript.CreateObject(\"WScript.Shell\")\r\n" +
-                               "sLinkFile = \"" + shortcutPath.Replace("\\", "\\\\") + "\"\r\n" +
-                               "Set oLink = oWS.CreateShortcut(sLinkFile)\r\n" +
-                               "oLink.TargetPath = \"" + targetExe.Replace("\\", "\\\\") + "\"\r\n" +
-                               "oLink.WorkingDirectory = \"" + Path.GetDirectoryName(targetExe).Replace("\\", "\\\\") + "\"\r\n" +
-                               "oLink.WindowStyle = 1\r\n" +
-                               "oLink.Description = \"PrintAway Hardware Station\"\r\n" +
-                               "oLink.Save\r\n";
-            string tempVbs = Path.Combine(Path.GetTempPath(), "create_shortcut.vbs");
-            File.WriteAllText(tempVbs, vbsScript);
-            Process.Start("cscript.exe", "//nologo \"" + tempVbs + "\"").WaitForExit();
-            File.Delete(tempVbs);
+            WindowsStartup.CreateShortcut(shortcutPath, targetExe);
         }
 
         private void CheckForUpdatesAsync(bool silentWhenUpToDate)
@@ -1298,31 +1286,14 @@ namespace PrintAway.Gui
                 }
             }
             catch { }
-            return "midtownstationary";
-        }
-
-        private void CheckFirstTimeOnboarding()
-        {
-            try
-            {
-                string flagPath = Path.Combine(_repoRoot, "data", "onboarded.flag");
-                string curShop = GetCurrentShopId();
-                if (!File.Exists(flagPath) && (curShop == "pilot" || string.IsNullOrEmpty(curShop)))
-                {
-                    this.BeginInvoke(new Action(() =>
-                    {
-                        ShowEditShopAndAdminPasswordDialog(true);
-                    }));
-                }
-            }
-            catch { }
+            return "";
         }
 
         private void ShowEditShopAndAdminPasswordDialog(bool isFirstRun = false)
         {
             var status = _repo.GetShopAndAvailabilityStatus();
             string curShopName = status != null && status.ContainsKey("shopName") && status["shopName"] != null
-                ? Convert.ToString(status["shopName"]) : "PrintAway Pilot Shop";
+                ? Convert.ToString(status["shopName"]) : "";
             string curShopId = GetCurrentShopId();
             string curActiveQueue = status != null && status.ContainsKey("activeQueueName") && status["activeQueueName"] != null
                 ? Convert.ToString(status["activeQueueName"]) : "";
@@ -1419,10 +1390,9 @@ namespace PrintAway.Gui
                 };
                 txtName.TextChanged += (s, e) =>
                 {
-                    if (!userEditedSlug && (isFirstRun || curShopId == "pilot"))
+                    if (!userEditedSlug && (isFirstRun || !PrintAway.Config.StationConfig.IsUsableSlug(curShopId)))
                     {
-                        string autoSlug = Regex.Replace(txtName.Text.Trim().ToLowerInvariant().Replace(" ", "_"), @"[^a-z0-9_-]", "");
-                        txtSlug.Text = autoSlug;
+                        txtSlug.Text = PrintAway.Config.StationConfig.Slugify(txtName.Text);
                     }
                 };
 
@@ -1589,11 +1559,32 @@ namespace PrintAway.Gui
                         txtName.Focus();
                         return;
                     }
-                    if (string.IsNullOrEmpty(newSlug))
+                    string slugError = PrintAway.Config.StationConfig.ValidateSlug(newSlug);
+                    if (slugError != null)
                     {
-                        MessageBox.Show("Please enter a valid shop identifier / slug.", "Shop Slug Required", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                        MessageBox.Show(slugError, "Invalid Shop ID", MessageBoxButtons.OK, MessageBoxIcon.Warning);
                         txtSlug.Focus();
                         return;
+                    }
+                    if (!string.Equals(newSlug, curShopId, StringComparison.Ordinal))
+                    {
+                        Cursor.Current = Cursors.WaitCursor;
+                        var slugCheck = PrintAway.SaaS.ShopRegistryClient.CheckSlug(newSlug);
+                        Cursor.Current = Cursors.Default;
+                        if (slugCheck.Availability == PrintAway.SaaS.SlugAvailability.Taken)
+                        {
+                            var claim = MessageBox.Show(
+                                "Shop ID '" + newSlug + "' is already registered" +
+                                (string.IsNullOrEmpty(slugCheck.ExistingShopName) ? "" : " to \"" + slugCheck.ExistingShopName + "\"") + ".\n\n" +
+                                "Using another shop's ID sends their customers' orders to this computer.\n\n" +
+                                "Only continue if this is YOUR shop. Continue?",
+                                "Shop ID already in use", MessageBoxButtons.YesNo, MessageBoxIcon.Warning, MessageBoxDefaultButton.Button2);
+                            if (claim != DialogResult.Yes)
+                            {
+                                txtSlug.Focus();
+                                return;
+                            }
+                        }
                     }
 
                     if (isFirstRun && string.IsNullOrEmpty(newPassword))
@@ -1606,9 +1597,10 @@ namespace PrintAway.Gui
                     bool passwordChanged = false;
                     if (!string.IsNullOrEmpty(newPassword))
                     {
-                        if (newPassword.Length < 6)
+                        string passwordError = PrintAway.Config.StationConfig.ValidateAdminPassword(newPassword);
+                        if (passwordError != null)
                         {
-                            MessageBox.Show("Password must be at least 6 characters long.", "Password Too Short", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                            MessageBox.Show(passwordError, "Weak Password", MessageBoxButtons.OK, MessageBoxIcon.Warning);
                             txtPass.Focus();
                             return;
                         }
@@ -1640,10 +1632,9 @@ namespace PrintAway.Gui
                     string selColor = (cmbColor.SelectedIndex > 0 && cmbColor.SelectedItem != null)
                         ? cmbColor.SelectedItem.ToString().Replace("[PHYSICAL] ", "").Replace("[VIRTUAL] ", "").Trim() : selPrimary;
 
-                    // 1. Update config/station.json
+                    // 1. Update config/station.json (identity is also persisted via ShopIdentityChanged)
                     UpdateStationJson("shopName", newName);
                     UpdateStationJson("shopId", newSlug);
-                    UpdateStationJson("stationRegistryTopic", "printaway_station_registry_" + newSlug + "_9f8a7b");
                     if (!string.IsNullOrEmpty(selPrimary)) UpdateStationJson("activePrinterQueue", selPrimary);
                     if (!string.IsNullOrEmpty(selBw)) UpdateStationJson("bwPrinterQueue", selBw);
                     if (!string.IsNullOrEmpty(selColor)) UpdateStationJson("colorPrinterQueue", selColor);
@@ -1697,23 +1688,7 @@ namespace PrintAway.Gui
                     // 5. Reload GUI fields & metrics
                     LoadInitialData();
 
-                    // 6. Broadcast live tunnel to new shop's ntfy topic & sync Supabase
-                    string activeTunnel = _repo.GetLiveTunnelUrl();
-                    if (!string.IsNullOrEmpty(activeTunnel))
-                    {
-                        ThreadPool.QueueUserWorkItem(_ =>
-                        {
-                            try
-                            {
-                                using (var wc = new WebClient())
-                                {
-                                    wc.UploadString("https://ntfy.sh/printaway_station_registry_" + newSlug + "_9f8a7b", activeTunnel);
-                                }
-                            }
-                            catch { }
-                        });
-                    }
-
+                    // 6. Tunnel registry re-broadcast happens via PrintAwayRepository.ShopIdentityChanged
                     if (_supabaseSync != null)
                     {
                         _supabaseSync.ShopId = newSlug;
@@ -1759,17 +1734,33 @@ namespace PrintAway.Gui
                         var cfg = json.Deserialize<Dictionary<string, object>>(text);
                         if (cfg != null && cfg.ContainsKey("shopId"))
                         {
-                            string newShopId = Convert.ToString(cfg["shopId"]).Trim();
+                            string newShopId = PrintAway.Config.StationConfig.NormalizeSlug(Convert.ToString(cfg["shopId"]));
                             string newShopName = cfg.ContainsKey("shopName") && cfg["shopName"] != null
                                 ? Convert.ToString(cfg["shopName"]).Trim()
                                 : newShopId;
 
-                            // 1. Save / overwrite config/station.json
-                            Directory.CreateDirectory(cfgDir);
-                            string destCfg = Path.Combine(cfgDir, "station.json");
-                            File.WriteAllText(destCfg, text);
+                            string slugError = PrintAway.Config.StationConfig.ValidateSlug(newShopId);
+                            if (slugError != null)
+                            {
+                                MessageBox.Show(slugError, "Invalid Config", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                                return;
+                            }
+                            if (!string.Equals(newShopId, GetCurrentShopId(), StringComparison.Ordinal))
+                            {
+                                var confirm = MessageBox.Show(
+                                    "This will switch this station to shop '" + newShopName + "' (" + newShopId + ").\n\n" +
+                                    "Customers of that shop will be routed to THIS computer. Only do this for your own shop.\n\nContinue?",
+                                    "Switch shop identity?", MessageBoxButtons.YesNo, MessageBoxIcon.Warning, MessageBoxDefaultButton.Button2);
+                                if (confirm != DialogResult.Yes) return;
+                            }
 
-                            // 2. Update local SQLite DB
+                            // 1. Merge into config/station.json (preserves keys not present in the imported file)
+                            var stationCfg = PrintAway.Config.StationConfig.Load(_repoRoot);
+                            foreach (var kv in cfg) stationCfg.Set(kv.Key, kv.Value);
+                            stationCfg.ShopId = newShopId;
+                            stationCfg.Save();
+
+                            // 2. Update local SQLite DB (raises ShopIdentityChanged -> tunnel registry update)
                             _repo.UpdateShopAndPrinterControls(null, null, null, null, "gui-set-shop", null, null, null, null, null, null, null, newShopId, newShopName);
 
                             // 3. Update UI Labels immediately
@@ -1779,12 +1770,13 @@ namespace PrintAway.Gui
                             // 4. Trigger cloud telemetry sync with new shop identity
                             if (_supabaseSync != null)
                             {
+                                _supabaseSync.ShopId = newShopId;
                                 _supabaseSync.TriggerSyncNow();
                             }
 
                             MessageBox.Show(
                                 string.Format(CultureInfo.InvariantCulture,
-                                    "Station successfully updated!\n\nFranchise: {0}\nShop ID: {1}\n\nLive Customer QR Link:\nhttps://printitaway.netlify.app/?shop={1}",
+                                    "Station successfully updated!\n\nShop: {0}\nShop ID: {1}\n\nCustomer QR Link:\nhttps://printitaway.netlify.app/?shop={1}",
                                     newShopName, newShopId),
                                 "PrintAway Station Configured",
                                 MessageBoxButtons.OK,
@@ -1808,17 +1800,14 @@ namespace PrintAway.Gui
         {
             try
             {
-                string cfgPath = Path.Combine(_repoRoot, "config", "station.json");
-                if (File.Exists(cfgPath))
-                {
-                    string text = File.ReadAllText(cfgPath);
-                    string pattern = "\"" + key + "\"\\s*:\\s*\"[^\"]*\"";
-                    string replacement = "\"" + key + "\": \"" + val + "\"";
-                    text = Regex.Replace(text, pattern, replacement);
-                    File.WriteAllText(cfgPath, text);
-                }
+                var cfg = PrintAway.Config.StationConfig.Load(_repoRoot);
+                cfg.Set(key, val);
+                cfg.Save();
             }
-            catch { }
+            catch (Exception ex)
+            {
+                Console.WriteLine("[Config] Could not update station.json: " + ex.Message);
+            }
         }
 
         private void ShutdownStation()

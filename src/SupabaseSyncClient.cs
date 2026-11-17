@@ -53,7 +53,7 @@ namespace PrintAway.SaaS
                     }
                 }
                 catch { }
-                return _shopId ?? "midtownstationary";
+                return _shopId ?? PrintAway.Config.StationConfig.UnconfiguredSlug;
             }
             set
             {
@@ -74,7 +74,7 @@ namespace PrintAway.SaaS
         {
             _supabaseUrl = !string.IsNullOrWhiteSpace(supabaseUrl) ? supabaseUrl.Trim().TrimEnd('/') : "";
             _apiKey = !string.IsNullOrWhiteSpace(apiKey) ? apiKey.Trim() : "";
-            _shopId = !string.IsNullOrWhiteSpace(shopId) ? shopId.Trim() : "midtownstationary";
+            _shopId = !string.IsNullOrWhiteSpace(shopId) ? shopId.Trim() : PrintAway.Config.StationConfig.UnconfiguredSlug;
             _repo = repo;
             _tunnel = tunnel;
             _serializer = new JavaScriptSerializer();
@@ -315,6 +315,8 @@ namespace PrintAway.SaaS
         private void PerformSync()
         {
             if (!IsConfigured || _disposed) return;
+            // Never report telemetry/heartbeats under a placeholder ID (would overwrite another shop's data).
+            if (!PrintAway.Config.StationConfig.IsUsableSlug(ShopId)) return;
             if (Interlocked.CompareExchange(ref _inFlightSync, 1, 0) != 0) return;
 
             try
@@ -326,7 +328,7 @@ namespace PrintAway.SaaS
                 string todayDate = istNow.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture);
 
                 // 1. Fetch local performance counters from SQLite strictly for today in IST for this shop
-                var dash = _repo.GetAdminDashboardSummary("all", "", "today", _shopId);
+                var dash = _repo.GetAdminDashboardSummary("all", "", "today", ShopId);
                 int todayPages = 0;
                 int todaySheets = 0;
                 int todayOrders = 0;

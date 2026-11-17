@@ -75,7 +75,7 @@ flowchart TD
    - **Safety Gate:** Paid orders **never** print blindly without counter approval (`paid_awaiting_approval`).
 
 5. **Counter Staff Review, Override & Approval (`/admin`)**
-   - Staff logs into `/admin` (`admin` / `PrintAway@Admin2026`).
+   - Staff logs into `/admin` (Shop ID + the admin password chosen in the first-run setup wizard).
    - Staff can optionally click **⚙ Edit Settings** on any order to override B&W/Color, page ranges, copies, duplex, or N-Up before printing.
    - Clicking **✓ Approve & Print** atomically transitions the order from `paid_awaiting_approval` &rarr; `queued`, creates the `print_jobs` record, and wakes up `LocalPrintWorker` immediately.
 

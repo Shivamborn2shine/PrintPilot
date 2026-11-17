@@ -44,6 +44,9 @@ while ($maxWait -gt 0) {
 }
 
 $sources = @(
+    Join-Path $repoRoot "src\StationConfig.cs"
+    Join-Path $repoRoot "src\ShopRegistryClient.cs"
+    Join-Path $repoRoot "src\OnboardingWizard.cs"
     Join-Path $repoRoot "src\SqliteInterop.cs"
     Join-Path $repoRoot "src\PdfAndPrinterEngine.cs"
     Join-Path $repoRoot "src\DatabaseSchemaAndRepo.cs"

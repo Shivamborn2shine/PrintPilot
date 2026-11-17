@@ -215,7 +215,11 @@ namespace PrintAway.Web
                         }
                         catch { }
                     }
-                    if (string.IsNullOrWhiteSpace(targetShop)) targetShop = "midtownstationary";
+                    if (string.IsNullOrWhiteSpace(targetShop))
+                    {
+                        WriteError(res, 400, "SHOP_REQUIRED", "A shop query parameter is required.");
+                        return;
+                    }
 
                     if (_supabaseSync != null)
                     {
@@ -1111,6 +1115,29 @@ namespace PrintAway.Web
                         string shopName = body.ContainsKey("shopName") ? GetString(body, "shopName", null) : null;
                         bool? printerReady = body.ContainsKey("printerReady") ? (bool?)GetBool(body, "printerReady", true) : null;
 
+                        if (!string.IsNullOrWhiteSpace(shopId))
+                        {
+                            string newSlug = PrintAway.Config.StationConfig.NormalizeSlug(shopId);
+                            string currentSlug = Convert.ToString(_repo.GetShopAndAvailabilityStatus()["shopId"]);
+                            if (!string.Equals(newSlug, currentSlug, StringComparison.Ordinal))
+                            {
+                                string slugErr = PrintAway.Config.StationConfig.ValidateSlug(newSlug);
+                                if (slugErr != null)
+                                {
+                                    WriteError(res, 400, "INVALID_SHOP_ID", slugErr);
+                                    return;
+                                }
+                                // Changing to an ID that another shop already owns would hijack its customers.
+                                var check = PrintAway.SaaS.ShopRegistryClient.CheckSlug(newSlug);
+                                if (check.Availability == PrintAway.SaaS.SlugAvailability.Taken)
+                                {
+                                    WriteError(res, 409, "SHOP_ID_TAKEN", "Shop ID '" + newSlug + "' is already registered to another shop.");
+                                    return;
+                                }
+                            }
+                            shopId = newSlug;
+                        }
+
                         var updated = _repo.UpdateShopAndPrinterControls(
                             intakePaused, pauseReason, supportsDuplex, printerReady, Convert.ToString(adminSess["username"]),
                             supportsColor, supportsPageRange, allowedPaperSizes, maxCopies, activeQueueName, bwQueueName, colorQueueName, shopId, shopName);
@@ -1450,7 +1477,8 @@ namespace PrintAway.Web
                 var status = _repo.GetShopAndAvailabilityStatus();
                 string shopId = (status != null && status.ContainsKey("shopId") && status["shopId"] != null)
                     ? Convert.ToString(status["shopId"])
-                    : "midtownstationary";
+                    : "";
+                if (!PrintAway.Config.StationConfig.IsUsableSlug(shopId)) throw new InvalidOperationException("Station not onboarded");
                 string liveTunnel = _repo.GetLiveTunnelUrl();
                 string targetPath = (fileName == "admin.html") ? "/admin" : "";
                 string targetUrl = string.IsNullOrEmpty(liveTunnel)
@@ -1477,8 +1505,7 @@ namespace PrintAway.Web
                     "<body style='font-family:Segoe UI,sans-serif;text-align:center;padding:50px;background:#f8fafc;'>" +
                     "<h2>PrintAway Hardware Station</h2>" +
                     "<p>Local API server is active on port 8080.</p>" +
-                    "<p><a href='https://printitaway.netlify.app/?shop=midtownstationary' style='color:#2563eb;font-weight:bold;'>Open Customer Storefront</a> &nbsp;|&nbsp; " +
-                    "<a href='https://printitaway.netlify.app/admin?shop=midtownstationary' style='color:#2563eb;font-weight:bold;'>Open Counter Admin</a></p>" +
+                    "<p>Finish the setup wizard in the PrintAway Station window to get your customer link.</p>" +
                     "</body></html>";
                 byte[] safeBytes = Encoding.UTF8.GetBytes(safeHtml);
                 WriteBytes(res, 200, "text/html; charset=utf-8", safeBytes);

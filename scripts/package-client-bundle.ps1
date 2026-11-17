@@ -75,27 +75,15 @@ Copy-Item -Path (Join-Path $rootDir "scripts\start-tunnel.ps1") -Destination (Jo
 Copy-Item -Path (Join-Path $rootDir "scripts\enable-autostart.ps1") -Destination (Join-Path $OutputDir "scripts\enable-autostart.ps1") -Force
 Copy-Item -Path (Join-Path $rootDir "scripts\render-pdf.ps1") -Destination (Join-Path $OutputDir "scripts\render-pdf.ps1") -Force
 
-# Copy default config template (without sensitive secrets)
-if (Test-Path (Join-Path $rootDir "config\station.json")) {
-    Copy-Item -Path (Join-Path $rootDir "config\station.json") -Destination (Join-Path $OutputDir "config\station.json") -Force
-} else {
-    $templateConfig = @{
-        shopId = "midtownstationary"
-        shopName = "Midtown Stationary"
-        tagline = "Printing ke liye pareshan ho? Just PrintAway."
-        operatingHours = "09:00 AM - 09:00 PM IST"
-        turnaroundText = "3-5 mins after counter admin approval"
-        port = 8080
-        activePrinterQueue = "auto"
-        bwPrinterQueue = ""
-        colorPrinterQueue = ""
-        autoFallbackToPhysicalPrinter = $true
-        netlifySiteUrl = "https://printitaway.netlify.app"
-        stationRegistryTopic = "printaway_station_registry_midtownstationary_9f8a7b"
-        autoPushTunnelToGit = $false
-    } | ConvertTo-Json -Depth 5
-    [System.IO.File]::WriteAllText((Join-Path $OutputDir "config\station.json"), $templateConfig, [System.Text.Encoding]::UTF8)
+# Ship ONLY the example config. A real config/station.json must never be bundled: every shop that
+# installs the bundle would otherwise start up as that shop and hijack its customers. The station's
+# first-run setup wizard creates config/station.json on the shop's own PC.
+$exampleConfig = Join-Path $rootDir "config\station.example.json"
+if (Test-Path $exampleConfig) {
+    Copy-Item -Path $exampleConfig -Destination (Join-Path $OutputDir "config\station.example.json") -Force
 }
+$bundledConfig = Join-Path $OutputDir "config\station.json"
+if (Test-Path $bundledConfig) { Remove-Item $bundledConfig -Force }
 
 # Copy web frontend UI files (Client HTML/CSS/Assets - ZERO C# backend code)
 $webOutDir = Join-Path $OutputDir "web"

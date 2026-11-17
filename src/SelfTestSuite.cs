@@ -49,9 +49,51 @@ namespace PrintAway
                 var repo = new PrintAwayRepository(sqlite, vaultPath, "test_webhook_secret_key", "test_worker_secret_token");
                 var worker = new LocalPrintWorker(repo, simulateSpoolerOnly: true);
 
+                // Fresh install must NOT inherit any real shop's identity or a known default password.
+                runTest("T00a: Fresh database starts unconfigured with no usable default credentials", () =>
+                {
+                    Assert(!repo.IsShopConfigured, "Fresh DB must require onboarding");
+                    Assert(!repo.HasAdminPasswordSet, "Fresh DB must not have an owner-chosen password");
+                    Assert(!repo.IsOnboardingComplete, "Fresh DB must not be considered onboarded");
+                    Assert(Convert.ToString(repo.GetShopAndAvailabilityStatus()["shopId"]) == PrintAway.Config.StationConfig.UnconfiguredSlug,
+                        "Fresh DB must use the placeholder slug");
+                    string e0;
+                    Assert(repo.AuthenticateAdmin("admin", "PrintAway@Admin2026", out e0) == null, "Legacy default password must not work");
+                    Assert(repo.AuthenticateAdmin("admin", "PrintAwayMaster@2026!", out e0) == null, "Leaked master password must not work");
+                });
+
+                runTest("T00b: Shop ID / UPI / password validation rules", () =>
+                {
+                    Assert(PrintAway.Config.StationConfig.ValidateSlug("sharma-xerox") == null, "valid slug");
+                    Assert(PrintAway.Config.StationConfig.ValidateSlug("pilot") != null, "reserved slug rejected");
+                    Assert(PrintAway.Config.StationConfig.ValidateSlug(PrintAway.Config.StationConfig.UnconfiguredSlug) != null, "placeholder rejected");
+                    Assert(PrintAway.Config.StationConfig.ValidateSlug("ab") != null, "too short rejected");
+                    Assert(PrintAway.Config.StationConfig.Slugify("Sharma Xerox & Stationery!") == "sharma-xerox-stationery", "slugify");
+                    Assert(PrintAway.Config.StationConfig.IsValidUpiVpa("shop.name@okaxis"), "valid UPI");
+                    Assert(!PrintAway.Config.StationConfig.IsValidUpiVpa("no-at-sign"), "invalid UPI");
+                    Assert(PrintAway.Config.StationConfig.NormalizePhone("98765 43210") == "9876543210", "phone normalize");
+                    Assert(PrintAway.Config.StationConfig.ValidateAdminPassword("short1") != null, "short password rejected");
+                    Assert(PrintAway.Config.StationConfig.ValidateAdminPassword("Counter2026x") == null, "good password accepted");
+                });
+
+                const string testAdminPassword = "SelfTest2026pass";
+                repo.ApplyOnboarding("selftest-shop", "Self Test Shop", "selftest@okaxis", testAdminPassword, null, null, null);
+
+                runTest("T00c: Onboarding sets identity, UPI and admin password", () =>
+                {
+                    Assert(repo.IsShopConfigured, "Shop must be configured after onboarding");
+                    Assert(repo.HasAdminPasswordSet && repo.IsOnboardingComplete, "Onboarding must mark the password as set");
+                    var st = repo.GetShopAndAvailabilityStatus();
+                    Assert(Convert.ToString(st["shopId"]) == "selftest-shop", "slug persisted");
+                    Assert(Convert.ToString(st["upiVpa"]) == "selftest@okaxis", "UPI persisted");
+                    string e1;
+                    Assert(repo.AuthenticateAdmin("selftest-shop", testAdminPassword, out e1) != null, "login with shop ID + new password");
+                    Assert(repo.AuthenticateAdmin("admin", "wrong-password-1", out e1) == null, "wrong password rejected");
+                });
+
                 string loginErr;
-                var adminSess = repo.AuthenticateAdmin("admin", "PrintAway@Admin2026", out loginErr);
-                Assert(adminSess != null, "Admin seed login must succeed");
+                var adminSess = repo.AuthenticateAdmin("admin", testAdminPassword, out loginErr);
+                Assert(adminSess != null, "Admin login after onboarding must succeed");
 
                 // Auto-detect verified physical queue on current host (supports both desktop 'PCL6' and laptop queues)
                 var liveQueues = PdfAndPrinterEngine.DiscoverWindowsQueues();

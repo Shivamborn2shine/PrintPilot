@@ -43,8 +43,9 @@ if (Test-Path $cfExe) {
     Copy-Item $cfExe (Join-Path $releaseDir "bin\cloudflared.exe")
 }
 
-# 4. Copy config/station.json
-Copy-Item (Join-Path $repoRoot "config\station.json") (Join-Path $releaseDir "config\station.json")
+# 4. Ship only the example config. Never bundle a real station.json: every install would
+#    start up as that shop. PrintAway.exe runs a first-time setup wizard instead.
+Copy-Item (Join-Path $repoRoot "config\station.example.json") (Join-Path $releaseDir "config\station.example.json")
 
 # 5. Copy web assets
 Copy-Item (Join-Path $repoRoot "web") (Join-Path $releaseDir "web") -Recurse
@@ -62,19 +63,19 @@ $readmeContent = @"
 
 HOW TO START:
 1. Double-click 'PrintAway.exe'
-2. Your station will open with a clean desktop control window and 
-   connect to your physical printer automatically.
+2. The first time, a setup wizard asks for your shop name, a unique
+   Shop ID, owner details, your UPI ID, an admin password and your printer.
 3. The station minimizes to your Windows system tray near the clock
    and prints quietly in the background without any command prompt windows!
 
 CUSTOMER QR LINK:
 Print the QR code from the station window or use:
-https://printitaway.netlify.app/?shop=pilot
+https://printitaway.netlify.app/?shop=<your-shop-id>
 
 ADMIN DASHBOARD:
 Click 'Open Counter Admin Dashboard' or visit http://127.0.0.1:8080/admin
-Username: admin
-Password: PrintAway@Admin2026
+Username: your Shop ID
+Password: the admin password you chose in the setup wizard
 
 AUTO-START:
 Check 'Start station automatically when Windows boots' inside the app

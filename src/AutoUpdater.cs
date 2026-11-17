@@ -10,7 +10,7 @@ namespace PrintAway.Updater
 {
     public static class AutoUpdater
     {
-        public const string CurrentVersion = "2.4.1";
+        public const string CurrentVersion = "2.5.0";
         private const string VersionEndpoint = "https://raw.githubusercontent.com/Shivamborn2shine/PrintPilot/main/version.json";
         private const string FallbackVersionEndpoint = "https://printitaway.netlify.app/downloads/version.json";
 

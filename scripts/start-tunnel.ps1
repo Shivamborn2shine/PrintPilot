@@ -32,7 +32,7 @@ $configPath = Join-Path $rootDir "config\station.json"
 if (-not (Test-Path $configPath)) {
     $configPath = Join-Path $rootDir "station.json"
 }
-$activeShopId = "midtownstationary"
+$activeShopId = ""
 $registryTopic = ""
 if (Test-Path $configPath) {
     try {
@@ -47,7 +47,11 @@ if (Test-Path $configPath) {
 }
 if ($ShopId) { $activeShopId = $ShopId }
 $activeShopId = ($activeShopId -replace '[^a-zA-Z0-9_-]', '').ToLower()
-if (-not $activeShopId) { $activeShopId = "midtownstationary" }
+if (-not $activeShopId) {
+    Write-Host "This station has not been set up yet. Launch PrintAway.exe once and complete the setup wizard," -ForegroundColor Yellow
+    Write-Host "or pass -ShopId <your-shop-id>." -ForegroundColor Yellow
+    exit 2
+}
 if (-not $registryTopic -or ($activeShopId -ne "pilot" -and $registryTopic -eq "printaway_station_registry_pilot_9f8a7b6c5d4e")) {
     $registryTopic = Get-RegistryTopicForShop $activeShopId
 }

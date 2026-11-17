@@ -16,7 +16,7 @@
 | **Local Counter Storefront** | `http://127.0.0.1:8080/` |
 | **Local Counter Admin Dashboard** | `http://127.0.0.1:8080/admin` |
 | **Admin Username** | `admin` |
-| **Admin Password** | `PrintAway@Admin2026` |
+| **Admin Password** | Set per shop in the first-run setup wizard (no shared default) |
 | **Default Pilot Shop ID** | `pilot` (`https://printitaway.netlify.app/?shop=pilot`) |
 | **Pilot Station Cloud Registry Topic** | `https://ntfy.sh/printaway_station_registry_pilot_9f8a7b6c5d4e` |
 | **Other Shops Cloud Registry Topic** | `https://ntfy.sh/printaway_station_registry_<shopId>_9f8a7b` |

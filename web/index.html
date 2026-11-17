@@ -1304,7 +1304,7 @@
       </div>
 
       <div style="margin-bottom:12px;">
-        <input type="text" id="inpSearchShop" placeholder="🔍 Search store by name or owner..." style="width:100%;padding:10px 14px;border:1.5px solid #cbd5e1;border-radius:10px;font-size:0.88rem;" oninput="filterShopCards(this.value)" />
+        <input type="text" id="inpSearchShop" placeholder="🔍 Search by shop name, or type the Shop ID from the counter QR..." style="width:100%;padding:10px 14px;border:1.5px solid #cbd5e1;border-radius:10px;font-size:0.88rem;" oninput="filterShopCards(this.value)" />
       </div>
 
       <!-- Dynamic Store List Grid -->
@@ -2005,11 +2005,8 @@
     function closeShopSelectorIfSelected() {
       const cur = getActiveShopId();
       if (!cur) {
-        if (allDiscoveredShops && allDiscoveredShops.length > 0) {
-          selectStationeryShop(allDiscoveredShops[0].shop_id, allDiscoveredShops[0].shop_name);
-        } else {
-          selectStationeryShop('midtownstationary', 'Midtown Stationary');
-        }
+        // No shop chosen yet: keep the picker open rather than guessing a shop for the customer.
+        return;
       }
       const modal = document.getElementById('modalSelectShop');
       if (modal) modal.classList.remove('active');
@@ -2033,28 +2030,15 @@
         console.warn('Could not load shops from Supabase:', err);
       }
 
-      if (!allDiscoveredShops || allDiscoveredShops.length === 0) {
-        allDiscoveredShops = [
-          {
-            shop_id: 'midtownstationary',
-            shop_name: 'Midtown Stationary',
-            owner_name: 'Deepak',
-            owner_phone: '8937984398',
-            active_printer_model: 'Xerox B1025 Multifunction Printer',
-            live_tunnel_url: 'https://sam-refrigerator-wealth-grams.trycloudflare.com'
-          },
-          {
-            shop_id: 'pilot',
-            shop_name: 'PrintAway Pilot Shop',
-            owner_name: 'Shivam',
-            owner_phone: '9999999999',
-            active_printer_model: 'Xerox B1025 Multifunction Printer',
-            live_tunnel_url: null
-          }
-        ];
-      }
+      if (!Array.isArray(allDiscoveredShops)) allDiscoveredShops = [];
 
       renderShopCards(allDiscoveredShops);
+    }
+
+    function escapeHtml(value) {
+      return String(value == null ? '' : value)
+        .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;').replace(/'/g, '&#39;');
     }
 
     function renderShopCards(shops) {
@@ -2063,13 +2047,15 @@
       const currentShop = getActiveShopId();
 
       if (!shops || shops.length === 0) {
-        container.innerHTML = '<div style="text-align:center;padding:20px;color:#64748b;font-size:0.88rem;">No stationery stores found.</div>';
+        container.innerHTML = '<div style="text-align:center;padding:20px;color:#64748b;font-size:0.88rem;">No shops could be loaded. Scan the QR code at your shop counter, or check your connection and try again.</div>';
         return;
       }
 
       const now = Date.now();
       container.innerHTML = shops.map(s => {
-        const sid = s.shop_id || 'pilot';
+        const sid = String(s.shop_id || '').toLowerCase().replace(/[^a-z0-9_-]/g, '');
+        if (!sid) return '';
+        const safeName = escapeHtml(s.shop_name || sid);
         const isSelected = (sid === currentShop);
         let isOnline = false;
         let lastSeenText = '';
@@ -2088,20 +2074,19 @@
         const statusBadge = isOnline
           ? `<span class="shop-badge-online" style="background:#ecfdf5;color:#047857;border:1px solid #a7f3d0;padding:2px 8px;border-radius:999px;font-size:0.75rem;font-weight:700;">🟢 Online (${lastSeenText || 'Active'})</span>`
           : `<span class="shop-badge-offline" style="background:#fef2f2;color:#b91c1c;border:1px solid #fecaca;padding:2px 8px;border-radius:999px;font-size:0.75rem;font-weight:700;">🔴 Offline${lastSeenText ? ' (' + lastSeenText + ')' : ''}</span>`;
-        const ownerContact = s.owner_name ? `${s.owner_name}${s.owner_phone ? ' • ' + s.owner_phone : ''}` : '';
 
         return `
-          <div class="shop-select-card ${isSelected ? 'active-shop' : ''}" onclick="selectStationeryShop('${sid}', '${(s.shop_name || sid).replace(/'/g, "\\'")}')">
+          <div class="shop-select-card ${isSelected ? 'active-shop' : ''}" data-shop-id="${sid}" data-shop-name="${safeName}" onclick="selectStationeryShop(this.dataset.shopId, this.dataset.shopName)">
             <div>
               <div style="display:flex;align-items:center;gap:8px;margin-bottom:3px;flex-wrap:wrap;">
-                <strong style="font-size:0.98rem;color:#0f172a;">${s.shop_name || sid}</strong>
+                <strong style="font-size:0.98rem;color:#0f172a;">${safeName}</strong>
                 ${statusBadge}
               </div>
               <div style="font-size:0.78rem;color:#64748b;">
-                ${ownerContact ? ownerContact + ' • ' : ''}<code>${sid}</code>
+                <code>${sid}</code>
               </div>
               <div style="font-size:0.74rem;color:#0284c7;margin-top:4px;">
-                🖨️ ${s.active_printer_model || 'Xerox B1025'} • B&amp;W &amp; Color • Duplex
+                🖨️ ${escapeHtml(s.active_printer_model || 'Printer')}
               </div>
             </div>
             <div>
@@ -2126,11 +2111,18 @@
         const owner = (s.owner_name || '').toLowerCase();
         return name.includes(q) || id.includes(q) || owner.includes(q);
       });
+      const typedId = q.replace(/[^a-z0-9_-]/g, '');
+      if (filtered.length === 0 && /^[a-z0-9][a-z0-9_-]{2,39}$/.test(typedId)) {
+        // Allow selecting a shop by exact ID even when the registry list is unavailable.
+        renderShopCards([{ shop_id: typedId, shop_name: 'Shop ID: ' + typedId }]);
+        return;
+      }
       renderShopCards(filtered);
     }
 
     function selectStationeryShop(shopId, shopName) {
-      const clean = (shopId || 'midtownstationary').trim().toLowerCase().replace(/[^a-z0-9_-]/g, '');
+      const clean = (shopId || '').trim().toLowerCase().replace(/[^a-z0-9_-]/g, '');
+      if (!clean) return;
       localStorage.setItem('printaway_shop_id', clean);
       localStorage.removeItem('printaway_api_base');
 
@@ -2158,7 +2150,7 @@
     }
 
     function getRegistryTopicForShop(shopId) {
-      const sid = (shopId || 'midtownstationary').trim().toLowerCase();
+      const sid = (shopId || '').trim().toLowerCase();
       if (!sid || sid === 'pilot' || sid === 'printaway-pilot') {
         return 'printaway_station_registry_pilot_9f8a7b6c5d4e';
       }
@@ -2185,7 +2177,8 @@
         }
       }
       try {
-        const shopId = getActiveShopId() || 'midtownstationary';
+        const shopId = getActiveShopId();
+        if (!shopId) return '';
         const badgeEl = document.getElementById('lblActiveShopBadge');
         if (badgeEl && !badgeEl.textContent.includes('Change')) {
           badgeEl.textContent = shopId;
@@ -2353,7 +2346,7 @@
           const bEl = document.getElementById('lblActiveShopBadge');
           if (bEl && data.shopId) bEl.textContent = data.shopName || data.shopId;
           const trkShop = document.getElementById('trkShopNameBadge');
-          if (trkShop) trkShop.textContent = data.shopName || 'Midtown Stationary';
+          if (trkShop) trkShop.textContent = data.shopName || data.shopId || '';
           txt.textContent = '● ' + (data.shopName ? data.shopName + ' — ' : '') + data.statusReason + ' (' + capTags.join(' / ') + ')';
           turn.textContent = '⚡ Turnaround: ' + (data.turnaroundText || '3-5 mins counter pickup');
         } else {
@@ -3684,7 +3677,7 @@
       if (sp) localStorage.setItem('printaway_api_base', sp.trim().replace(/\/+$/, ''));
 
       const spShop = new URLSearchParams(window.location.search).get('shop');
-      if (!spShop) {
+      if (!spShop && !getActiveShopId()) {
         // Welcome and prompt customer to pick stationery store!
         openShopSelector();
       } else {

@@ -4,7 +4,7 @@
 **Value Proposition:** Upload. Configure. Pay. Print. Collect.  
 **Live Cloud Storefront (Netlify):** `https://printitaway.netlify.app`  
 **Local Host Portal:** `http://127.0.0.1:8080/`  
-**Default Active Printer Queue:** `Xerox B1025 Multifunction Printer PCL6` (`USB001` — Configurable via Admin UI or `config/station.json`)
+**Printer:** chosen per shop in the first-run setup wizard (changeable later in the station window or Admin UI).
 
 > **Full Deep-Dive Guide:** See [docs/SYSTEM_FLOW_AND_MIGRATION_GUIDE.md](docs/SYSTEM_FLOW_AND_MIGRATION_GUIDE.md) for the complete architecture diagram, how the printer hardware is commanded, and how to change printers or move to a new PC in one click.
 
@@ -25,7 +25,27 @@ PrintAway runs natively on any Windows 10/11 workstation with **zero external ru
 
 ---
 
-## 2. 1-Click Launch & New PC / New Printer Setup
+## 2. First Run: New Shop Onboarding
+
+A fresh clone or download contains **no shop identity**. The first time `PrintAway.exe` starts it shows a 3-step setup wizard and does not start the server, tunnel or cloud sync until it is finished:
+
+1. **Shop** - shop name and a unique Shop ID (checked against the PrintAway registry so you cannot accidentally take over another shop's QR link).
+2. **Owner & payments** - owner name, mobile number and the UPI ID customers pay to.
+3. **Security & printer** - counter admin password (min 8 chars, letters + numbers) and the Windows printer(s) to use.
+
+The result is saved to `config/station.json` (git-ignored, per machine) and `data/printaway.db`. Per-install secrets are generated in `data/secrets.json`.
+
+Headless / scripted setup:
+```powershell
+.\bin\PrintAway.exe --cli --setup-shop-id sharma-xerox --setup-shop-name "Sharma Xerox" `
+  --setup-owner-name "R. Sharma" --setup-owner-phone 9876543210 --setup-upi sharma@okaxis `
+  --setup-admin-password "<strong password>" [--setup-printer "<queue name>"]
+```
+Moving an existing shop to a new PC: use the same Shop ID and confirm you own it (wizard) or add `--setup-claim-existing yes` (CLI).
+
+> Never commit `config/station.json` or `data/`. A committed station config makes every new install impersonate that shop. See `config/station.example.json` for the format.
+
+## 2b. 1-Click Launch & New PC / New Printer Setup
 
 ### Daily Startup (Start Local Server + Cloudflare Tunnel + Sync Netlify)
 Simply double-click **[`start-station.bat`](start-station.bat)** in the root folder, or run:
@@ -45,7 +65,7 @@ powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\setup-station.ps1
 This wizard:
 1. Verifies native Windows dependencies (`csc.exe`, `winsqlite3.dll`, Print Spooler).
 2. Compiles `bin\PrintAway.exe` and runs all **10 automated self-tests**.
-3. Lists all physical printers connected to the PC, lets you pick your active printer (or auto-detects it), and saves it to [`config/station.json`](config/station.json).
+3. Lists all physical printers connected to the PC, lets you pick your active printer (or auto-detects it), and saves it to `config/station.json`.
 
 ---
 
@@ -63,6 +83,6 @@ powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\test-print-proof.p
 ```
 
 - **Local Customer Web App:** http://127.0.0.1:8080/
-- **Local Staff Admin Dashboard:** http://127.0.0.1:8080/admin (`admin` / `PrintAway@Admin2026`)
+- **Local Staff Admin Dashboard:** http://127.0.0.1:8080/admin (username: your Shop ID, password: the one set in the setup wizard)
 - **Netlify Customer Web App:** https://printitaway.netlify.app/
 - **Netlify Staff Admin Dashboard:** https://printitaway.netlify.app/admin

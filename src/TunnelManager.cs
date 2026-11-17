@@ -76,16 +76,33 @@ namespace PrintAway.Tunnel
             return true;
         }
 
-        public TunnelManager(string rootDir, int localPort = 8080, string shopId = "midtownstationary", string shopName = "Midtown Stationary")
+        public TunnelManager(string rootDir, int localPort, string shopId, string shopName)
         {
             _rootDir = rootDir;
             _localPort = localPort;
-            _shopId = !string.IsNullOrWhiteSpace(shopId) ? shopId.Trim() : "midtownstationary";
-            _shopName = !string.IsNullOrWhiteSpace(shopName) ? shopName.Trim() : "Midtown Stationary";
+            _shopId = !string.IsNullOrWhiteSpace(shopId) ? shopId.Trim() : PrintAway.Config.StationConfig.UnconfiguredSlug;
+            _shopName = !string.IsNullOrWhiteSpace(shopName) ? shopName.Trim() : _shopId;
             _registryTopic = GetRegistryTopicForShop(_shopId);
             _activeProviderName = "Initializing";
             ServicePointManager.SecurityProtocol = SecurityProtocolType.Tls12 | SecurityProtocolType.Tls11 | SecurityProtocolType.Tls;
             ServicePointManager.DefaultConnectionLimit = 64;
+        }
+
+        private string _ownerName;
+        private string _ownerPhone;
+        private string _upiVpa;
+
+        /// <summary>Real owner details used if the shop row has to be created in the registry.</summary>
+        public void SetShopProfile(string ownerName, string ownerPhone, string upiVpa)
+        {
+            _ownerName = ownerName;
+            _ownerPhone = ownerPhone;
+            _upiVpa = upiVpa;
+        }
+
+        private bool HasPublishableIdentity
+        {
+            get { return PrintAway.Config.StationConfig.IsUsableSlug(_shopId); }
         }
 
         public void UpdateShopIdentity(string newShopId, string newShopName)
@@ -971,6 +988,14 @@ namespace PrintAway.Tunnel
             }
             catch { }
 
+            // Never broadcast a tunnel under a placeholder/shared shop ID: other stations' customers
+            // would be routed to this machine.
+            if (!HasPublishableIdentity)
+            {
+                AppendTunnelLog("[Registry] Skipped: station has no shop identity yet.");
+                return;
+            }
+
             // 2. Broadcast to ntfy.sh Cloud Registry Topic (deduplicated)
             if (sendNtfy)
             {
@@ -1005,8 +1030,8 @@ namespace PrintAway.Tunnel
             // 3. Patch & auto-insert ONLY this shop's row in Supabase Cloud Control Plane (isolated per shop_id)
             try
             {
-                string sbUrl = "https://zduoifzakiojfqbtxqqm.supabase.co";
-                string sbKey = "sb_publishable_rhmUZZbKhXiJxrChcPTbsg_gFIH9FdO";
+                string sbUrl = PrintAway.SaaS.ControlPlane.Url;
+                string sbKey = PrintAway.SaaS.ControlPlane.Key;
                 string now = DateTime.UtcNow.ToString("o", CultureInfo.InvariantCulture);
 
                 string patchTarget = string.Format(CultureInfo.InvariantCulture, "{0}/rest/v1/shops?shop_id=eq.{1}", sbUrl, Uri.EscapeDataString(_shopId));
@@ -1034,14 +1059,21 @@ namespace PrintAway.Tunnel
                     patchRespBody = sr.ReadToEnd();
                 }
 
-                if (string.IsNullOrWhiteSpace(patchRespBody) || patchRespBody.Trim() == "[]")
+                bool canRegister = !string.IsNullOrWhiteSpace(_ownerName) && !string.IsNullOrWhiteSpace(_ownerPhone) &&
+                                   PrintAway.Config.StationConfig.IsValidUpiVpa(_upiVpa);
+                if ((string.IsNullOrWhiteSpace(patchRespBody) || patchRespBody.Trim() == "[]") && !canRegister)
+                {
+                    AppendTunnelLog("[Supabase] Shop row missing and owner profile incomplete; open 'Shop & Password' to complete registration.");
+                }
+                else if (string.IsNullOrWhiteSpace(patchRespBody) || patchRespBody.Trim() == "[]")
                 {
                     string postTarget = sbUrl + "/rest/v1/shops";
                     var postReq = (HttpWebRequest)WebRequest.Create(postTarget);
                     postReq.Method = "POST";
                     postReq.Headers.Add("apikey", sbKey);
                     postReq.Headers.Add("Authorization", "Bearer " + sbKey);
-                    postReq.Headers.Add("Prefer", "resolution=merge-duplicates");
+                    // Plain insert (no merge): if another station owns this ID the insert fails instead of overwriting it.
+                    postReq.Headers.Add("Prefer", "return=minimal");
                     postReq.ContentType = "application/json";
                     postReq.Timeout = 6000;
 
@@ -1049,9 +1081,9 @@ namespace PrintAway.Tunnel
                     {
                         { "shop_id", _shopId },
                         { "shop_name", _shopName ?? _shopId },
-                        { "owner_name", _shopId },
-                        { "owner_phone", "9999999999" },
-                        { "upi_vpa", _shopId + "@upi" },
+                        { "owner_name", _ownerName },
+                        { "owner_phone", _ownerPhone },
+                        { "upi_vpa", _upiVpa },
                         { "live_tunnel_url", cleanUrl },
                         { "last_heartbeat_utc", now }
                     };

@@ -480,8 +480,8 @@ CREATE TABLE IF NOT EXISTS audit_events (
             {
                 _db.ExecuteInsert(
                     @"INSERT INTO shops (slug, name, tagline, intake_paused, operating_hours, turnaround_text, retention_hours, min_free_disk_mb, created_at_utc)
-                      VALUES ('midtownstationary', 'Midtown Stationary', 'Printing ke liye pareshan ho? Just PrintAway.', 0, '09:00 AM - 09:00 PM IST', '3-5 mins after counter admin approval', 24, 1024, @now);",
-                    new Dictionary<string, object> { { "now", now } });
+                      VALUES (@slug, 'New PrintAway Shop', 'Printing ke liye pareshan ho? Just PrintAway.', 0, '09:00 AM - 09:00 PM IST', '3-5 mins after counter admin approval', 24, 1024, @now);",
+                    new Dictionary<string, object> { { "slug", PrintAway.Config.StationConfig.UnconfiguredSlug }, { "now", now } });
             }
             else
             {
@@ -505,8 +505,11 @@ CREATE TABLE IF NOT EXISTS audit_events (
             long userCount = _db.ExecuteScalarLong("SELECT COUNT(*) FROM users;");
             if (userCount == 0)
             {
-                string salt = GenerateRandomToken(16);
-                string hash = HashPassword("PrintAway@Admin2026", salt);
+                // No shared default password: the seed account gets a random secret nobody knows.
+                // Onboarding (GUI wizard or --setup CLI) sets the real password; the salt prefix
+                // marks the account as "password not yet chosen".
+                string salt = UnsetPasswordSaltPrefix + GenerateRandomToken(16);
+                string hash = HashPassword(GenerateRandomToken(32), salt);
                 _db.ExecuteInsert(
                     @"INSERT INTO users (username, display_name, role, password_hash, password_salt, is_active, created_at_utc)
                       VALUES ('admin', 'Shop Owner / Lead Admin', 'admin', @hash, @salt, 1, @now);",
@@ -635,6 +638,70 @@ CREATE TABLE IF NOT EXISTS audit_events (
             }
         }
 
+        /// <summary>Raised after the shop slug or name changes (GUI, admin API, or onboarding).</summary>
+        public event Action<string, string> ShopIdentityChanged;
+
+        private const string UnsetPasswordSaltPrefix = "unset-";
+
+        /// <summary>False until the shop owner has chosen an admin password (fresh installs start without one).</summary>
+        public bool HasAdminPasswordSet
+        {
+            get
+            {
+                var row = _db.QuerySingle("SELECT password_salt, password_hash FROM users WHERE username = 'admin' AND is_active = 1 LIMIT 1;");
+                if (row == null) row = _db.QuerySingle("SELECT password_salt, password_hash FROM users WHERE role = 'admin' AND is_active = 1 ORDER BY id ASC LIMIT 1;");
+                if (row == null || row["password_salt"] == null) return false;
+                string salt = Convert.ToString(row["password_salt"]);
+                if (salt.StartsWith(UnsetPasswordSaltPrefix, StringComparison.Ordinal)) return false;
+                // Older builds seeded a password that is published in this repository; treat it as unset so the
+                // owner is made to choose a private one before the station goes online again.
+                string legacyHash = HashPassword("PrintAway@Admin2026", salt);
+                return !CryptographicEquals(legacyHash, Convert.ToString(row["password_hash"]));
+            }
+        }
+
+        /// <summary>A station is ready to go online once it has its own shop ID and an owner-chosen password.</summary>
+        public bool IsOnboardingComplete
+        {
+            get { return IsShopConfigured && HasAdminPasswordSet; }
+        }
+
+        /// <summary>False until onboarding assigns a real shop ID to this station.</summary>
+        public bool IsShopConfigured
+        {
+            get
+            {
+                var row = _db.QuerySingle("SELECT slug FROM shops WHERE id = 1;");
+                string slug = row != null && row["slug"] != null ? Convert.ToString(row["slug"]).Trim() : "";
+                return PrintAway.Config.StationConfig.IsUsableSlug(slug);
+            }
+        }
+
+        /// <summary>
+        /// Persists the result of first-run onboarding: identity, payout UPI, admin password and printer routing.
+        /// </summary>
+        public void ApplyOnboarding(string shopSlug, string shopName, string upiVpa, string adminPassword,
+            string primaryQueue, string bwQueue, string colorQueue)
+        {
+            string slugErr = PrintAway.Config.StationConfig.ValidateSlug(shopSlug);
+            if (slugErr != null) throw new ArgumentException(slugErr);
+            if (string.IsNullOrWhiteSpace(shopName)) throw new ArgumentException("Shop name is required.");
+
+            string pErr;
+            if (!SetAdminPasswordDirect("admin", adminPassword, out pErr)) throw new ArgumentException(pErr);
+
+            _db.ExecuteNonQuery("UPDATE shops SET upi_vpa = @v WHERE id = 1;",
+                new Dictionary<string, object> { { "v", upiVpa ?? "" } });
+
+            UpdateShopAndPrinterControls(null, null, null, null, "onboarding", null, null, null, null,
+                string.IsNullOrWhiteSpace(primaryQueue) ? null : primaryQueue,
+                bwQueue ?? primaryQueue ?? "", colorQueue ?? primaryQueue ?? "",
+                shopSlug, shopName);
+
+            LogAudit(null, "system", "onboarding", "STATION_ONBOARDED", null, null,
+                "Shop=" + shopSlug + ", Name=" + shopName + ", Printer=" + (primaryQueue ?? "(none)"));
+        }
+
         public Dictionary<string, object> GetShopAndAvailabilityStatus()
         {
             var shop = _db.QuerySingle("SELECT * FROM shops WHERE id = 1;");
@@ -678,7 +745,8 @@ CREATE TABLE IF NOT EXISTS audit_events (
 
             return new Dictionary<string, object>
             {
-                { "shopId", shop.ContainsKey("slug") && shop["slug"] != null ? shop["slug"] : "pilot" },
+                { "shopId", shop.ContainsKey("slug") && shop["slug"] != null ? shop["slug"] : PrintAway.Config.StationConfig.UnconfiguredSlug },
+                { "isConfigured", IsShopConfigured },
                 { "shopName", shop["name"] },
                 { "upiVpa", shopUpiVpa },
                 { "hasRazorpay", HasRazorpayConfigured },
@@ -1346,6 +1414,15 @@ CREATE TABLE IF NOT EXISTS audit_events (
             });
         }
 
+        private static bool OrdinalConstantTimeEquals(string a, string b)
+        {
+            if (a == null || b == null) return false;
+            int diff = a.Length ^ b.Length;
+            int n = Math.Min(a.Length, b.Length);
+            for (int i = 0; i < n; i++) diff |= a[i] ^ b[i];
+            return diff == 0;
+        }
+
         private static bool CryptographicEquals(string a, string b)
         {
             if (a == null || b == null || a.Length != b.Length) return false;
@@ -1439,14 +1516,26 @@ CREATE TABLE IF NOT EXISTS audit_events (
             }
         }
 
+        /// <summary>
+        /// Platform master override is disabled unless PRINTAWAY_MASTER_PASSWORD is set (in .env) to a
+        /// strong value. There is intentionally no built-in default: a default committed to a public
+        /// repository would unlock every station reachable through its public tunnel.
+        /// </summary>
+        private static string GetConfiguredMasterPassword()
+        {
+            string mp = Environment.GetEnvironmentVariable("PRINTAWAY_MASTER_PASSWORD");
+            if (string.IsNullOrEmpty(mp) || mp.Length < 16) return null;
+            if (string.Equals(mp, "PrintAwayMaster@2026!", StringComparison.Ordinal)) return null; // leaked legacy value
+            return mp;
+        }
+
         // Admin Authentication (Supports Shop-Specific Credentials & Master Password Override)
         public Dictionary<string, object> AuthenticateAdmin(string username, string password, out string errorMsg, string shopId = null)
         {
             errorMsg = null;
-            string masterPassword = Environment.GetEnvironmentVariable("PRINTAWAY_MASTER_PASSWORD");
-            if (string.IsNullOrWhiteSpace(masterPassword)) masterPassword = "PrintAwayMaster@2026!";
+            string masterPassword = GetConfiguredMasterPassword();
 
-            bool isMaster = !string.IsNullOrWhiteSpace(password) && string.Equals(password.Trim(), masterPassword);
+            bool isMaster = masterPassword != null && !string.IsNullOrEmpty(password) && OrdinalConstantTimeEquals(password, masterPassword);
 
             if (isMaster)
             {
@@ -1491,7 +1580,7 @@ CREATE TABLE IF NOT EXISTS audit_events (
 
             // Normal shop-specific user authentication:
             // Match username against users table, or default to admin user if shop slug matches
-            var user = _db.QuerySingle("SELECT * FROM users WHERE (username = @u OR username = 'admin') AND is_active = 1 LIMIT 1;",
+            var user = _db.QuerySingle("SELECT * FROM users WHERE (username = @u OR username = 'admin') AND is_active = 1 ORDER BY CASE WHEN username = @u THEN 0 ELSE 1 END, id ASC LIMIT 1;",
                 new Dictionary<string, object> { { "u", username ?? "" } });
 
             if (user == null)
@@ -1550,16 +1639,15 @@ CREATE TABLE IF NOT EXISTS audit_events (
         public bool ChangeAdminPassword(string username, string currentPassword, string newPassword, out string errorMsg)
         {
             errorMsg = null;
-            if (string.IsNullOrWhiteSpace(newPassword) || newPassword.Length < 6)
+            if (string.IsNullOrWhiteSpace(newPassword) || newPassword.Length < 8)
             {
-                errorMsg = "New password must be at least 6 characters long.";
+                errorMsg = "New password must be at least 8 characters long.";
                 return false;
             }
 
-            string masterPassword = Environment.GetEnvironmentVariable("PRINTAWAY_MASTER_PASSWORD");
-            if (string.IsNullOrWhiteSpace(masterPassword)) masterPassword = "PrintAwayMaster@2026!";
+            string masterPassword = GetConfiguredMasterPassword();
 
-            var user = _db.QuerySingle("SELECT * FROM users WHERE (username = @u OR username = 'admin') AND is_active = 1 LIMIT 1;",
+            var user = _db.QuerySingle("SELECT * FROM users WHERE (username = @u OR username = 'admin') AND is_active = 1 ORDER BY CASE WHEN username = @u THEN 0 ELSE 1 END, id ASC LIMIT 1;",
                 new Dictionary<string, object> { { "u", username ?? "admin" } });
 
             if (user == null)
@@ -1568,7 +1656,7 @@ CREATE TABLE IF NOT EXISTS audit_events (
                 return false;
             }
 
-            bool isMaster = !string.IsNullOrWhiteSpace(currentPassword) && string.Equals(currentPassword.Trim(), masterPassword);
+            bool isMaster = masterPassword != null && !string.IsNullOrEmpty(currentPassword) && OrdinalConstantTimeEquals(currentPassword, masterPassword);
             if (!isMaster)
             {
                 string salt = Convert.ToString(user["password_salt"]);
@@ -1600,17 +1688,17 @@ CREATE TABLE IF NOT EXISTS audit_events (
         public bool SetAdminPasswordDirect(string username, string newPassword, out string errorMsg)
         {
             errorMsg = null;
-            if (string.IsNullOrWhiteSpace(newPassword) || newPassword.Trim().Length < 6)
+            if (string.IsNullOrWhiteSpace(newPassword) || newPassword.Length < 8)
             {
-                errorMsg = "Password must be at least 6 characters long.";
+                errorMsg = "Password must be at least 8 characters long.";
                 return false;
             }
 
-            var user = _db.QuerySingle("SELECT * FROM users WHERE (username = @u OR username = 'admin') AND is_active = 1 LIMIT 1;",
+            var user = _db.QuerySingle("SELECT * FROM users WHERE (username = @u OR username = 'admin') AND is_active = 1 ORDER BY CASE WHEN username = @u THEN 0 ELSE 1 END, id ASC LIMIT 1;",
                 new Dictionary<string, object> { { "u", username ?? "admin" } });
 
             string newSalt = GenerateRandomToken(16);
-            string newHash = HashPassword(newPassword.Trim(), newSalt);
+            string newHash = HashPassword(newPassword, newSalt);
 
             if (user != null)
             {
@@ -2505,6 +2593,7 @@ CREATE TABLE IF NOT EXISTS audit_events (
             string shopSlug = null,
             string shopName = null)
         {
+            bool identityChanged = false;
             _db.RunInTransaction(() =>
             {
                 if (intakePaused.HasValue)
@@ -2576,11 +2665,21 @@ CREATE TABLE IF NOT EXISTS audit_events (
                 }
                 if (!string.IsNullOrWhiteSpace(shopSlug))
                 {
-                    _db.ExecuteNonQuery("UPDATE shops SET slug = @sl WHERE id = 1;",
-                        new Dictionary<string, object> { { "sl", shopSlug.Trim() } });
+                    string normalizedSlug = PrintAway.Config.StationConfig.NormalizeSlug(shopSlug);
+                    if (PrintAway.Config.StationConfig.IsUsableSlug(normalizedSlug))
+                    {
+                        var cur = _db.QuerySingle("SELECT slug, name FROM shops WHERE id = 1;");
+                        string curSlug = cur != null && cur["slug"] != null ? Convert.ToString(cur["slug"]) : "";
+                        if (!string.Equals(curSlug, normalizedSlug, StringComparison.Ordinal)) identityChanged = true;
+                        _db.ExecuteNonQuery("UPDATE shops SET slug = @sl WHERE id = 1;",
+                            new Dictionary<string, object> { { "sl", normalizedSlug } });
+                    }
                 }
                 if (!string.IsNullOrWhiteSpace(shopName))
                 {
+                    var cur = _db.QuerySingle("SELECT name FROM shops WHERE id = 1;");
+                    string curName = cur != null && cur["name"] != null ? Convert.ToString(cur["name"]) : "";
+                    if (!string.Equals(curName, shopName.Trim(), StringComparison.Ordinal)) identityChanged = true;
                     _db.ExecuteNonQuery("UPDATE shops SET name = @sn WHERE id = 1;",
                         new Dictionary<string, object> { { "sn", shopName.Trim() } });
                 }
@@ -2599,7 +2698,17 @@ CREATE TABLE IF NOT EXISTS audit_events (
                         intakePaused, supportsColor, supportsDuplex, supportsPageRange, activeQueueName ?? "unchanged"));
             });
 
-            return GetShopAndAvailabilityStatus();
+            var status = GetShopAndAvailabilityStatus();
+            if (identityChanged)
+            {
+                var handler = ShopIdentityChanged;
+                if (handler != null)
+                {
+                    try { handler(Convert.ToString(status["shopId"]), Convert.ToString(status["shopName"])); }
+                    catch (Exception ex) { Console.WriteLine("[Config] ShopIdentityChanged handler failed: " + ex.Message); }
+                }
+            }
+            return status;
         }
 
         public Dictionary<string, object> UpdatePaymentSettlementConfig(
@@ -2616,7 +2725,10 @@ CREATE TABLE IF NOT EXISTS audit_events (
                     ? razorpayKeySecret.Trim()
                     : _razorpayKeySecret;
                 string acc = razorpayLinkedAccountId != null ? razorpayLinkedAccountId.Trim() : _razorpayLinkedAccountId;
-                string vpa = !string.IsNullOrWhiteSpace(upiVpa) ? upiVpa.Trim() : "printaway@upi";
+                var curShopRow = _db.QuerySingle("SELECT upi_vpa FROM shops WHERE id = 1;");
+                string curVpa = curShopRow != null && curShopRow["upi_vpa"] != null ? Convert.ToString(curShopRow["upi_vpa"]).Trim() : "";
+                // Never invent a payout destination: keep the existing UPI ID when none is supplied.
+                string vpa = !string.IsNullOrWhiteSpace(upiVpa) ? upiVpa.Trim() : curVpa;
 
                 _db.ExecuteNonQuery(
                     "UPDATE shops SET razorpay_key_id = @kid, razorpay_key_secret = @ksec, razorpay_linked_account_id = @acc, upi_vpa = @vpa WHERE id = 1;",

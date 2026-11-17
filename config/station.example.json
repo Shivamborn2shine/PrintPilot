@@ -1,0 +1,17 @@
+{
+    "shopId": "your-shop-id",
+    "shopName": "Your Shop Name",
+    "ownerName": "Owner Name",
+    "ownerPhone": "9876543210",
+    "upiVpa": "yourshop@okaxis",
+    "tagline": "Printing ke liye pareshan ho? Just PrintAway.",
+    "operatingHours": "09:00 AM - 09:00 PM IST",
+    "turnaroundText": "3-5 mins after counter admin approval",
+    "port": 8080,
+    "activePrinterQueue": "auto",
+    "bwPrinterQueue": "",
+    "colorPrinterQueue": "",
+    "autoFallbackToPhysicalPrinter": true,
+    "netlifySiteUrl": "https://printitaway.netlify.app",
+    "autoPushTunnelToGit": false
+}

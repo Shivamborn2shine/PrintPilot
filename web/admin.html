@@ -405,7 +405,7 @@
     <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;">
       <a href="/" style="color:#93c5fd;text-decoration:none;font-size:0.82rem;font-weight:600;">&larr; Customer Portal</a>
       <a href="/pricing" target="_blank" style="color:#c084fc;text-decoration:none;font-size:0.82rem;font-weight:600;border:1px solid #9333ea;padding:4px 8px;border-radius:6px;">✨ SaaS Plans</a>
-      <a href="#" onclick="switchShopPrompt(); return false;" style="color:#a7f3d0;text-decoration:none;font-size:0.82rem;font-weight:600;border:1px solid #059669;padding:4px 8px;border-radius:6px;">🏪 <span id="lblAdminShopBadge">midtownstationary</span></a>
+      <a href="#" onclick="switchShopPrompt(); return false;" style="color:#a7f3d0;text-decoration:none;font-size:0.82rem;font-weight:600;border:1px solid #059669;padding:4px 8px;border-radius:6px;">🏪 <span id="lblAdminShopBadge"></span></a>
       <a href="#" onclick="configureStationUrl(); return false;" style="color:#38bdf8;text-decoration:none;font-size:0.82rem;font-weight:600;border:1px solid #0284c7;padding:4px 8px;border-radius:6px;">⚙️ Tunnel</a>
       <button id="btnRefreshTop" class="btn btn-secondary hidden" style="padding:4px 9px;font-size:0.78rem;" onclick="loadDashboard()">↻ Refresh</button>
       <button id="btnLogoutTop" class="btn btn-danger hidden" style="padding:4px 9px;font-size:0.78rem;" onclick="doAdminLogout()">Sign Out</button>
@@ -433,22 +433,19 @@
           🏪 Choose Stationery Store
         </label>
         <select id="loginShopSelect" onchange="onLoginShopSelected()" style="width:100%;font-size:0.92rem;font-weight:600;padding:9px 12px;border-radius:8px;">
-          <option value="midtownstationary">Midtown Stationary (Xerox B1025)</option>
-          <option value="pilot">PrintAway Pilot Shop</option>
-          <option value="campus-xerox">Campus Central Stationary</option>
-          <option value="__custom__">✏️ Enter Other Shop ID / Code...</option>
+          <option value="__custom__" selected>✏️ Enter your Shop ID...</option>
         </select>
       </div>
 
       <!-- Custom Shop ID Field (revealed if chosen) -->
-      <div id="wrapCustomShopId" class="hidden" style="margin-bottom:12px;">
+      <div id="wrapCustomShopId" style="margin-bottom:12px;">
         <label style="display:block;font-size:0.78rem;font-weight:600;color:#475569;margin-bottom:4px;">Custom Shop Slug / ID</label>
         <input type="text" id="loginCustomShopId" placeholder="e.g. shop-02, north-counter" style="width:100%;" oninput="onCustomShopInput(this.value)" />
       </div>
 
       <div style="margin-bottom:12px;">
         <label style="display:block;font-size:0.8rem;font-weight:700;color:#334155;margin-bottom:5px;">Staff Username</label>
-        <input type="text" id="loginUser" value="midtownstationary" placeholder="Enter username (or shop ID)" autocomplete="username" style="width:100%;" />
+        <input type="text" id="loginUser" value="" placeholder="Your Shop ID (or staff username)" autocomplete="username" style="width:100%;" />
       </div>
 
       <div style="margin-bottom:16px;">
@@ -700,7 +697,7 @@
               Viewing: Today (IST)
             </span>
             <span class="badge" id="lblActiveShopFilterBadge" style="background:#f1f5f9;color:#334155;font-weight:700;padding:4px 10px;font-size:0.8rem;">
-              🏪 Station: <span id="lblActiveShopSlug">midtownstationary</span>
+              🏪 Station: <span id="lblActiveShopSlug"></span>
             </span>
           </div>
         </div>
@@ -935,16 +932,16 @@
             <div class="grid-2" style="gap:8px;margin-bottom:10px;">
               <div>
                 <label style="font-size:0.74rem;font-weight:600;">Shop ID / QR Slug</label>
-                <input type="text" id="inpShopId" value="midtownstationary" style="width:100%;margin-top:2px;" />
+                <input type="text" id="inpShopId" value="" style="width:100%;margin-top:2px;" />
               </div>
               <div>
                 <label style="font-size:0.74rem;font-weight:600;">Shop Display Name</label>
-                <input type="text" id="inpShopName" value="Midtown Stationary" style="width:100%;margin-top:2px;" />
+                <input type="text" id="inpShopName" value="" style="width:100%;margin-top:2px;" />
               </div>
             </div>
             <button class="btn btn-secondary" onclick="saveHardwareCapabilities()">Update Shop Identity</button>
             <div style="font-size:0.78rem;color:#0369a1;margin-top:10px;background:#e0f2fe;padding:8px 10px;border-radius:6px;">
-              Permanent Customer QR URL: <strong id="lblShopQrUrl">?shop=midtownstationary</strong>
+              Permanent Customer QR URL: <strong id="lblShopQrUrl"></strong>
             </div>
           </div>
 
@@ -998,7 +995,7 @@
             </div>
             <div>
               <label style="font-size:0.74rem;font-weight:600;">Store Direct UPI ID (VPA)</label>
-              <input type="text" id="inpShopUpiVpa" placeholder="e.g. midtownstationary@okaxis" style="width:100%;font-family:monospace;font-size:0.78rem;" />
+              <input type="text" id="inpShopUpiVpa" placeholder="e.g. yourshop@okaxis" style="width:100%;font-family:monospace;font-size:0.78rem;" />
             </div>
           </div>
           <button class="btn btn-success" style="font-size:0.8rem;" onclick="savePaymentSettlementConfig()">💾 Save Payment &amp; Settlement Config</button>
@@ -1201,11 +1198,11 @@
         localStorage.setItem('printaway_shop_id', clean);
         return clean;
       }
-      return localStorage.getItem('printaway_shop_id') || 'midtownstationary';
+      return localStorage.getItem('printaway_shop_id') || '';
     }
 
     function getRegistryTopicForShop(shopId) {
-      const sid = (shopId || 'midtownstationary').trim().toLowerCase();
+      const sid = (shopId || '').trim().toLowerCase();
       if (!sid || sid === 'pilot' || sid === 'printaway-pilot') {
         return 'printaway_station_registry_pilot_9f8a7b6c5d4e';
       }
@@ -1214,7 +1211,7 @@
 
     function switchShopPrompt() {
       const cur = getActiveShopId();
-      const entered = prompt("Enter Shop ID / Code to manage (e.g. 'midtownstationary', 'pilot', 'campus-xerox'):", cur);
+      const entered = prompt("Enter the Shop ID to manage (as shown in the station window):", cur);
       if (entered !== null && entered.trim()) {
         const clean = entered.trim().toLowerCase().replace(/[^a-z0-9_-]/g, '');
         localStorage.setItem('printaway_shop_id', clean);
@@ -1486,10 +1483,14 @@
             shops.forEach(s => {
               const isSel = (s.shop_id === curShop);
               if (isSel) matched = true;
-              html += `<option value="${s.shop_id}" ${isSel ? 'selected' : ''}>${s.shop_name} (${s.shop_id})</option>`;
+              const sid = String(s.shop_id || '').toLowerCase().replace(/[^a-z0-9_-]/g, '');
+              if (!sid) return;
+              const sname = String(s.shop_name || sid).replace(/[&<>"']/g, ch => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[ch]));
+              html += `<option value="${sid}" ${isSel ? 'selected' : ''}>${sname} (${sid})</option>`;
             });
-            html += '<option value="__custom__">✏️ Enter Other Shop ID / Code...</option>';
+            html += `<option value="__custom__" ${matched ? '' : 'selected'}>✏️ Enter your Shop ID...</option>`;
             sel.innerHTML = html;
+            document.getElementById('wrapCustomShopId').classList.toggle('hidden', matched);
             if (!matched && curShop) {
               sel.value = '__custom__';
               document.getElementById('wrapCustomShopId').classList.remove('hidden');
@@ -1503,7 +1504,8 @@
       if (sel.value && sel.value !== '__custom__') {
         document.getElementById('loginUser').value = sel.value;
       } else {
-        document.getElementById('loginUser').value = curShop || 'midtownstationary';
+        document.getElementById('loginUser').value = curShop || '';
+        if (curShop) document.getElementById('loginCustomShopId').value = curShop;
       }
     }
 
@@ -1517,6 +1519,10 @@
       const password = document.getElementById('loginPass').value;
       const btn = document.getElementById('btnAdminSignIn');
 
+      if (!shopId) {
+        showNotice('Please enter your Shop ID.', true);
+        return;
+      }
       if (!username || !password) {
         showNotice('Please enter your username and password.', true);
         return;
@@ -2001,7 +2007,7 @@
           <td>
             <div style="display:flex;align-items:center;gap:5px;">
               <strong>${o.orderCode}</strong>
-              <span class="badge" style="background:#f1f5f9;color:#475569;font-size:0.68rem;padding:1px 5px;">${o.shopSlug || 'midtownstationary'}</span>
+              <span class="badge" style="background:#f1f5f9;color:#475569;font-size:0.68rem;padding:1px 5px;">${o.shopSlug || ''}</span>
             </div>
             <span style="font-size:0.75rem;color:var(--muted);">${o.createdAtIst}</span>
           </td>
@@ -2094,7 +2100,7 @@
           <div class="moc-top">
             <div class="moc-code-wrap">
               <span class="moc-code">${o.orderCode}</span>
-              <span class="moc-shop-badge">${o.shopSlug || 'midtownstationary'}</span>
+              <span class="moc-shop-badge">${o.shopSlug || ''}</span>
             </div>
             <span class="${badgeClass(o.state)}">${o.state}</span>
           </div>

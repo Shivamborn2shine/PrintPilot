@@ -1,5 +1,6 @@
-# Runtime SQLite database, WAL/SHM locks, and private PDF vault
+# Runtime SQLite database, WAL/SHM locks, per-install secrets, and private PDF vault
 data/
+data.backup-*/
 *.db
 *.db-wal
 *.db-shm
@@ -15,7 +16,17 @@ Thumbs.db
 .env.*
 !.env.example
 config/*.local.json
+# Per-machine shop identity: created by the first-run setup wizard, never committed.
+# (A committed station.json makes every fresh install impersonate that shop.)
+config/station.json
+config/station.json.*
+config/station-*.json
+!config/station.example.json
 secrets/
+
+# Crash / startup logs written next to the executable
+startup_error.log
+crash.log
 
 # Tunnel binary
 bin/cloudflared.exe

@@ -76,8 +76,8 @@ Write-Host "`n[Step 3/4] Configuring Shop Identity & Discovering Windows Printer
 $configDir = Join-Path $rootDir "config"
 $configPath = Join-Path $configDir "station.json"
 $netlifyUrl = "https://printitaway.netlify.app"
-$defaultShopId = if ($ShopId) { $ShopId } else { "pilot" }
-$defaultShopName = if ($ShopName) { $ShopName } else { "PrintAway Pilot Shop" }
+$defaultShopId = if ($ShopId) { $ShopId } else { "" }
+$defaultShopName = if ($ShopName) { $ShopName } else { "" }
 $defaultBwQueue = ""
 $defaultColorQueue = ""
 
@@ -96,7 +96,7 @@ $selectedShopId = $defaultShopId
 $selectedShopName = $defaultShopName
 
 if (-not $NonInteractive) {
-    $inId = Read-Host "Enter unique Shop ID for this location (e.g. 'pilot', 'shop-02', 'campus-01') [Default: $defaultShopId]"
+    $inId = Read-Host "Enter unique Shop ID for this location (e.g. 'sharma-xerox'). Leave blank to choose it in the PrintAway setup wizard [Current: $defaultShopId]"
     if ($inId -and $inId.Trim()) {
         $selectedShopId = ($inId.Trim() -replace '[^a-zA-Z0-9_-]', '').ToLower()
     }
