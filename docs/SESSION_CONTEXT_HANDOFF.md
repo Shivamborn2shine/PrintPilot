@@ -11,13 +11,13 @@
 | Item | Value |
 |---|---|
 | **GitHub Repository** | `https://github.com/Shivamborn2shine/PrintPilot.git` (branch: `main`) |
-| **Live Netlify Storefront** | `https://printitaway.netlify.app` |
-| **Live Netlify Admin Dashboard** | `https://printitaway.netlify.app/admin` |
+| **Live Netlify Storefront** | `https://printaway-ten.vercel.app` |
+| **Live Netlify Admin Dashboard** | `https://printaway-ten.vercel.app/admin` |
 | **Local Counter Storefront** | `http://127.0.0.1:8080/` |
 | **Local Counter Admin Dashboard** | `http://127.0.0.1:8080/admin` |
 | **Admin Username** | `admin` |
 | **Admin Password** | Set per shop in the first-run setup wizard (no shared default) |
-| **Default Pilot Shop ID** | `pilot` (`https://printitaway.netlify.app/?shop=pilot`) |
+| **Default Pilot Shop ID** | `pilot` (`https://printaway-ten.vercel.app/?shop=pilot`) |
 | **Pilot Station Cloud Registry Topic** | `https://ntfy.sh/printaway_station_registry_pilot_9f8a7b6c5d4e` |
 | **Other Shops Cloud Registry Topic** | `https://ntfy.sh/printaway_station_registry_<shopId>_9f8a7b` |
 | **Verified Physical Printer (Pilot PC)** | `Xerox B1025 Multifunction Printer PCL6` |
@@ -45,7 +45,7 @@
    - Added `enable-autostart.bat` (`scripts/enable-autostart.ps1`) to register a Windows Startup shortcut (`shell:startup`) so the shopkeeper only has to turn on their PC and printer.
 
 4. **Multi-Shop Franchise & Multi-Printer Smart Routing Architecture:**
-   - **Multi-Shop (`?shop=<shopId>`):** Any number of shops can clone this repository, run `setup-new-pc.bat` (`scripts/setup-station.ps1`), set their unique `shopId` (e.g., `pilot`, `shop-02`, `campus-01`) and `shopName` in `config/station.json`, and operate independently under `https://printitaway.netlify.app/?shop=<shopId>` and `https://printitaway.netlify.app/admin?shop=<shopId>`.
+   - **Multi-Shop (`?shop=<shopId>`):** Any number of shops can clone this repository, run `setup-new-pc.bat` (`scripts/setup-station.ps1`), set their unique `shopId` (e.g., `pilot`, `shop-02`, `campus-01`) and `shopName` in `config/station.json`, and operate independently under `https://printaway-ten.vercel.app/?shop=<shopId>` and `https://printaway-ten.vercel.app/admin?shop=<shopId>`.
    - **Multi-Printer Smart Routing:** Each shop can configure:
      - **Primary / Default Printer Queue** (`activeQueueName`)
      - **Dedicated B&W Printer Queue** (`bwQueueName`) — auto-routes B&W orders on approval

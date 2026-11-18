@@ -12,6 +12,6 @@
     "bwPrinterQueue": "",
     "colorPrinterQueue": "",
     "autoFallbackToPhysicalPrinter": true,
-    "netlifySiteUrl": "https://printitaway.netlify.app",
+    "storefrontUrl": "https://printaway-ten.vercel.app",
     "autoPushTunnelToGit": false
 }

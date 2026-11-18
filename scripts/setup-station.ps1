@@ -75,7 +75,7 @@ Write-Host "`n[Step 3/4] Configuring Shop Identity & Discovering Windows Printer
 
 $configDir = Join-Path $rootDir "config"
 $configPath = Join-Path $configDir "station.json"
-$netlifyUrl = "https://printitaway.netlify.app"
+$netlifyUrl = "https://printaway-ten.vercel.app"
 $defaultShopId = if ($ShopId) { $ShopId } else { "" }
 $defaultShopName = if ($ShopName) { $ShopName } else { "" }
 $defaultBwQueue = ""

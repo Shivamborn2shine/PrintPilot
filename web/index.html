@@ -2940,91 +2940,101 @@
     }
 
     /**
-     * ScanDrop-inspired fast local-PC transfer:
-     * - Files <= 1.5 MB upload in a single binary POST (/api/uploads).
-     * - Larger files (> 1.5 MB up to 50 MB / 500 pages) upload in resilient 1 MB chunks
-     *   (/api/uploads/chunk + /api/uploads/complete) with per-chunk retry and progress text.
+     * Sends a file to the shop's station PC.
+     * - Up to 512 KB: one POST (/api/uploads).
+     * - Larger: 512 KB chunks (/api/uploads/chunk + /api/uploads/complete) with progress and retries.
+     * Every request has a timeout, so a slow or throttled tunnel shows a clear error instead of hanging.
      */
-    async function uploadDocumentSmart(bytesOrBuffer, fileName, contentType) {
-      const u8 = bytesOrBuffer instanceof Uint8Array
-        ? bytesOrBuffer
-        : new Uint8Array(bytesOrBuffer);
+    const UPLOAD_CHUNK_BYTES = 512 * 1024;
+    const UPLOAD_REQUEST_TIMEOUT_MS = 45000;
 
+    class StationTimeoutError extends Error { }
+
+    function setUploadProgress(text) {
+      const subEl = document.getElementById('loaderModalSub');
+      if (subEl) subEl.textContent = text;
+    }
+
+    async function stationFetchWithTimeout(path, options, timeoutMs, label) {
+      const controller = new AbortController();
+      const timer = setTimeout(() => controller.abort(), timeoutMs);
+      try {
+        const res = await apiFetch(path, Object.assign({}, options, { signal: controller.signal }));
+        return await parseJsonSafe(res, label).then(data => ({ res, data }));
+      } catch (err) {
+        if (controller.signal.aborted) {
+          throw new StationTimeoutError(label + ' got no answer from the shop in ' + Math.round(timeoutMs / 1000) + 's.');
+        }
+        throw err;
+      } finally {
+        clearTimeout(timer);
+      }
+    }
+
+    function slowStationMessage() {
+      return "The shop's print station is responding too slowly right now, so the upload was stopped. " +
+        'Please try again in a minute. If it keeps happening, ask the shopkeeper to restart PrintAway Station.';
+    }
+
+    async function uploadDocumentSmart(bytesOrBuffer, fileName, contentType) {
+      const u8 = bytesOrBuffer instanceof Uint8Array ? bytesOrBuffer : new Uint8Array(bytesOrBuffer);
       const maxBytes = 50 * 1024 * 1024;
       if (u8.byteLength > maxBytes) {
-        throw new Error('File size (' + (u8.byteLength / (1024 * 1024)).toFixed(1) + ' MB) exceeds 50 MB station maximum.');
+        throw new Error('File size (' + (u8.byteLength / 1048576).toFixed(1) + ' MB) exceeds the 50 MB station maximum.');
       }
+      const sizeLabel = u8.byteLength >= 1048576 ? (u8.byteLength / 1048576).toFixed(1) + ' MB' : Math.max(1, Math.round(u8.byteLength / 1024)) + ' KB';
 
-      const CHUNK_THRESHOLD = 1500 * 1024; // 1.5 MB
-      const CHUNK_SIZE = 1024 * 1024; // 1 MB binary chunks
-
-      if (u8.byteLength <= CHUNK_THRESHOLD) {
-        const res = await apiFetch('/api/uploads?filename=' + encodeURIComponent(fileName), {
-          method: 'POST',
-          headers: { 'Content-Type': contentType || 'application/octet-stream', 'X-File-Name': fileName },
-          body: u8
-        });
-        const data = await parseJsonSafe(res, 'Upload');
-        if (!res.ok || data.error) {
-          throw new Error(data.message || ('Upload rejected (HTTP ' + res.status + ')'));
-        }
-        return data;
-      }
-
-      const uploadId = 'pa_' + Date.now() + '_' + Math.random().toString(36).slice(2, 8);
-      const totalChunks = Math.max(1, Math.ceil(u8.byteLength / CHUNK_SIZE));
-      const subEl = document.getElementById('loaderModalSub');
-
-      for (let i = 0; i < totalChunks; i++) {
-        const start = i * CHUNK_SIZE;
-        const end = Math.min(u8.byteLength, start + CHUNK_SIZE);
-        const slice = u8.subarray(start, end);
-        const pct = Math.min(95, Math.round(((i + 1) / totalChunks) * 95));
-        if (subEl) {
-          subEl.textContent = `⚡ Direct PC transfer: chunk ${i + 1} of ${totalChunks} (${pct}%)`;
+      try {
+        if (u8.byteLength <= UPLOAD_CHUNK_BYTES) {
+          setUploadProgress('Sending ' + sizeLabel + ' to the shop…');
+          const { res, data } = await stationFetchWithTimeout('/api/uploads?filename=' + encodeURIComponent(fileName), {
+            method: 'POST',
+            headers: { 'Content-Type': contentType || 'application/octet-stream', 'X-File-Name': fileName },
+            body: u8
+          }, UPLOAD_REQUEST_TIMEOUT_MS, 'Upload');
+          if (!res.ok || data.error) throw new Error(data.message || ('Upload rejected (HTTP ' + res.status + ')'));
+          return data;
         }
 
-        let chunkOk = false;
-        let lastChunkErr = null;
-        for (let attempt = 1; attempt <= 2; attempt++) {
-          try {
-            const cRes = await apiFetch(
-              `/api/uploads/chunk?uploadId=${encodeURIComponent(uploadId)}&index=${i}&total=${totalChunks}`,
-              {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/octet-stream' },
-                body: slice
-              }
-            );
-            const cData = await parseJsonSafe(cRes, 'Chunk ' + (i + 1));
-            if (!cRes.ok || cData.error) {
-              throw new Error(cData.message || ('Chunk HTTP ' + cRes.status));
+        const uploadId = 'pa_' + Date.now() + '_' + Math.random().toString(36).slice(2, 8);
+        const totalChunks = Math.ceil(u8.byteLength / UPLOAD_CHUNK_BYTES);
+        for (let i = 0; i < totalChunks; i++) {
+          const slice = u8.subarray(i * UPLOAD_CHUNK_BYTES, Math.min(u8.byteLength, (i + 1) * UPLOAD_CHUNK_BYTES));
+          const pct = Math.round((i / totalChunks) * 100);
+          let lastErr = null;
+          for (let attempt = 1; attempt <= 3; attempt++) {
+            setUploadProgress('Uploading ' + sizeLabel + ' · ' + pct + '%' + (attempt > 1 ? ' (retry ' + (attempt - 1) + ')' : ''));
+            try {
+              const { res, data } = await stationFetchWithTimeout(
+                '/api/uploads/chunk?uploadId=' + encodeURIComponent(uploadId) + '&index=' + i + '&total=' + totalChunks,
+                { method: 'POST', headers: { 'Content-Type': 'application/octet-stream' }, body: slice },
+                UPLOAD_REQUEST_TIMEOUT_MS, 'Upload part ' + (i + 1));
+              if (!res.ok || data.error) throw new Error(data.message || ('Upload part ' + (i + 1) + ' failed (HTTP ' + res.status + ')'));
+              lastErr = null;
+              break;
+            } catch (err) {
+              lastErr = err;
+              if (attempt < 3) await new Promise(r => setTimeout(r, 800 * attempt));
             }
-            chunkOk = true;
-            break;
-          } catch (err) {
-            lastChunkErr = err;
-            await new Promise(r => setTimeout(r, 600));
           }
+          if (lastErr) throw lastErr;
         }
-        if (!chunkOk) {
-          throw lastChunkErr || new Error('Chunk transfer failed at part ' + (i + 1));
-        }
-      }
 
-      if (subEl) {
-        subEl.textContent = 'Finalizing & validating pages on station PC...';
+        setUploadProgress('Uploading ' + sizeLabel + ' · 100% · checking pages on the shop PC…');
+        const { res, data } = await stationFetchWithTimeout('/api/uploads/complete', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ uploadId, fileName, totalChunks })
+        }, 90000, 'Finishing upload');
+        if (!res.ok || data.error) throw new Error(data.message || ('Upload validation failed (HTTP ' + res.status + ')'));
+        return data;
+      } catch (err) {
+        if (err instanceof StationTimeoutError) {
+          console.warn('[PrintAway] ' + err.message);
+          throw new Error(slowStationMessage());
+        }
+        throw err;
       }
-      const compRes = await apiFetch('/api/uploads/complete', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ uploadId, fileName, totalChunks })
-      });
-      const compData = await parseJsonSafe(compRes, 'Finalize upload');
-      if (!compRes.ok || compData.error) {
-        throw new Error(compData.message || ('Upload validation failed (HTTP ' + compRes.status + ')'));
-      }
-      return compData;
     }
 
     /* ==========================================================================

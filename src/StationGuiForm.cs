@@ -269,7 +269,7 @@ namespace PrintAway.Gui
 
             _lblCustomerLink = new Label
             {
-                Text = "Customer QR: https://printitaway.netlify.app/?shop=pilot",
+                Text = "Customer QR: " + PrintAway.Config.StationConfig.ActiveStorefrontUrl + "/?shop=",
                 Font = new Font("Segoe UI", 8.5f, FontStyle.Regular),
                 ForeColor = Color.FromArgb(29, 78, 216),
                 Location = new Point(14, 54),
@@ -520,7 +520,7 @@ namespace PrintAway.Gui
             btnOpenAdmin.Click += (s, e) =>
             {
                 string shopId = GetCurrentShopId();
-                string adminUrl = "https://printitaway.netlify.app/admin?shop=" + Uri.EscapeDataString(shopId);
+                string adminUrl = PrintAway.Config.StationConfig.ActiveStorefrontUrl + "/admin?shop=" + Uri.EscapeDataString(shopId);
                 LaunchBrowser(adminUrl);
             };
 
@@ -539,7 +539,7 @@ namespace PrintAway.Gui
             btnOpenQr.Click += (s, e) =>
             {
                 string shopId = GetCurrentShopId();
-                string qrUrl = "https://printitaway.netlify.app/?shop=" + Uri.EscapeDataString(shopId);
+                string qrUrl = PrintAway.Config.StationConfig.CustomerLink(shopId);
                 LaunchBrowser(qrUrl);
             };
 
@@ -668,7 +668,7 @@ namespace PrintAway.Gui
         {
             _trayMenu = new ContextMenuStrip();
             _trayMenu.Items.Add("Open Counter Admin Dashboard", null, (s, e) => LaunchBrowser("http://127.0.0.1:" + _port + "/admin"));
-            _trayMenu.Items.Add("Open Customer Storefront", null, (s, e) => LaunchBrowser("https://printitaway.netlify.app/?shop=" + GetCurrentShopId()));
+            _trayMenu.Items.Add("Open Customer Storefront", null, (s, e) => LaunchBrowser(PrintAway.Config.StationConfig.CustomerLink(GetCurrentShopId())));
             _trayMenu.Items.Add("Pause / Resume Order Intake", null, OnPauseResumeClicked);
             _trayMenu.Items.Add(new ToolStripSeparator());
             _trayMenu.Items.Add("Show Station Window", null, (s, e) => RestoreWindow());
@@ -725,7 +725,7 @@ namespace PrintAway.Gui
                 bool accepting = (bool)status["acceptingOrders"];
 
                 _lblShopTitle.Text = string.Format(CultureInfo.InvariantCulture, "{0} (ID: {1})", shopName, shopId);
-                _lblCustomerLink.Text = "Customer QR: https://printitaway.netlify.app/?shop=" + shopId;
+                _lblCustomerLink.Text = "Customer QR: " + PrintAway.Config.StationConfig.CustomerLink(shopId);
 
                 string initialTunnel = (_tunnel != null && !string.IsNullOrEmpty(_tunnel.LiveTunnelUrl))
                     ? _tunnel.LiveTunnelUrl
@@ -1366,7 +1366,7 @@ namespace PrintAway.Gui
                 // 2. Shop Slug
                 var lblSlug = new Label
                 {
-                    Text = "Shop Identifier / Slug (Appears in customer QR link: printitaway.netlify.app/?shop=...):",
+                    Text = "Shop Identifier / Slug (Appears in customer QR link: " + PrintAway.Config.StationConfig.ActiveStorefrontUrl.Replace("https://", "") + "/?shop=...):",
                     Font = new Font("Segoe UI", 8.5f, FontStyle.Bold),
                     Location = new Point(20, dy),
                     Size = new Size(495, 18)
@@ -1701,7 +1701,7 @@ namespace PrintAway.Gui
                         "Shop ID: {1}\n" +
                         "Primary Printer: {2}\n" +
                         "Admin Password: {3}\n\n" +
-                        "Customer QR URL:\nhttps://printitaway.netlify.app/?shop={1}\n\n" +
+                        "Customer QR URL:\n" + PrintAway.Config.StationConfig.ActiveStorefrontUrl + "/?shop={1}\n\n" +
                         "Local Counter Admin Panel:\nhttp://127.0.0.1:{4}/admin\n\n" +
                         "Shopkeepers can keep this Station window minimized while the shop is open.",
                         newName, newSlug, selPrimary, passwordChanged ? "Configured & Active" : "Unchanged", _port);
@@ -1765,7 +1765,7 @@ namespace PrintAway.Gui
 
                             // 3. Update UI Labels immediately
                             _lblShopTitle.Text = string.Format(CultureInfo.InvariantCulture, "{0} (ID: {1})", newShopName, newShopId);
-                            _lblCustomerLink.Text = "Customer QR: https://printitaway.netlify.app/?shop=" + newShopId;
+                            _lblCustomerLink.Text = "Customer QR: " + PrintAway.Config.StationConfig.CustomerLink(newShopId);
 
                             // 4. Trigger cloud telemetry sync with new shop identity
                             if (_supabaseSync != null)
@@ -1776,7 +1776,7 @@ namespace PrintAway.Gui
 
                             MessageBox.Show(
                                 string.Format(CultureInfo.InvariantCulture,
-                                    "Station successfully updated!\n\nShop: {0}\nShop ID: {1}\n\nCustomer QR Link:\nhttps://printitaway.netlify.app/?shop={1}",
+                                    "Station successfully updated!\n\nShop: {0}\nShop ID: {1}\n\nCustomer QR Link:\n" + PrintAway.Config.StationConfig.ActiveStorefrontUrl + "/?shop={1}",
                                     newShopName, newShopId),
                                 "PrintAway Station Configured",
                                 MessageBoxButtons.OK,

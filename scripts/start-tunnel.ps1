@@ -5,7 +5,7 @@
     2. Starts local PrintAway server on port 8080 (with physical printer auto-discovery)
     3. Downloads cloudflared.exe if missing and starts an HTTP/2 TLS tunnel
     4. Publishes the live tunnel URL to the shop's isolated cloud registry topic (ntfy.sh)
-       so the shop's permanent QR code (https://printitaway.netlify.app/?shop=<shopId>) connects in 0.1s!
+       so the shop's permanent QR code (https://printaway-ten.vercel.app/?shop=<shopId>) connects in 0.1s!
 #>
 
 param(
@@ -55,7 +55,7 @@ if (-not $activeShopId) {
 if (-not $registryTopic -or ($activeShopId -ne "pilot" -and $registryTopic -eq "printaway_station_registry_pilot_9f8a7b6c5d4e")) {
     $registryTopic = Get-RegistryTopicForShop $activeShopId
 }
-if (-not $NetlifyUrl) { $NetlifyUrl = "https://printitaway.netlify.app" }
+if (-not $NetlifyUrl) { $NetlifyUrl = "https://printaway-ten.vercel.app" }
 if ($LocalPort -le 0) { $LocalPort = 8080 }
 
 Write-Host "==========================================================" -ForegroundColor Cyan

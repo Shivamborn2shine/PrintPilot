@@ -173,7 +173,7 @@ Write-Host "`n==================================================================
 Write-Host "  CLIENT DISTRIBUTION BUNDLE READY & DEPLOYABLE!" -ForegroundColor Green
 Write-Host "  Local Folder: $OutputDir" -ForegroundColor White
 Write-Host "  Git Release:  $releaseZip" -ForegroundColor Cyan
-Write-Host "  Netlify CDN:  https://printitaway.netlify.app/downloads/PrintAway-Station-Setup.zip" -ForegroundColor Yellow
+Write-Host "  Storefront:   https://printaway-ten.vercel.app/downloads/PrintAway-Station-Setup.zip" -ForegroundColor Yellow
 Write-Host "  GitHub Raw:   https://github.com/Shivamborn2shine/PrintPilot/raw/main/releases/PrintAway-Station-Setup.zip" -ForegroundColor Yellow
 Write-Host "======================================================================" -ForegroundColor Green
 Write-Host "You can safely push to Git and download this ZIP on ANY computer." -ForegroundColor Yellow

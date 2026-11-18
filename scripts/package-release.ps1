@@ -70,7 +70,7 @@ HOW TO START:
 
 CUSTOMER QR LINK:
 Print the QR code from the station window or use:
-https://printitaway.netlify.app/?shop=<your-shop-id>
+https://printaway-ten.vercel.app/?shop=<your-shop-id>
 
 ADMIN DASHBOARD:
 Click 'Open Counter Admin Dashboard' or visit http://127.0.0.1:8080/admin

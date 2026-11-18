@@ -13,8 +13,8 @@ This guide explains:
 ```mermaid
 flowchart TD
     subgraph Cloud ["1. Cloud Frontend & Tunnel"]
-        A["Customer Phone / Browser\n(https://printitaway.netlify.app)"]
-        B["Counter Admin Browser\n(https://printitaway.netlify.app/admin)"]
+        A["Customer Phone / Browser\n(https://printaway-ten.vercel.app)"]
+        B["Counter Admin Browser\n(https://printaway-ten.vercel.app/admin)"]
         C["Cloudflare HTTP/2 TLS Tunnel\n(*.trycloudflare.com)"]
     end
 
@@ -50,7 +50,7 @@ flowchart TD
 ### Step-by-Step Lifecycle of Every Print Order
 
 1. **Shop Status & Capabilities Discovery (`GET /api/shop/status`)**
-   - When the customer opens `http://127.0.0.1:8080/` or `https://printitaway.netlify.app/`, the UI fetches `/api/shop/status`.
+   - When the customer opens `http://127.0.0.1:8080/` or `https://printaway-ten.vercel.app/`, the UI fetches `/api/shop/status`.
    - The server checks `stations`, `printers`, `printer_queues`, and `price_rules` in SQLite (`data/printaway.db`) and returns the active printer model, whether Color / Duplex / Page Range are enabled, allowed paper sizes (`A4,Legal,Letter`), and per-side pricing.
 
 2. **PDF Upload & Security Validation (`POST /api/uploads`)**
@@ -156,7 +156,7 @@ If you buy a new printer tomorrow (HP, Canon, Epson, Brother, Xerox, Ricoh — U
 
 ### Method 1: Live from the Admin Browser Dashboard (Zero Restart)
 1. Plug in the new printer so Windows installs its driver.
-2. Open `/admin` (`http://127.0.0.1:8080/admin` or `https://printitaway.netlify.app/admin`).
+2. Open `/admin` (`http://127.0.0.1:8080/admin` or `https://printaway-ten.vercel.app/admin`).
 3. In the **Printer & Queue Controls** panel on the right, open the **Active Windows Queue** dropdown.
 4. Select your new printer and click **Save Printer Capabilities**.
 5. Done! All future print jobs immediately route to the new printer, and the customer storefront banner updates automatically.
@@ -199,7 +199,7 @@ PrintAway is engineered with **zero external runtime installers** — it compile
    - Starts `PrintAway.exe` on `http://127.0.0.1:8080`.
    - Automatically downloads `bin\cloudflared.exe` if missing.
    - Starts the secure HTTP/2 tunnel (`https://*.trycloudflare.com`).
-   - Automatically updates `web/index.html` and `web/admin.html` with the new tunnel URL and pushes to GitHub so `https://printitaway.netlify.app` connects to your new PC automatically!
+   - Automatically updates `web/index.html` and `web/admin.html` with the new tunnel URL and pushes to GitHub so `https://printaway-ten.vercel.app` connects to your new PC automatically!
 
 
 ---
@@ -207,8 +207,8 @@ PrintAway is engineered with **zero external runtime installers** — it compile
 ## 6. How Your Single Permanent QR Code Works Without Git or Manual Setup
 
 You only ever print **ONE physical QR code** for the shop wall:
-- **Customer QR Code:** `https://printitaway.netlify.app`
-- **Staff Admin URL:** `https://printitaway.netlify.app/admin` (or `http://127.0.0.1:8080/admin` on the shop PC)
+- **Customer QR Code:** `https://printaway-ten.vercel.app`
+- **Staff Admin URL:** `https://printaway-ten.vercel.app/admin` (or `http://127.0.0.1:8080/admin` on the shop PC)
 
 ### How Netlify Finds the New Tunnel URL Automatically (0.1 Seconds, Zero Git Required)
 1. **Shopkeeper Turns on the PC:**
@@ -217,7 +217,7 @@ You only ever print **ONE physical QR code** for the shop wall:
    - `scripts/start-tunnel.ps1` immediately sends an HTTPS POST with the new tunnel URL to the station's private registry channel (`https://ntfy.sh/printaway_station_registry_pilot_9f8a7b6c5d4e`) and refreshes it every 30 minutes.
    - **No Git installation, no GitHub login, and no Netlify rebuild is needed on the shopkeeper's computer!**
 3. **Automatic Frontend Discovery (`autoDiscoverLiveStation()`):**
-   - Whenever any customer scans `https://printitaway.netlify.app` on their phone, `web/index.html` (and `web/admin.html`) automatically queries `https://ntfy.sh/printaway_station_registry_pilot_9f8a7b6c5d4e/raw?poll=1&since=12h` on load, grabs the latest live tunnel URL, and connects directly to the shopkeeper's printer station in ~150ms.
+   - Whenever any customer scans `https://printaway-ten.vercel.app` on their phone, `web/index.html` (and `web/admin.html`) automatically queries `https://ntfy.sh/printaway_station_registry_pilot_9f8a7b6c5d4e/raw?poll=1&since=12h` on load, grabs the latest live tunnel URL, and connects directly to the shopkeeper's printer station in ~150ms.
 4. **1-Click Windows Boot Auto-Start (`enable-autostart.bat`):**
    - Double-click [`enable-autostart.bat`](file:///c:/Users/Vikash/Documents/PrintAway/enable-autostart.bat) once on the shopkeeper's PC.
    - It creates a minimized startup shortcut in the Windows Startup folder (`shell:startup`).
@@ -230,17 +230,17 @@ You only ever print **ONE physical QR code** for the shop wall:
 PrintAway now includes a built-in **Multi-Shop Franchise & Multi-Printer Smart Routing** architecture:
 
 ### A. How Multiple Shops Work Under One PrintAway Deployment
-Every shop that clones this repository operates its own isolated local database, its own local PC + printers, and its own isolated cloud auto-discovery channel—all under the single `https://printitaway.netlify.app` frontend:
+Every shop that clones this repository operates its own isolated local database, its own local PC + printers, and its own isolated cloud auto-discovery channel—all under the single `https://printaway-ten.vercel.app` frontend:
 
 1. **Unique Shop ID (`shopId`) & Permanent QR Code:**
    - Each shop has a unique `shopId` (for example: `pilot`, `shop-02`, `campus-north`, `library-01`).
    - That shop's permanent customer QR code URL is:
-     `https://printitaway.netlify.app/?shop=<shopId>` (e.g. `https://printitaway.netlify.app/?shop=shop-02`)
+     `https://printaway-ten.vercel.app/?shop=<shopId>` (e.g. `https://printaway-ten.vercel.app/?shop=shop-02`)
    - That shop's permanent remote Admin URL is:
-     `https://printitaway.netlify.app/admin?shop=<shopId>`
+     `https://printaway-ten.vercel.app/admin?shop=<shopId>`
 2. **Isolated Instant Cloud Discovery per Shop:**
    - When Shop `shop-02` runs [`start-station.bat`](file:///c:/Users/Vikash/Documents/PrintAway/start-station.bat), [`scripts/start-tunnel.ps1`](file:///c:/Users/Vikash/Documents/PrintAway/scripts/start-tunnel.ps1) broadcasts its Cloudflare tunnel URL to its own dedicated cloud registry topic (`https://ntfy.sh/printaway_station_registry_shop-02_9f8a7b`).
-   - When a customer scans `https://printitaway.netlify.app/?shop=shop-02`, the browser resolves `shop-02`'s tunnel automatically and remembers `shop-02` on that phone.
+   - When a customer scans `https://printaway-ten.vercel.app/?shop=shop-02`, the browser resolves `shop-02`'s tunnel automatically and remembers `shop-02` on that phone.
 3. **Onboarding a New Franchise Shop in 60 Seconds:**
    - Clone this repository on the new shop's Windows PC.
    - Double-click [`setup-new-pc.bat`](file:///c:/Users/Vikash/Documents/PrintAway/setup-new-pc.bat).

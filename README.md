@@ -2,7 +2,7 @@
 
 **Brand Line:** *"Printing ke liye pareshan ho? Just PrintAway."*  
 **Value Proposition:** Upload. Configure. Pay. Print. Collect.  
-**Live Cloud Storefront (Netlify):** `https://printitaway.netlify.app`  
+**Live Cloud Storefront (Netlify):** `https://printaway-ten.vercel.app`  
 **Local Host Portal:** `http://127.0.0.1:8080/`  
 **Printer:** chosen per shop in the first-run setup wizard (changeable later in the station window or Admin UI).
 
@@ -14,7 +14,7 @@
 
 PrintAway runs natively on any Windows 10/11 workstation with **zero external runtime installers** (uses built-in `.NET 4.8 csc.exe`, `winsqlite3.dll`, and WinRT `Windows.Data.Pdf`):
 
-- **Cloud Storefront (`https://printitaway.netlify.app`) + Local Server (`127.0.0.1:8080`):** Serves the Customer Portal (`/`) and protected Staff Admin Dashboard (`/admin`) both locally and globally over a secure Cloudflare HTTP/2 Tunnel.
+- **Cloud Storefront (`https://printaway-ten.vercel.app`) + Local Server (`127.0.0.1:8080`):** Serves the Customer Portal (`/`) and protected Staff Admin Dashboard (`/admin`) both locally and globally over a secure Cloudflare HTTP/2 Tunnel.
 - **Full Printer & Page Controls:**
   - **Color Mode:** Black & White (ITU-R BT.601 luminance grayscale enforcement) vs. Full Color.
   - **Granular Page Selection:** All pages, First $N$ pages, From–To range, Odd only, Even only, or interactive clickable page chips (`1-3, 5`).
@@ -55,7 +55,7 @@ powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\start-tunnel.ps1
 This automatically:
 1. Starts `bin\PrintAway.exe` on port `8080`.
 2. Launches the Cloudflare HTTP/2 tunnel (`https://*.trycloudflare.com`).
-3. Updates `web/index.html` and `web/admin.html` with the new tunnel URL and pushes to GitHub so `https://printitaway.netlify.app` connects automatically.
+3. Updates `web/index.html` and `web/admin.html` with the new tunnel URL and pushes to GitHub so `https://printaway-ten.vercel.app` connects automatically.
 
 ### Moving to a New Computer or Changing Printers (`setup-new-pc.bat`)
 Whenever you move PrintAway to a new Windows PC or connect a different printer, double-click **[`setup-new-pc.bat`](setup-new-pc.bat)** or run:
@@ -84,5 +84,5 @@ powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\test-print-proof.p
 
 - **Local Customer Web App:** http://127.0.0.1:8080/
 - **Local Staff Admin Dashboard:** http://127.0.0.1:8080/admin (username: your Shop ID, password: the one set in the setup wizard)
-- **Netlify Customer Web App:** https://printitaway.netlify.app/
-- **Netlify Staff Admin Dashboard:** https://printitaway.netlify.app/admin
+- **Netlify Customer Web App:** https://printaway-ten.vercel.app/
+- **Netlify Staff Admin Dashboard:** https://printaway-ten.vercel.app/admin

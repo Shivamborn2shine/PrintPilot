@@ -22,7 +22,24 @@ namespace PrintAway.Config
         /// <summary>Slug stored in the local DB for a station that has not completed onboarding.</summary>
         public const string UnconfiguredSlug = "unconfigured";
 
-        public const string DefaultPublicStorefrontUrl = "https://printitaway.netlify.app";
+        public const string DefaultPublicStorefrontUrl = "https://printaway-ten.vercel.app";
+
+        /// <summary>Old storefront hosts saved by earlier builds; they are replaced by the default.</summary>
+        private static readonly string[] RetiredStorefrontHosts = { "printitaway.netlify.app", "printitaway.vercel.app" };
+
+        private static string _activeStorefrontUrl = DefaultPublicStorefrontUrl;
+
+        /// <summary>Customer-facing storefront base URL (no trailing slash) for QR codes, links and the GUI.</summary>
+        public static string ActiveStorefrontUrl
+        {
+            get { return _activeStorefrontUrl; }
+        }
+
+        /// <summary>Builds the customer link for a shop, e.g. https://…/?shop=my-shop.</summary>
+        public static string CustomerLink(string shopId)
+        {
+            return ActiveStorefrontUrl + "/?shop=" + Uri.EscapeDataString(shopId ?? "");
+        }
 
         private static readonly Regex SlugPattern = new Regex(@"^[a-z0-9][a-z0-9_-]{2,39}$", RegexOptions.Compiled);
         private static readonly Regex UpiPattern = new Regex(@"^[a-zA-Z0-9._-]{2,256}@[a-zA-Z][a-zA-Z0-9]{1,63}$", RegexOptions.Compiled);
@@ -99,7 +116,9 @@ namespace PrintAway.Config
                 }
             }
 
-            return new StationConfig(canonical, data, existed);
+            var cfg = new StationConfig(canonical, data, existed);
+            _activeStorefrontUrl = cfg.PublicStorefrontUrl;
+            return cfg;
         }
 
         // ------------------------------------------------------------------ typed accessors
@@ -127,8 +146,17 @@ namespace PrintAway.Config
         {
             get
             {
-                string v = GetString("netlifySiteUrl");
-                return string.IsNullOrWhiteSpace(v) ? DefaultPublicStorefrontUrl : v.TrimEnd('/');
+                string v = GetString("storefrontUrl");
+                if (string.IsNullOrWhiteSpace(v)) v = GetString("netlifySiteUrl"); // key used by builds before 2.6.0
+                if (string.IsNullOrWhiteSpace(v)) return DefaultPublicStorefrontUrl;
+                v = v.Trim().TrimEnd('/');
+                Uri parsed;
+                if (!Uri.TryCreate(v, UriKind.Absolute, out parsed) || parsed.Scheme != Uri.UriSchemeHttps) return DefaultPublicStorefrontUrl;
+                foreach (string retired in RetiredStorefrontHosts)
+                {
+                    if (string.Equals(parsed.Host, retired, StringComparison.OrdinalIgnoreCase)) return DefaultPublicStorefrontUrl;
+                }
+                return v;
             }
         }
 

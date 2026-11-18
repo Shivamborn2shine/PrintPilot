@@ -35,6 +35,8 @@ namespace PrintAway.Tunnel
         private string _lastNtfyPublishedUrl;
         private DateTime _cloudflareCooldownUntilUtc = DateTime.MinValue;
         private DateTime _localhostRunCooldownUntilUtc = DateTime.MinValue;
+        private int _throttleSwitchGen;
+        private static readonly Regex LocalhostRunThrottleRegex = new Regex(@"is being slowed|have been slowed by|will be slowed", RegexOptions.Compiled | RegexOptions.IgnoreCase);
         private DateTime _pinggyCooldownUntilUtc = DateTime.MinValue;
         private int _consecutiveHealthFailures;
         private int _generation;
@@ -582,6 +584,28 @@ namespace PrintAway.Tunnel
         {
             if (string.IsNullOrEmpty(line) || Volatile.Read(ref _generation) != gen) return;
             AppendTunnelLog("[SSH-LHR] " + line);
+
+            // localhost.run's free tier throttles after a short burst: every request then waits up to a
+            // minute, which makes customer uploads hang. Move to Pinggy as soon as throttling is reported.
+            if (LocalhostRunThrottleRegex.IsMatch(line) && Interlocked.Exchange(ref _throttleSwitchGen, gen) != gen)
+            {
+                ThreadPool.QueueUserWorkItem(_ =>
+                {
+                    lock (_lock)
+                    {
+                        if (_disposed || Volatile.Read(ref _generation) != gen) return;
+                        Log("localhost.run is throttling this tunnel (free-tier bandwidth limit). Switching to Pinggy SSH tunnel...");
+                        _localhostRunCooldownUntilUtc = DateTime.UtcNow.AddMinutes(60);
+                        _liveTunnelUrl = null;
+                        _healthStatus = "Reconnecting";
+                        FireCaptured("");
+                        int nextGen = Interlocked.Increment(ref _generation);
+                        StopProcessOnly();
+                        StartPinggySshTunnel(nextGen);
+                    }
+                });
+                return;
+            }
 
             Match match = SshUrlRegex.Match(line);
             if (match.Success)

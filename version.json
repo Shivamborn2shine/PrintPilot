@@ -1,7 +1,7 @@
 {
-  "version": "2.4.1",
-  "releaseDate": "2026-11-14",
-  "releaseNotes": "Fix silent self-updater failures (no-cache version probing, automatic startup check, retry-safe apply-update.bat & local web sync), raise page limit to 500 pages (50 MB), add ScanDrop chunked uploads & <!DOCTYPE fix, plus Admin PDF preview & multi-file batch upload.",
+  "version": "2.6.0",
+  "releaseDate": "2026-11-18",
+  "releaseNotes": "Storefront moved to printaway-ten.vercel.app (QR links, admin links and updater). Uploads no longer hang: the station leaves a throttled localhost.run tunnel for Pinggy automatically, and the website uploads in 512 KB parts with progress, timeouts and retries. Multi-document orders with previews, auto-crop and a sticky pay bar.",
   "downloadUrl": "https://raw.githubusercontent.com/Shivamborn2shine/PrintPilot/main/bin/PrintAway.exe",
-  "fallbackUrl": "https://printitaway.netlify.app/downloads/PrintAway.exe"
+  "fallbackUrl": "https://printaway-ten.vercel.app/downloads/PrintAway.exe"
 }

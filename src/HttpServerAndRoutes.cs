@@ -1482,8 +1482,8 @@ namespace PrintAway.Web
                 string liveTunnel = _repo.GetLiveTunnelUrl();
                 string targetPath = (fileName == "admin.html") ? "/admin" : "";
                 string targetUrl = string.IsNullOrEmpty(liveTunnel)
-                    ? string.Format(CultureInfo.InvariantCulture, "https://printitaway.netlify.app{0}?shop={1}", targetPath, shopId)
-                    : string.Format(CultureInfo.InvariantCulture, "https://printitaway.netlify.app{0}?shop={1}&station={2}", targetPath, shopId, Uri.EscapeDataString(liveTunnel));
+                    ? string.Format(CultureInfo.InvariantCulture, "{0}{1}?shop={2}", PrintAway.Config.StationConfig.ActiveStorefrontUrl, targetPath, shopId)
+                    : string.Format(CultureInfo.InvariantCulture, "{0}{1}?shop={2}&station={3}", PrintAway.Config.StationConfig.ActiveStorefrontUrl, targetPath, shopId, Uri.EscapeDataString(liveTunnel));
 
                 res.StatusCode = 302;
                 res.Headers["Location"] = targetUrl;

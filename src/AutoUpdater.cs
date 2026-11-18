@@ -10,9 +10,9 @@ namespace PrintAway.Updater
 {
     public static class AutoUpdater
     {
-        public const string CurrentVersion = "2.5.0";
+        public const string CurrentVersion = "2.6.0";
         private const string VersionEndpoint = "https://raw.githubusercontent.com/Shivamborn2shine/PrintPilot/main/version.json";
-        private const string FallbackVersionEndpoint = "https://printitaway.netlify.app/downloads/version.json";
+        private const string FallbackVersionEndpoint = "https://printaway-ten.vercel.app/downloads/version.json";
 
         public static bool IsVersionNewer(string currentVer, string candidateVer)
         {
@@ -118,7 +118,7 @@ namespace PrintAway.Updater
                         }
                         else
                         {
-                            client.DownloadFile("https://printitaway.netlify.app/downloads/PrintAway.exe" + bust, updateExePath);
+                            client.DownloadFile("https://printaway-ten.vercel.app/downloads/PrintAway.exe" + bust, updateExePath);
                         }
                     }
 
