@@ -22,6 +22,7 @@ namespace PrintAway.Web
         private readonly string _webRoot;
         private readonly int _port;
         private readonly SupabaseSyncClient _supabaseSync;
+        private readonly bool _allowExternalTunnelRegistration;
         private readonly JavaScriptSerializer _json;
         private readonly ConcurrentDictionary<string, List<long>> _rateLimitBuckets;
         private volatile bool _running;
@@ -33,13 +34,14 @@ namespace PrintAway.Web
         {
         }
 
-        public PrintAwayHttpServer(int port, PrintAwayRepository repo, LocalPrintWorker worker, string webRoot, SupabaseSyncClient supabaseSync)
+        public PrintAwayHttpServer(int port, PrintAwayRepository repo, LocalPrintWorker worker, string webRoot, SupabaseSyncClient supabaseSync, bool allowExternalTunnelRegistration = true)
         {
             _port = port;
             _repo = repo;
             _worker = worker;
             _webRoot = webRoot;
             _supabaseSync = supabaseSync;
+            _allowExternalTunnelRegistration = allowExternalTunnelRegistration;
             _json = new JavaScriptSerializer { MaxJsonLength = 30 * 1024 * 1024 };
             _rateLimitBuckets = new ConcurrentDictionary<string, List<long>>();
 
@@ -465,6 +467,11 @@ namespace PrintAway.Web
                 {
                     if (method == "POST")
                     {
+                        if (!_allowExternalTunnelRegistration)
+                        {
+                            WriteError(res, 403, "TUNNEL_MANAGED_LOCALLY", "PrintAway manages this station's tunnel.");
+                            return;
+                        }
                         var data = ReadJsonBody(req);
                         string tUrl = data != null && data.ContainsKey("tunnelUrl") ? Convert.ToString(data["tunnelUrl"]) : null;
                         if (!string.IsNullOrWhiteSpace(tUrl))

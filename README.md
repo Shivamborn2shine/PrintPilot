@@ -47,15 +47,14 @@ Moving an existing shop to a new PC: use the same Shop ID and confirm you own it
 
 ## 2b. 1-Click Launch & New PC / New Printer Setup
 
-### Daily Startup (Start Local Server + Cloudflare Tunnel + Sync Netlify)
+### Daily Startup
 Simply double-click **[`start-station.bat`](start-station.bat)** in the root folder, or run:
 ```powershell
 powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\start-tunnel.ps1
 ```
-This automatically:
-1. Starts `bin\PrintAway.exe` on port `8080`.
-2. Launches the Cloudflare HTTP/2 tunnel (`https://*.trycloudflare.com`).
-3. Updates `web/index.html` and `web/admin.html` with the new tunnel URL and pushes to GitHub so `https://printaway-ten.vercel.app` connects automatically.
+PrintAway starts the local server on port `8080` by default. In Automatic mode it tries Cloudflare Quick Tunnel and switches to an SSH provider if needed. The station publishes the public URL to the shop registry after it verifies the route. Customers keep using the same Vercel storefront link when the tunnel address changes.
+
+For a permanent Cloudflare hostname, create a named tunnel and route the public hostname to `http://127.0.0.1:8080` (or the configured station port). In the station's **Tunnel Config**, select **Cloudflare Named Tunnel**, enter the connector token and the public HTTPS hostname, then click **Save & Reconnect**. The station window reports when the public route is live.
 
 ### Moving to a New Computer or Changing Printers (`setup-new-pc.bat`)
 Whenever you move PrintAway to a new Windows PC or connect a different printer, double-click **[`setup-new-pc.bat`](setup-new-pc.bat)** or run:

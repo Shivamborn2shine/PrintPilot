@@ -360,14 +360,11 @@ namespace PrintAway.Gui
                     {
                         try
                         {
-                            foreach (var p in Process.GetProcessesByName("cloudflared"))
-                            {
-                                try { p.Kill(); } catch { }
-                            }
                             string sId = GetCurrentShopId();
                             var status = _repo.GetShopAndAvailabilityStatus();
                             string sName = status.ContainsKey("shopName") && status["shopName"] != null ? Convert.ToString(status["shopName"]) : sId;
                             _tunnel = new TunnelManager(_repoRoot, _port, sId, sName);
+                            _tunnel.OnTunnelUrlCaptured += _repo.SetLiveTunnelUrl;
                             _tunnel.OnTunnelUrlCaptured += OnTunnelCaptured;
                             _tunnel.OnStatusMessage += OnTunnelStatusMessage;
                             _tunnel.Start();
@@ -991,14 +988,14 @@ namespace PrintAway.Gui
 
                 var lblMode = new Label { Text = "Tunnel Provider Mode:", Location = new Point(20, 85), AutoSize = true, Font = new Font("Segoe UI", 8.5f, FontStyle.Bold) };
                 var cmbMode = new ComboBox { Location = new Point(20, 105), Width = 495, DropDownStyle = ComboBoxStyle.DropDownList };
-                cmbMode.Items.Add("Auto Cascade: Cloudflare -> OpenSSH (localhost.run) -> Pinggy SSH (Recommended)");
-                cmbMode.Items.Add("Cloudflare Named Tunnel (Requires Token + Domain below - Permanent & Unlimited)");
+                cmbMode.Items.Add("Automatic: Cloudflare Quick Tunnel with SSH fallback");
+                cmbMode.Items.Add("Cloudflare Named Tunnel (requires token and public hostname)");
                 cmbMode.Items.Add("Built-in Windows OpenSSH Only (localhost.run - Zero Config)");
                 cmbMode.Items.Add("Pinggy SSH Tunnel Only (a.pinggy.io:443 - Zero Config)");
                 cmbMode.Items.Add("Custom Static Domain / Reverse Proxy");
 
                 var lblToken = new Label { Text = "Cloudflare Named Tunnel Token (Free from Cloudflare Zero Trust -> Tunnels -> http://127.0.0.1:8080):", Location = new Point(20, 140), AutoSize = true, Font = new Font("Segoe UI", 8.5f, FontStyle.Bold) };
-                var txtToken = new TextBox { Location = new Point(20, 160), Width = 495 };
+                var txtToken = new TextBox { Location = new Point(20, 160), Width = 495, UseSystemPasswordChar = true };
 
                 var lblCustom = new Label { Text = "Public Hostname for Named Tunnel / Custom Proxy (e.g. https://station1.yourdomain.com):", Location = new Point(20, 195), AutoSize = true, Font = new Font("Segoe UI", 8.5f, FontStyle.Bold) };
                 var txtCustom = new TextBox { Location = new Point(20, 215), Width = 495 };
@@ -1080,6 +1077,13 @@ namespace PrintAway.Gui
                     else if (cmbMode.SelectedIndex == 2) selectedMode = "openssh";
                     else if (cmbMode.SelectedIndex == 3) selectedMode = "pinggy";
                     else if (cmbMode.SelectedIndex == 4) selectedMode = "custom";
+
+                    if ((selectedMode == "cloudflare" && string.IsNullOrWhiteSpace(txtToken.Text)) ||
+                        ((selectedMode == "cloudflare" || selectedMode == "custom") && !TunnelManager.IsValidPublicTunnelUrl(txtCustom.Text)))
+                    {
+                        MessageBox.Show("Enter the public HTTPS hostname and, for a named tunnel, the connector token.", "Tunnel Configuration", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                        return;
+                    }
 
                     UpdateStationJson("tunnelProvider", selectedMode);
                     UpdateStationJson("cloudflareTunnelToken", txtToken.Text.Trim());

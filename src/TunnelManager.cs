@@ -22,14 +22,17 @@ namespace PrintAway.Tunnel
 
         private readonly string _rootDir;
         private readonly int _localPort;
+        private readonly string _storefrontOrigin;
         private string _shopId;
         private string _shopName;
         private string _registryTopic;
         private readonly object _lock = new object();
+        private readonly object _publishLock = new object();
 
         private Process _tunnelProcess;
         private Timer _broadcastTimer;
         private Timer _watchdogTimer;
+        private string _candidateTunnelUrl;
         private string _liveTunnelUrl;
         private string _activeProviderName;
         private string _healthStatus = "Initializing";
@@ -37,15 +40,13 @@ namespace PrintAway.Tunnel
         private DateTime _lastNtfyPublishUtc = DateTime.MinValue;
         private string _lastNtfyPublishedUrl;
         private DateTime _cloudflareCooldownUntilUtc = DateTime.MinValue;
-        private DateTime _localhostRunCooldownUntilUtc = DateTime.MinValue;
         private int _throttleSwitchGen;
         private static readonly Regex LocalhostRunThrottleRegex = new Regex(@"is being slowed|have been slowed by|will be slowed", RegexOptions.Compiled | RegexOptions.IgnoreCase);
         private DateTime _pinggyCooldownUntilUtc = DateTime.MinValue;
-        private int _consecutiveHealthFailures;
         private int _generation;
         private bool _disposed;
         private bool _isSwitchingToFallback;
-        private volatile bool _probeInFlight;
+        private int _probeInFlight;
 
         public event Action<string> OnTunnelUrlCaptured;
         public event Action<string> OnStatusMessage;
@@ -85,6 +86,9 @@ namespace PrintAway.Tunnel
         {
             _rootDir = rootDir;
             _localPort = localPort;
+            Uri storefront;
+            if (Uri.TryCreate(PrintAway.Config.StationConfig.ActiveStorefrontUrl, UriKind.Absolute, out storefront))
+                _storefrontOrigin = storefront.GetLeftPart(UriPartial.Authority);
             _shopId = !string.IsNullOrWhiteSpace(shopId) ? shopId.Trim() : PrintAway.Config.StationConfig.UnconfiguredSlug;
             _shopName = !string.IsNullOrWhiteSpace(shopName) ? shopName.Trim() : _shopId;
             _registryTopic = GetRegistryTopicForShop(_shopId);
@@ -112,14 +116,15 @@ namespace PrintAway.Tunnel
 
         public void UpdateShopIdentity(string newShopId, string newShopName)
         {
-            if (!string.IsNullOrWhiteSpace(newShopId)) _shopId = newShopId.Trim();
-            if (!string.IsNullOrWhiteSpace(newShopName)) _shopName = newShopName.Trim();
-            _registryTopic = GetRegistryTopicForShop(_shopId);
-            string url = _liveTunnelUrl;
-            if (IsValidPublicTunnelUrl(url))
+            lock (_lock)
             {
-                _lastNtfyPublishedUrl = null;
-                PublishToRegistry(url, true);
+                if (!string.IsNullOrWhiteSpace(newShopName)) _shopName = newShopName.Trim();
+                if (string.IsNullOrWhiteSpace(newShopId) || string.Equals(newShopId.Trim(), _shopId, StringComparison.OrdinalIgnoreCase)) return;
+                _shopId = newShopId.Trim();
+                _registryTopic = GetRegistryTopicForShop(_shopId);
+                string url = _candidateTunnelUrl;
+                ClearTunnelUrl("Connecting");
+                if (url != null) QueueTunnelProbe(url, _generation);
             }
         }
 
@@ -171,10 +176,8 @@ namespace PrintAway.Tunnel
                 KillOwnedOrphanTunnelProcesses();
                 StopProcessOnly();
 
-                _liveTunnelUrl = null;
-                _consecutiveHealthFailures = 0;
+                ClearTunnelUrl("Connecting");
                 _isSwitchingToFallback = false;
-                _healthStatus = "Connecting";
 
                 string token, customUrl, providerMode;
                 ReadConfig(out token, out customUrl, out providerMode);
@@ -183,48 +186,40 @@ namespace PrintAway.Tunnel
                 StartBroadcastTimer();
                 StartWatchdogTimer();
 
-                // Case A: Custom Static Domain / Reverse Proxy (without Cloudflare Named Token)
-                if (!string.IsNullOrWhiteSpace(customUrl) && (providerMode == "custom" || string.IsNullOrWhiteSpace(token)))
+                // Custom reverse proxy, or a legacy hostname configured without a named tunnel token.
+                if (providerMode == "custom" || (!string.IsNullOrWhiteSpace(customUrl) && string.IsNullOrWhiteSpace(token) && providerMode == "auto"))
                 {
                     _activeProviderName = "Custom Static Domain";
-                    _liveTunnelUrl = customUrl;
-                    _healthStatus = "Live";
-                    Log("Custom static tunnel URL configured: " + customUrl);
-                    PublishToRegistry(customUrl, true);
-                    FireCaptured(customUrl);
+                    if (IsValidPublicTunnelUrl(customUrl)) QueueTunnelProbe(customUrl, gen);
+                    else Log("Enter a valid HTTPS URL for the custom tunnel.");
                     return;
                 }
 
-                // Case B: Cloudflare Named Tunnel with Authenticated Token (Permanent Zero-Rate-Limit SLA)
-                if (!string.IsNullOrWhiteSpace(token))
-                {
-                    StartCloudflareNamedTunnel(token, customUrl, gen);
-                    return;
-                }
-
-                // Case C: Explicit OpenSSH tunnel requested
                 if (providerMode == "openssh")
                 {
                     StartOpenSshTunnel(gen);
                     return;
                 }
 
-                // Case D: Explicit Pinggy SSH tunnel requested
                 if (providerMode == "pinggy")
                 {
                     StartPinggySshTunnel(gen);
                     return;
                 }
 
-                // Case E: Explicit Cloudflare mode requested -> force clear cooldown
-                if (providerMode == "cloudflare")
+                if (!string.IsNullOrWhiteSpace(token) || (providerMode == "cloudflare" && !string.IsNullOrWhiteSpace(customUrl)))
                 {
-                    _cloudflareCooldownUntilUtc = DateTime.MinValue;
-                    StartCloudflareQuickTunnel(gen);
+                    if (string.IsNullOrWhiteSpace(token) || !IsValidPublicTunnelUrl(customUrl))
+                    {
+                        _activeProviderName = "Cloudflare Named Tunnel";
+                        Log("Set both the connector token and the public HTTPS hostname for the Cloudflare Named Tunnel.");
+                        return;
+                    }
+                    StartCloudflareNamedTunnel(token, customUrl, gen);
                     return;
                 }
 
-                // Case F: Resilient Auto Cascade (Cloudflare Quick -> Pinggy SSH -> OpenSSH localhost.run)
+                // Cloudflare Quick -> Pinggy SSH -> OpenSSH localhost.run.
                 if (DateTime.UtcNow < _cloudflareCooldownUntilUtc)
                 {
                     Log("Cloudflare Quick Tunnel in cooldown. Launching SSH tunnel fallback...");
@@ -244,26 +239,27 @@ namespace PrintAway.Tunnel
             string exePath = EnsureCloudflared();
             if (string.IsNullOrEmpty(exePath))
             {
-                Log("Cloudflare binary unavailable. Switching to OpenSSH tunnel...");
-                StartOpenSshTunnel(gen);
+                Log("Cloudflare binary unavailable. Retrying the named tunnel in 60s.");
+                ScheduleRestart(60000, gen);
                 return;
             }
 
             try
             {
-                Log("Starting authenticated Cloudflare Named Tunnel (Zero Rate-Limit)...");
+                Log("Starting authenticated Cloudflare Named Tunnel...");
                 _activeProviderName = "Cloudflare Named Tunnel";
 
                 var psi = new ProcessStartInfo
                 {
                     FileName = exePath,
-                    Arguments = string.Format(CultureInfo.InvariantCulture, "tunnel --no-autoupdate --protocol http2 run --token {0}", token),
+                    Arguments = "tunnel --no-autoupdate --protocol http2 run",
                     CreateNoWindow = true,
                     UseShellExecute = false,
                     RedirectStandardOutput = true,
                     RedirectStandardError = true,
                     WorkingDirectory = Path.GetDirectoryName(exePath)
                 };
+                psi.EnvironmentVariables["TUNNEL_TOKEN"] = token;
 
                 _tunnelProcess = new Process { StartInfo = psi };
                 _tunnelProcess.OutputDataReceived += (s, e) => HandleNamedTunnelOutput(e.Data, staticUrl, gen);
@@ -271,33 +267,32 @@ namespace PrintAway.Tunnel
                 _tunnelProcess.EnableRaisingEvents = true;
                 _tunnelProcess.Exited += (s, e) =>
                 {
-                    if (_disposed || Volatile.Read(ref _generation) != gen) return;
-                    _liveTunnelUrl = null;
-                    _healthStatus = "Reconnecting";
-                    Log("Cloudflare Named Tunnel disconnected. Reconnecting in 5s...");
-                    FireCaptured("");
-                    ScheduleRestart(5000, gen);
+                    bool hadUrl;
+                    if (!HandleTunnelExit(gen, out hadUrl)) return;
+                    Log("Cloudflare Named Tunnel disconnected. Reconnecting automatically...");
+                    ScheduleRestart(hadUrl ? 5000 : 60000, gen);
                 };
 
                 _tunnelProcess.Start();
-                RecordOwnedPid(_tunnelProcess.Id);
+                RecordOwnedProcess(_tunnelProcess);
                 _tunnelProcess.BeginOutputReadLine();
                 _tunnelProcess.BeginErrorReadLine();
 
-                if (IsValidPublicTunnelUrl(staticUrl))
+                ThreadPool.QueueUserWorkItem(_ =>
                 {
-                    _liveTunnelUrl = staticUrl;
-                    _healthStatus = "Live";
-                    _consecutiveHealthFailures = 0;
-                    Log("Cloudflare Named Tunnel Active: " + staticUrl);
-                    PublishToRegistry(staticUrl, true);
-                    FireCaptured(staticUrl);
-                }
+                    Thread.Sleep(60000);
+                    lock (_lock)
+                    {
+                        if (_disposed || _generation != gen || _candidateTunnelUrl != null || _tunnelProcess == null || _tunnelProcess.HasExited) return;
+                        Log("Cloudflare did not register an edge connection within 60s. Retrying the named tunnel.");
+                        Start();
+                    }
+                });
             }
             catch (Exception ex)
             {
-                Log("Error starting Cloudflare Named Tunnel: " + ex.Message + ". Falling back to OpenSSH...");
-                StartOpenSshTunnel(gen);
+                Log("Error starting Cloudflare Named Tunnel: " + ex.Message + ". Retrying in 60s.");
+                ScheduleRestart(60000, gen);
             }
         }
 
@@ -308,29 +303,12 @@ namespace PrintAway.Tunnel
 
             if (line.IndexOf("Registered tunnel connection", StringComparison.OrdinalIgnoreCase) >= 0)
             {
-                if (IsValidPublicTunnelUrl(staticUrl))
-                {
-                    _liveTunnelUrl = staticUrl;
-                    _healthStatus = "Live";
-                    _consecutiveHealthFailures = 0;
-                    _lastHealthOkUtc = DateTime.UtcNow;
-                    PublishToRegistry(staticUrl, false);
-                    FireCaptured(staticUrl);
-                }
+                QueueTunnelProbe(staticUrl, gen);
             }
             else if (line.IndexOf("Provided Tunnel token is not valid", StringComparison.OrdinalIgnoreCase) >= 0 ||
                      line.IndexOf("Unauthorized", StringComparison.OrdinalIgnoreCase) >= 0)
             {
-                Log("Cloudflare Named Tunnel token invalid. Falling back to OpenSSH...");
-                ThreadPool.QueueUserWorkItem(_ =>
-                {
-                    lock (_lock)
-                    {
-                        if (_disposed || Volatile.Read(ref _generation) != gen) return;
-                        StopProcessOnly();
-                        StartOpenSshTunnel(gen);
-                    }
-                });
+                Log("Cloudflare rejected the connector credentials. Check the named tunnel token.");
             }
         }
 
@@ -341,8 +319,9 @@ namespace PrintAway.Tunnel
             string exePath = EnsureCloudflared();
             if (string.IsNullOrEmpty(exePath))
             {
-                Log("Cloudflare binary not found. Activating OpenSSH tunnel...");
-                StartOpenSshTunnel(gen);
+                Log("Cloudflare binary not found. Trying the fallback providers.");
+                _cloudflareCooldownUntilUtc = DateTime.UtcNow.AddMinutes(5);
+                StartBestFallback(gen);
                 return;
             }
 
@@ -369,18 +348,17 @@ namespace PrintAway.Tunnel
                 _tunnelProcess.EnableRaisingEvents = true;
                 _tunnelProcess.Exited += (s, e) =>
                 {
-                    if (_disposed || _isSwitchingToFallback || Volatile.Read(ref _generation) != gen) return;
-
-                    bool hadUrl = !string.IsNullOrEmpty(_liveTunnelUrl);
-                    _liveTunnelUrl = null;
-                    _healthStatus = "Reconnecting";
-                    FireCaptured("");
+                    bool hadUrl;
+                    if (!HandleTunnelExit(gen, out hadUrl)) return;
 
                     if (!hadUrl)
                     {
-                        Log("Cloudflare Quick Tunnel exited (rate-limited or offline). Activating OpenSSH fallback...");
-                        _cloudflareCooldownUntilUtc = DateTime.UtcNow.AddMinutes(5);
-                        SwitchToFallbackLocked(gen, true);
+                        lock (_lock)
+                        {
+                            if (_disposed || _generation != gen) return;
+                            Log("Cloudflare Quick Tunnel exited before the public link was ready. Trying the fallback providers.");
+                            SwitchFromCloudflare(gen);
+                        }
                     }
                     else
                     {
@@ -390,31 +368,29 @@ namespace PrintAway.Tunnel
                 };
 
                 _tunnelProcess.Start();
-                RecordOwnedPid(_tunnelProcess.Id);
+                RecordOwnedProcess(_tunnelProcess);
                 _tunnelProcess.BeginOutputReadLine();
                 _tunnelProcess.BeginErrorReadLine();
 
-                // Startup timeout guard: if no URL is captured in 20s, do not hang -> fall back to OpenSSH
+                // Wait for a working public route, including DNS propagation at the edge.
                 ThreadPool.QueueUserWorkItem(_ =>
                 {
-                    Thread.Sleep(20000);
+                    Thread.Sleep(45000);
                     lock (_lock)
                     {
                         if (_disposed || _isSwitchingToFallback || Volatile.Read(ref _generation) != gen) return;
                         if (string.IsNullOrEmpty(_liveTunnelUrl))
                         {
-                            Log("Cloudflare Quick Tunnel timed out after 20s. Switching to OpenSSH fallback...");
-                            _cloudflareCooldownUntilUtc = DateTime.UtcNow.AddMinutes(5);
-                            SwitchToFallbackLocked(gen, true);
+                            Log("Cloudflare Quick Tunnel is still unreachable after 45s. Trying the fallback providers.");
+                            SwitchFromCloudflare(gen);
                         }
                     }
                 });
             }
             catch (Exception ex)
             {
-                Log("Cloudflare failed to start (" + ex.Message + "). Activating OpenSSH tunnel...");
-                _cloudflareCooldownUntilUtc = DateTime.UtcNow.AddMinutes(5);
-                StartOpenSshTunnel(gen);
+                Log("Cloudflare failed to start (" + ex.Message + "). Trying the fallback providers.");
+                SwitchFromCloudflare(gen);
             }
         }
 
@@ -423,51 +399,16 @@ namespace PrintAway.Tunnel
             if (string.IsNullOrEmpty(line) || Volatile.Read(ref _generation) != gen) return;
             AppendTunnelLog("[CF-Quick] " + line);
 
-            if (line.IndexOf("status 429", StringComparison.OrdinalIgnoreCase) >= 0 ||
-                line.IndexOf("quick tunnel provisioning failed", StringComparison.OrdinalIgnoreCase) >= 0 ||
-                line.IndexOf("too many requests", StringComparison.OrdinalIgnoreCase) >= 0)
-            {
-                _cloudflareCooldownUntilUtc = DateTime.UtcNow.AddMinutes(5);
-                if (!_isSwitchingToFallback)
-                {
-                    Log("Cloudflare rate-limit active (HTTP 429). Switching immediately to resilient OpenSSH tunnel...");
-                    ThreadPool.QueueUserWorkItem(_ =>
-                    {
-                        lock (_lock)
-                        {
-                            SwitchToFallbackLocked(gen, true);
-                        }
-                    });
-                }
-                return;
-            }
-
             Match match = CloudflareUrlRegex.Match(line);
-            if (match.Success)
-            {
-                string capturedUrl = match.Value.Trim().TrimEnd('/');
-                if (!IsValidPublicTunnelUrl(capturedUrl)) return;
-
-                if (!string.Equals(_liveTunnelUrl, capturedUrl, StringComparison.OrdinalIgnoreCase))
-                {
-                    _liveTunnelUrl = capturedUrl;
-                    _activeProviderName = "Cloudflare Tunnel";
-                    _healthStatus = "Live";
-                    _consecutiveHealthFailures = 0;
-                    _lastHealthOkUtc = DateTime.UtcNow;
-                    Log("Cloudflare Tunnel Live: " + capturedUrl);
-                    PublishToRegistry(capturedUrl, true);
-                    FireCaptured(capturedUrl);
-                }
-            }
+            if (match.Success) QueueTunnelProbe(match.Value, gen);
         }
 
-        private void SwitchToFallbackLocked(int expectedGen, bool useOpenSshFirst)
+        private void SwitchFromCloudflare(int expectedGen)
         {
             if (_disposed || Volatile.Read(ref _generation) != expectedGen) return;
             _isSwitchingToFallback = true;
-            _liveTunnelUrl = null;
-            _healthStatus = "Reconnecting";
+            _cloudflareCooldownUntilUtc = DateTime.UtcNow.AddMinutes(5);
+            ClearTunnelUrl("Reconnecting");
             int newGen = Interlocked.Increment(ref _generation);
             StopProcessOnly();
             _isSwitchingToFallback = false;
@@ -499,7 +440,7 @@ namespace PrintAway.Tunnel
                 {
                     StopProcessOnly();
                     _isSwitchingToFallback = false;
-                    _liveTunnelUrl = null;
+                    ClearTunnelUrl("Connecting");
                     string sshExe = FindOpenSshExecutable();
                     Log("Connecting built-in OpenSSH Tunnel (localhost.run)...");
                     _activeProviderName = "OpenSSH (localhost.run)";
@@ -523,25 +464,17 @@ namespace PrintAway.Tunnel
                     _tunnelProcess.EnableRaisingEvents = true;
                     _tunnelProcess.Exited += (s, e) =>
                     {
-                        if (_disposed || _isSwitchingToFallback || Volatile.Read(ref _generation) != gen) return;
-
-                        bool hadUrl = !string.IsNullOrEmpty(_liveTunnelUrl);
-                        _liveTunnelUrl = null;
-                        _healthStatus = "Reconnecting";
-                        FireCaptured("");
+                        bool hadUrl;
+                        if (!HandleTunnelExit(gen, out hadUrl)) return;
 
                         if (!hadUrl)
                         {
                             Log("localhost.run SSH did not establish tunnel. Trying Pinggy SSH backup...");
-                            _localhostRunCooldownUntilUtc = DateTime.UtcNow.AddMinutes(3);
                             ThreadPool.QueueUserWorkItem(_ =>
                             {
                                 lock (_lock)
                                 {
-                                    if (_disposed || Volatile.Read(ref _generation) != gen) return;
-                                    int nextGen = Interlocked.Increment(ref _generation);
-                                    StopProcessOnly();
-                                    StartPinggySshTunnel(nextGen);
+                                    RecoverFromOpenSshFailure(gen);
                                 }
                             });
                         }
@@ -553,7 +486,7 @@ namespace PrintAway.Tunnel
                     };
 
                     _tunnelProcess.Start();
-                    RecordOwnedPid(_tunnelProcess.Id);
+                    RecordOwnedProcess(_tunnelProcess);
                     _tunnelProcess.BeginOutputReadLine();
                     _tunnelProcess.BeginErrorReadLine();
 
@@ -567,20 +500,27 @@ namespace PrintAway.Tunnel
                             if (string.IsNullOrEmpty(_liveTunnelUrl))
                             {
                                 Log("localhost.run timed out after 20s. Switching to Pinggy SSH backup...");
-                                _localhostRunCooldownUntilUtc = DateTime.UtcNow.AddMinutes(3);
-                                int nextGen = Interlocked.Increment(ref _generation);
-                                StopProcessOnly();
-                                StartPinggySshTunnel(nextGen);
+                                RecoverFromOpenSshFailure(gen);
                             }
                         }
                     });
                 }
                 catch (Exception ex)
                 {
-                    Log("Failed to start OpenSSH tunnel: " + ex.Message + ". Trying Pinggy SSH...");
-                    StartPinggySshTunnel(gen);
+                    Log("Failed to start OpenSSH tunnel: " + ex.Message);
+                    RecoverFromOpenSshFailure(gen);
                 }
             }
+        }
+
+        private void RecoverFromOpenSshFailure(int gen)
+        {
+            if (_disposed || _generation != gen) return;
+            int nextGen = Interlocked.Increment(ref _generation);
+            ClearTunnelUrl("Reconnecting");
+            StopProcessOnly();
+            if (DateTime.UtcNow >= _pinggyCooldownUntilUtc) StartPinggySshTunnel(nextGen);
+            else ScheduleRestart(30000, nextGen);
         }
 
         private void HandleOpenSshOutput(string line, int gen)
@@ -599,10 +539,7 @@ namespace PrintAway.Tunnel
                     {
                         if (_disposed || Volatile.Read(ref _generation) != gen) return;
                         Log("localhost.run is throttling this tunnel (free-tier bandwidth limit). Switching to Pinggy SSH tunnel...");
-                        _localhostRunCooldownUntilUtc = DateTime.UtcNow.AddMinutes(30);
-                        _liveTunnelUrl = null;
-                        _healthStatus = "Reconnecting";
-                        FireCaptured("");
+                        ClearTunnelUrl("Reconnecting");
                         int nextGen = Interlocked.Increment(ref _generation);
                         StopProcessOnly();
                         StartPinggySshTunnel(nextGen);
@@ -612,23 +549,7 @@ namespace PrintAway.Tunnel
             }
 
             Match match = SshUrlRegex.Match(line);
-            if (match.Success)
-            {
-                string url = match.Value.Trim().TrimEnd('/');
-                if (!IsValidPublicTunnelUrl(url)) return;
-
-                if (!string.Equals(_liveTunnelUrl, url, StringComparison.OrdinalIgnoreCase))
-                {
-                    _liveTunnelUrl = url;
-                    _activeProviderName = "OpenSSH (localhost.run)";
-                    _healthStatus = "Live";
-                    _consecutiveHealthFailures = 0;
-                    _lastHealthOkUtc = DateTime.UtcNow;
-                    Log("OpenSSH Tunnel Live: " + url);
-                    PublishToRegistry(url, true);
-                    FireCaptured(url);
-                }
-            }
+            if (match.Success) QueueTunnelProbe(match.Value, gen);
         }
 
         private void StartPinggySshTunnel(int gen)
@@ -641,7 +562,7 @@ namespace PrintAway.Tunnel
                 {
                     StopProcessOnly();
                     _isSwitchingToFallback = false;
-                    _liveTunnelUrl = null;
+                    ClearTunnelUrl("Connecting");
                     string sshExe = FindOpenSshExecutable();
                     int debuggerPort = FindFreeLocalPort();
                     Log("Connecting Pinggy SSH Tunnel...");
@@ -660,7 +581,7 @@ namespace PrintAway.Tunnel
                             "-T -p 443 -o StrictHostKeyChecking=no -o UserKnownHostsFile=NUL -o PubkeyAuthentication=no " +
                             "-o PreferredAuthentications=none,keyboard-interactive,password -o NumberOfPasswordPrompts=1 " +
                             "-o ServerAliveInterval=15 -o ServerAliveCountMax=3 -o ExitOnForwardFailure=yes -o ConnectTimeout=10 " +
-                            "-R0:127.0.0.1:{0} -L{1}:localhost:4300 free.pinggy.io",
+                            "-R0:127.0.0.1:{0} -L{1}:localhost:4300 free.pinggy.io x:passpreflight",
                             _localPort, debuggerPort),
                         CreateNoWindow = true,
                         UseShellExecute = false,
@@ -681,11 +602,8 @@ namespace PrintAway.Tunnel
                     _tunnelProcess.EnableRaisingEvents = true;
                     _tunnelProcess.Exited += (s, e) =>
                     {
-                        if (_disposed || _isSwitchingToFallback || Volatile.Read(ref _generation) != gen) return;
-                        bool hadUrl = !string.IsNullOrEmpty(_liveTunnelUrl);
-                        _liveTunnelUrl = null;
-                        _healthStatus = "Reconnecting";
-                        FireCaptured("");
+                        bool hadUrl;
+                        if (!HandleTunnelExit(gen, out hadUrl)) return;
                         if (hadUrl)
                         {
                             // Free Pinggy tunnels end after a while; reconnect (the registry gets the new URL).
@@ -699,7 +617,7 @@ namespace PrintAway.Tunnel
                     };
 
                     _tunnelProcess.Start();
-                    RecordOwnedPid(_tunnelProcess.Id);
+                    RecordOwnedProcess(_tunnelProcess);
                     _tunnelProcess.BeginOutputReadLine();
                     _tunnelProcess.BeginErrorReadLine();
 
@@ -719,8 +637,7 @@ namespace PrintAway.Tunnel
                 {
                     Log("Pinggy SSH failed to start: " + ex.Message + ".");
                     _pinggyCooldownUntilUtc = DateTime.UtcNow.AddMinutes(30);
-                    _localhostRunCooldownUntilUtc = DateTime.MinValue;
-                    StartOpenSshTunnel(gen);
+                    StartOpenSshTunnel(Interlocked.Increment(ref _generation));
                 }
             }
         }
@@ -734,7 +651,6 @@ namespace PrintAway.Tunnel
                 if (!string.IsNullOrEmpty(_liveTunnelUrl)) return;
                 Log(reason + ". Using localhost.run instead.");
                 _pinggyCooldownUntilUtc = DateTime.UtcNow.AddMinutes(30);
-                _localhostRunCooldownUntilUtc = DateTime.MinValue;
                 int nextGen = Interlocked.Increment(ref _generation);
                 StopProcessOnly();
                 StartOpenSshTunnel(nextGen);
@@ -802,23 +718,7 @@ namespace PrintAway.Tunnel
 
         private void AcceptPinggyUrl(string rawUrl, int gen)
         {
-            if (Volatile.Read(ref _generation) != gen) return;
-            string url = (rawUrl ?? "").Trim().TrimEnd('/');
-            if (!IsValidPublicTunnelUrl(url)) return;
-            lock (_lock)
-            {
-                if (Volatile.Read(ref _generation) != gen) return;
-                if (string.Equals(_liveTunnelUrl, url, StringComparison.OrdinalIgnoreCase)) return;
-                _liveTunnelUrl = url;
-                _activeProviderName = "Pinggy SSH Tunnel";
-                _healthStatus = "Live";
-                _consecutiveHealthFailures = 0;
-                _lastHealthOkUtc = DateTime.UtcNow;
-                _pinggyCooldownUntilUtc = DateTime.MinValue;
-            }
-            Log("Pinggy Tunnel Live: " + url);
-            PublishToRegistry(url, true);
-            FireCaptured(url);
+            QueueTunnelProbe(rawUrl, gen);
         }
 
         private string FindOpenSshExecutable()
@@ -867,13 +767,13 @@ namespace PrintAway.Tunnel
 
         public void Restart()
         {
-            Log("Restarting tunnel connection...");
-            _cloudflareCooldownUntilUtc = DateTime.MinValue;
-            _localhostRunCooldownUntilUtc = DateTime.MinValue;
-            _pinggyCooldownUntilUtc = DateTime.MinValue;
-            Stop();
-            _liveTunnelUrl = null;
-            Start();
+            lock (_lock)
+            {
+                Log("Restarting tunnel connection...");
+                _cloudflareCooldownUntilUtc = DateTime.MinValue;
+                _pinggyCooldownUntilUtc = DateTime.MinValue;
+                Start();
+            }
         }
 
         private void ScheduleRestart(int delayMs, int expectedGen)
@@ -881,8 +781,11 @@ namespace PrintAway.Tunnel
             ThreadPool.QueueUserWorkItem(_ =>
             {
                 Thread.Sleep(delayMs);
-                if (_disposed || Volatile.Read(ref _generation) != expectedGen) return;
-                Start();
+                lock (_lock)
+                {
+                    if (_disposed || _generation != expectedGen) return;
+                    Start();
+                }
             });
         }
 
@@ -908,6 +811,41 @@ namespace PrintAway.Tunnel
             _watchdogTimer = new Timer(_ => RunWatchdogCheck(), null, TimeSpan.FromSeconds(15), TimeSpan.FromSeconds(15));
         }
 
+        private void QueueTunnelProbe(string url, int gen)
+        {
+            if (!IsValidPublicTunnelUrl(url)) return;
+            url = url.Trim().TrimEnd('/');
+            lock (_lock)
+            {
+                if (_disposed || _generation != gen || (_tunnelProcess != null && _tunnelProcess.HasExited)) return;
+                if (string.Equals(_candidateTunnelUrl, url, StringComparison.OrdinalIgnoreCase)) return;
+                ClearTunnelUrl("Verifying public route");
+                _candidateTunnelUrl = url;
+            }
+            ThreadPool.QueueUserWorkItem(_ => RunWatchdogCheck());
+        }
+
+        private void ClearTunnelUrl(string status)
+        {
+            bool wasLive = _liveTunnelUrl != null;
+            _candidateTunnelUrl = null;
+            _liveTunnelUrl = null;
+            _lastHealthOkUtc = null;
+            _healthStatus = status;
+            if (wasLive) FireCaptured("");
+        }
+
+        private bool HandleTunnelExit(int gen, out bool hadUrl)
+        {
+            lock (_lock)
+            {
+                hadUrl = _liveTunnelUrl != null;
+                if (_disposed || _isSwitchingToFallback || _generation != gen) return false;
+                ClearTunnelUrl("Reconnecting");
+                return true;
+            }
+        }
+
         public bool RunManualProbe(out string detail)
         {
             detail = "";
@@ -916,18 +854,15 @@ namespace PrintAway.Tunnel
                 detail = "Local PrintAway HTTP server (127.0.0.1:" + _localPort + ") is not responding.";
                 return false;
             }
-            string url = _liveTunnelUrl;
+            string url = _candidateTunnelUrl;
             if (!IsValidPublicTunnelUrl(url))
             {
                 detail = "No active public tunnel URL yet. Provider: " + (_activeProviderName ?? "Unknown");
                 return false;
             }
             string err;
-            if (ProbePublicTunnel(url, out err))
+            if (ProbePublicTunnel(url, _shopId, out err))
             {
-                _lastHealthOkUtc = DateTime.UtcNow;
-                _consecutiveHealthFailures = 0;
-                _healthStatus = "Live";
                 detail = "Tunnel Healthy (" + (_activeProviderName ?? "Active") + ") -> " + url;
                 return true;
             }
@@ -937,64 +872,60 @@ namespace PrintAway.Tunnel
 
         private void RunWatchdogCheck()
         {
-            if (_disposed || _probeInFlight) return;
-            _probeInFlight = true;
+            if (Interlocked.CompareExchange(ref _probeInFlight, 1, 0) != 0) return;
             try
             {
-                // 1. Verify local server is accepting requests before blaming tunnel
-                if (!ProbeLocalServer()) return;
-
-                string url = _liveTunnelUrl;
-                if (!IsValidPublicTunnelUrl(url)) return;
-
+                int gen;
+                string url, shopId;
+                bool wasLive;
+                lock (_lock)
+                {
+                    if (_disposed || _candidateTunnelUrl == null) return;
+                    gen = _generation;
+                    url = _candidateTunnelUrl;
+                    shopId = _shopId;
+                    wasLive = _liveTunnelUrl != null;
+                }
                 string err;
-                if (ProbePublicTunnel(url, out err))
+                bool healthy = ProbePublicTunnel(url, shopId, out err);
+                if (!healthy && wasLive)
                 {
-                    _consecutiveHealthFailures = 0;
-                    _lastHealthOkUtc = DateTime.UtcNow;
-                    _healthStatus = "Live";
-                    return;
+                    // Confirm the outage before withdrawing a previously working route.
+                    Thread.Sleep(2500);
+                    healthy = ProbePublicTunnel(url, shopId, out err);
                 }
 
-                // First failure -> wait 2.5s and re-confirm so momentary latency doesn't flap a healthy link
-                _consecutiveHealthFailures++;
-                Thread.Sleep(2500);
-                if (ProbePublicTunnel(url, out err))
+                lock (_lock)
                 {
-                    _consecutiveHealthFailures = 0;
-                    _lastHealthOkUtc = DateTime.UtcNow;
-                    _healthStatus = "Live";
-                    return;
-                }
+                    if (_disposed || _generation != gen || url != _candidateTunnelUrl || shopId != _shopId) return;
+                    if (healthy)
+                    {
+                        _lastHealthOkUtc = DateTime.UtcNow;
+                        _healthStatus = "Live";
+                        if (_liveTunnelUrl == url) return;
+                        _liveTunnelUrl = url;
+                        if (_activeProviderName == "Pinggy SSH Tunnel") _pinggyCooldownUntilUtc = DateTime.MinValue;
+                        Log(_activeProviderName + " live: " + url);
+                        FireCaptured(url);
+                    }
+                    else
+                    {
+                        if (wasLive) ClearTunnelUrl("Recovering");
+                        Log("Public tunnel check failed: " + err);
+                        if (!wasLive) return;
 
-                _consecutiveHealthFailures++;
-                Log("Watchdog detected dead/stalled tunnel (" + err + "). Auto-recovering...");
-                _healthStatus = "Recovering";
-
-                // If Cloudflare Quick Tunnel died under load, temporarily cool down Quick Tunnel so fallback takes over fast
-                string tok, cust, mode;
-                ReadConfig(out tok, out cust, out mode);
-                if (string.IsNullOrWhiteSpace(tok) && mode != "cloudflare" &&
-                    (_activeProviderName ?? "").IndexOf("Cloudflare", StringComparison.OrdinalIgnoreCase) >= 0)
-                {
-                    _cloudflareCooldownUntilUtc = DateTime.UtcNow.AddMinutes(5);
+                        if (_activeProviderName == "Custom Static Domain" || !ProbeLocalServer()) _candidateTunnelUrl = url;
+                        else if (_activeProviderName == "Cloudflare Quick Tunnel") SwitchFromCloudflare(gen);
+                        else Start();
+                        return;
+                    }
                 }
-                else if ((_activeProviderName ?? "").IndexOf("localhost.run", StringComparison.OrdinalIgnoreCase) >= 0 && mode == "auto")
-                {
-                    _localhostRunCooldownUntilUtc = DateTime.UtcNow.AddMinutes(10);
-                }
-
-                if (mode != "custom")
-                {
-                    _liveTunnelUrl = null;
-                    FireCaptured("");
-                    Start();
-                }
+                PublishToRegistry(url, true);
             }
             catch { }
             finally
             {
-                _probeInFlight = false;
+                Interlocked.Exchange(ref _probeInFlight, 0);
             }
         }
 
@@ -1016,41 +947,48 @@ namespace PrintAway.Tunnel
             }
         }
 
-        private static bool ProbePublicTunnel(string baseUrl, out string error)
+        private bool ProbePublicTunnel(string baseUrl, string shopId, out string error)
         {
             error = null;
             try
             {
                 ServicePointManager.SecurityProtocol = SecurityProtocolType.Tls12 | SecurityProtocolType.Tls11 | SecurityProtocolType.Tls;
-                var req = (HttpWebRequest)WebRequest.Create(baseUrl.TrimEnd('/') + "/api/health");
+                string endpoint = baseUrl + "/api/shop/status";
+                bool isPinggy = new Uri(baseUrl).Host.IndexOf("pinggy", StringComparison.OrdinalIgnoreCase) >= 0;
+                if (isPinggy && !CanBrowserReachPinggy(endpoint))
+                {
+                    error = "Pinggy did not allow the storefront's browser preflight";
+                    return false;
+                }
+
+                var req = (HttpWebRequest)WebRequest.Create(endpoint);
                 req.Method = "GET";
+                req.AllowAutoRedirect = false;
                 req.Timeout = 6000;
                 req.ReadWriteTimeout = 6000;
                 req.UserAgent = "PrintAway-Watchdog/1.0";
-                // Pinggy free interstitial bypass header if applicable
-                req.Headers["X-Pinggy-No-Screen"] = "true";
+                if (isPinggy) req.Headers["X-Pinggy-No-Screen"] = "1";
                 using (var resp = (HttpWebResponse)req.GetResponse())
                 using (var sr = new StreamReader(resp.GetResponseStream()))
                 {
-                    int code = (int)resp.StatusCode;
-                    string body = sr.ReadToEnd();
-                    if (code >= 200 && code < 300 && body.IndexOf("\"ok\"", StringComparison.OrdinalIgnoreCase) >= 0)
+                    if (resp.StatusCode != HttpStatusCode.OK || !resp.ContentType.StartsWith("application/json", StringComparison.OrdinalIgnoreCase))
                     {
-                        return true;
+                        error = "HTTP " + (int)resp.StatusCode + " did not return station status";
+                        return false;
                     }
-                    error = "HTTP " + code + " unexpected response";
+                    var body = new JavaScriptSerializer().Deserialize<Dictionary<string, object>>(sr.ReadToEnd());
+                    object actualShopId;
+                    if (body != null && body.TryGetValue("shopId", out actualShopId) &&
+                        string.Equals(Convert.ToString(actualShopId), shopId, StringComparison.OrdinalIgnoreCase)) return true;
+                    error = "public route returned a different shop ID";
                     return false;
                 }
             }
             catch (WebException wex)
             {
-                if (wex.Response is HttpWebResponse)
+                using (var response = wex.Response as HttpWebResponse)
                 {
-                    error = "HTTP " + (int)((HttpWebResponse)wex.Response).StatusCode;
-                }
-                else
-                {
-                    error = wex.Message;
+                    error = response == null ? wex.Message : "HTTP " + (int)response.StatusCode;
                 }
                 return false;
             }
@@ -1058,6 +996,27 @@ namespace PrintAway.Tunnel
             {
                 error = ex.Message;
                 return false;
+            }
+        }
+
+        private bool CanBrowserReachPinggy(string endpoint)
+        {
+            if (string.IsNullOrEmpty(_storefrontOrigin)) return false;
+            var req = (HttpWebRequest)WebRequest.Create(endpoint);
+            req.Method = "OPTIONS";
+            req.AllowAutoRedirect = false;
+            req.Timeout = 5000;
+            req.UserAgent = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/131.0.0.0 Safari/537.36";
+            req.Headers["Origin"] = _storefrontOrigin;
+            req.Headers["Access-Control-Request-Method"] = "GET";
+            req.Headers["Access-Control-Request-Headers"] = "x-pinggy-no-screen";
+            using (var resp = (HttpWebResponse)req.GetResponse())
+            {
+                string origin = resp.Headers["Access-Control-Allow-Origin"];
+                string headers = resp.Headers["Access-Control-Allow-Headers"] ?? "";
+                return (int)resp.StatusCode >= 200 && (int)resp.StatusCode < 300 &&
+                    (origin == "*" || origin == _storefrontOrigin) &&
+                    (headers.Trim() == "*" || Regex.IsMatch(headers, @"(?:^|,)\s*x-pinggy-no-screen\s*(?:,|$)", RegexOptions.IgnoreCase));
             }
         }
 
@@ -1098,30 +1057,25 @@ namespace PrintAway.Tunnel
 
         private void PublishToRegistry(string url, bool sendNtfy)
         {
-            if (!IsValidPublicTunnelUrl(url)) return;
-            string cleanUrl = url.Trim().TrimEnd('/');
-
-            // 1. Write to data/tunnel.url for instant zero-latency file sync
-            try
+            lock (_publishLock)
             {
-                string dataDir = Path.Combine(_rootDir, "data");
-                if (!Directory.Exists(dataDir)) Directory.CreateDirectory(dataDir);
-                File.WriteAllText(Path.Combine(dataDir, "tunnel.url"), cleanUrl, Encoding.UTF8);
+                string shopId, topic, shopName;
+                lock (_lock)
+                {
+                    if (url != _liveTunnelUrl || !HasPublishableIdentity) return;
+                    shopId = _shopId;
+                    shopName = _shopName;
+                    topic = _registryTopic;
+                }
+                PublishVerifiedUrl(url, sendNtfy, shopId, shopName, topic);
             }
-            catch { }
+        }
 
-            // Never broadcast a tunnel under a placeholder/shared shop ID: other stations' customers
-            // would be routed to this machine.
-            if (!HasPublishableIdentity)
-            {
-                AppendTunnelLog("[Registry] Skipped: station has no shop identity yet.");
-                return;
-            }
-
-            // 2. Broadcast to ntfy.sh Cloud Registry Topic (deduplicated)
+        private void PublishVerifiedUrl(string cleanUrl, bool sendNtfy, string shopId, string shopName, string topic)
+        {
+            // Broadcast to ntfy.sh Cloud Registry Topic (deduplicated).
             if (sendNtfy)
             {
-                string topic = !string.IsNullOrWhiteSpace(_registryTopic) ? _registryTopic : GetRegistryTopicForShop(_shopId);
                 try
                 {
                     ServicePointManager.SecurityProtocol = SecurityProtocolType.Tls12 | SecurityProtocolType.Tls11 | SecurityProtocolType.Tls;
@@ -1156,7 +1110,7 @@ namespace PrintAway.Tunnel
                 string sbKey = PrintAway.SaaS.ControlPlane.Key;
                 string now = DateTime.UtcNow.ToString("o", CultureInfo.InvariantCulture);
 
-                string patchTarget = string.Format(CultureInfo.InvariantCulture, "{0}/rest/v1/shops?shop_id=eq.{1}", sbUrl, Uri.EscapeDataString(_shopId));
+                string patchTarget = string.Format(CultureInfo.InvariantCulture, "{0}/rest/v1/shops?shop_id=eq.{1}", sbUrl, Uri.EscapeDataString(shopId));
                 var req = (HttpWebRequest)WebRequest.Create(patchTarget);
                 req.Method = "PATCH";
                 req.Headers.Add("apikey", sbKey);
@@ -1201,8 +1155,8 @@ namespace PrintAway.Tunnel
 
                     var postDict = new Dictionary<string, object>
                     {
-                        { "shop_id", _shopId },
-                        { "shop_name", _shopName ?? _shopId },
+                        { "shop_id", shopId },
+                        { "shop_name", shopName ?? shopId },
                         { "owner_name", _ownerName },
                         { "owner_phone", _ownerPhone },
                         { "upi_vpa", _upiVpa },
@@ -1221,14 +1175,15 @@ namespace PrintAway.Tunnel
             }
         }
 
-        private void RecordOwnedPid(int pid)
+        private void RecordOwnedProcess(Process process)
         {
             try
             {
                 string dataDir = Path.Combine(_rootDir, "data");
                 if (!Directory.Exists(dataDir)) Directory.CreateDirectory(dataDir);
                 string pidFile = Path.Combine(dataDir, "tunnel.pids");
-                File.AppendAllText(pidFile, pid.ToString(CultureInfo.InvariantCulture) + Environment.NewLine, Encoding.UTF8);
+                string entry = string.Format(CultureInfo.InvariantCulture, "{0} {1}{2}", process.Id, process.StartTime.ToUniversalTime().Ticks, Environment.NewLine);
+                File.AppendAllText(pidFile, entry, Encoding.UTF8);
             }
             catch { }
         }
@@ -1256,27 +1211,7 @@ namespace PrintAway.Tunnel
 
         private void KillOwnedOrphanTunnelProcesses()
         {
-            // 1. Always kill leftover cloudflared instances inside our station dir (never kills system SSH)
-            try
-            {
-                string localCloudflared = Path.GetFullPath(Path.Combine(_rootDir, "bin", "cloudflared.exe"));
-                foreach (var p in Process.GetProcessesByName("cloudflared"))
-                {
-                    try
-                    {
-                        string pPath = null;
-                        try { pPath = Path.GetFullPath(p.MainModule.FileName); } catch { }
-                        if (pPath == null || string.Equals(pPath, localCloudflared, StringComparison.OrdinalIgnoreCase))
-                        {
-                            p.Kill();
-                        }
-                    }
-                    catch { }
-                }
-            }
-            catch { }
-
-            // 2. Kill only SSH/tunnel PIDs previously spawned by PrintAway (never unrelated user ssh.exe)
+            // Verify the process start time as Windows can reuse a PID after a station crash.
             try
             {
                 string pidFile = Path.Combine(_rootDir, "data", "tunnel.pids");
@@ -1286,16 +1221,18 @@ namespace PrintAway.Tunnel
                     File.Delete(pidFile);
                     foreach (string line in lines)
                     {
+                        string[] entry = line.Split(' ');
                         int pid;
-                        if (int.TryParse((line ?? "").Trim(), out pid))
+                        long ticks;
+                        if (entry.Length == 2 && int.TryParse(entry[0], out pid) && long.TryParse(entry[1], out ticks))
                         {
                             try
                             {
-                                var proc = Process.GetProcessById(pid);
-                                string pname = (proc.ProcessName ?? "").ToLowerInvariant();
-                                if (pname == "ssh" || pname == "cloudflared")
+                                using (var proc = Process.GetProcessById(pid))
                                 {
-                                    proc.Kill();
+                                    string pname = proc.ProcessName.ToLowerInvariant();
+                                    if ((pname == "ssh" || pname == "cloudflared") && proc.StartTime.ToUniversalTime().Ticks == ticks)
+                                        proc.Kill();
                                 }
                             }
                             catch { }
@@ -1308,19 +1245,23 @@ namespace PrintAway.Tunnel
 
         public void Stop()
         {
-            Interlocked.Increment(ref _generation);
-            if (_watchdogTimer != null)
+            lock (_lock)
             {
-                _watchdogTimer.Dispose();
-                _watchdogTimer = null;
+                Interlocked.Increment(ref _generation);
+                ClearTunnelUrl("Stopped");
+                if (_watchdogTimer != null)
+                {
+                    _watchdogTimer.Dispose();
+                    _watchdogTimer = null;
+                }
+                if (_broadcastTimer != null)
+                {
+                    _broadcastTimer.Dispose();
+                    _broadcastTimer = null;
+                }
+                StopProcessOnly();
+                KillOwnedOrphanTunnelProcesses();
             }
-            if (_broadcastTimer != null)
-            {
-                _broadcastTimer.Dispose();
-                _broadcastTimer = null;
-            }
-            StopProcessOnly();
-            KillOwnedOrphanTunnelProcesses();
         }
 
         public void Dispose()
