@@ -1,7 +1,7 @@
 {
-  "version": "2.6.2",
+  "version": "2.6.3",
   "releaseDate": "2026-11-18",
-  "releaseNotes": "Adapt ScanDrop dual-layer upload architecture on top of Pinggy SSH_ASKPASS fix: preflight-free FormData XMLHttpRequest transfers (12 MB single-shot + 4 MB chunks), conditional Pinggy X-Pinggy-No-Screen bypass, parallel tunnel discovery, 15s watchdog recovery, and Supabase Cloud Relay support.",
+  "releaseNotes": "Cloudflare tunnel works on networks that block trycloudflare.com: when the direct sign-up is blocked the station signs up for its quick tunnel through a PrintAway relay on Vercel, then runs over Cloudflare's normal edge. The watchdog reads cloudflared's own health status instead of opening the public link from the shop PC, so a busy or locally-blocked tunnel is no longer replaced (which changed the customer link). localhost.run is only a backup; the station returns to Cloudflare within 15 minutes. Pinggy tunnel removed. Includes 2.6.2: FormData uploads, parallel tunnel discovery and the Supabase Cloud Relay.",
   "downloadUrl": "https://raw.githubusercontent.com/Shivamborn2shine/PrintPilot/main/bin/PrintAway.exe",
   "fallbackUrl": "https://printaway-ten.vercel.app/downloads/PrintAway.exe"
 }

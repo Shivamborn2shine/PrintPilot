@@ -177,7 +177,10 @@ for ($attempt = 1; $attempt -le $maxRetries; $attempt++) {
 
     $procInfo = New-Object System.Diagnostics.ProcessStartInfo
     $procInfo.FileName = $cloudflared
-    $procInfo.Arguments = "tunnel --protocol http2 --url http://127.0.0.1:$LocalPort"
+    # Attempt 1 signs up with api.trycloudflare.com directly; later attempts go through the PrintAway
+    # relay on Vercel, for networks that block *.trycloudflare.com but allow the tunnel edge (port 7844).
+    $quickService = if ($attempt -gt 1) { " --quick-service https://printaway-ten.vercel.app/api/cf-quick" } else { "" }
+    $procInfo.Arguments = "tunnel --no-autoupdate --protocol http2 --edge-ip-version 4 --url http://127.0.0.1:$LocalPort$quickService"
     $procInfo.RedirectStandardError = $true
     $procInfo.RedirectStandardOutput = $true
     $procInfo.UseShellExecute = $false
@@ -257,45 +260,6 @@ if (-not $tunnelUrl) {
                 if ($line -match "https://([a-zA-Z0-9.-]+\.lhr\.(life|rocks|pro))") {
                     $tunnelUrl = "https://" + $matches[1]
                     Write-Host "  [OK] Resilient OpenSSH Fallback Tunnel Live: $tunnelUrl" -ForegroundColor Green
-                    break
-                }
-            }
-            Start-Sleep -Milliseconds 100
-        }
-    } finally {
-        $logWriter.Close()
-    }
-}
-
-if (-not $tunnelUrl) {
-    Write-Host "Activating backup Pinggy SSH Tunnel (a.pinggy.io)..." -ForegroundColor Yellow
-    try { if ($tunnelProcess -and -not $tunnelProcess.HasExited) { $tunnelProcess.Kill() } } catch { }
-    $sshExe = "C:\Windows\System32\OpenSSH\ssh.exe"
-    if (-not (Test-Path $sshExe)) { $sshExe = "ssh.exe" }
-
-    $pinggyInfo = New-Object System.Diagnostics.ProcessStartInfo
-    $pinggyInfo.FileName = $sshExe
-    $pinggyInfo.Arguments = "-T -p 443 -o StrictHostKeyChecking=no -o UserKnownHostsFile=NUL -o ServerAliveInterval=15 -o ServerAliveCountMax=3 -o ExitOnForwardFailure=yes -o ConnectTimeout=10 -R0:127.0.0.1:$LocalPort qr@a.pinggy.io"
-    $pinggyInfo.RedirectStandardOutput = $true
-    $pinggyInfo.RedirectStandardError = $true
-    $pinggyInfo.UseShellExecute = $false
-    $pinggyInfo.CreateNoWindow = $true
-
-    $tunnelProcess = New-Object System.Diagnostics.Process
-    $tunnelProcess.StartInfo = $pinggyInfo
-    $null = $tunnelProcess.Start()
-
-    $deadline = (Get-Date).AddSeconds(15)
-    $logWriter = [System.IO.File]::AppendText($tunnelLog)
-    try {
-        while ((Get-Date) -lt $deadline -and -not $tunnelUrl -and -not $tunnelProcess.HasExited) {
-            $line = $tunnelProcess.StandardOutput.ReadLine()
-            if ($line) {
-                $logWriter.WriteLine($line)
-                $logWriter.Flush()
-                if ($line -match "https://([a-zA-Z0-9.-]+\.(?:free\.pinggy\.link|pinggy\.link|pinggy\.io))") {
-                    $tunnelUrl = "https://" + $matches[1]
-                    Write-Host "  [OK] Backup Pinggy SSH Tunnel Live: $tunnelUrl" -ForegroundColor Green
                     break
                 }
             }

@@ -44,14 +44,6 @@ namespace PrintAway
         [STAThread]
         public static int Main(string[] args)
         {
-            // Launched by ssh.exe as SSH_ASKPASS for the Pinggy tunnel: Pinggy's free tier asks for a
-            // password and accepts an empty one, so answer with a blank line and exit immediately.
-            if (Environment.GetEnvironmentVariable(PrintAway.Tunnel.TunnelManager.AskPassEnvVar) == "1")
-            {
-                try { Console.Out.WriteLine(); Console.Out.Flush(); } catch { }
-                return 0;
-            }
-
             ServicePointManager.SecurityProtocol = SecurityProtocolType.Tls12 | SecurityProtocolType.Tls11 | SecurityProtocolType.Tls;
             ServicePointManager.DefaultConnectionLimit = 64;
             ServicePointManager.Expect100Continue = false;

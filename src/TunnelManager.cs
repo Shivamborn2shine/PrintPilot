@@ -15,10 +15,13 @@ namespace PrintAway.Tunnel
     {
         private static readonly Regex CloudflareUrlRegex = new Regex(@"https://(?!api\.|pkg\.|update\.|staging\.|www\.)([a-zA-Z0-9-]{5,}\.trycloudflare\.com)", RegexOptions.Compiled | RegexOptions.IgnoreCase);
         private static readonly Regex SshUrlRegex = new Regex(@"https://[a-zA-Z0-9.-]+\.lhr\.(?:life|rocks|pro)", RegexOptions.Compiled | RegexOptions.IgnoreCase);
-        private static readonly Regex PinggyUrlRegex = new Regex(@"https://[a-zA-Z0-9.-]+\.(?:pinggy-free\.link|free\.pinggy\.link|pinggy\.link|pinggy\.online)", RegexOptions.Compiled | RegexOptions.IgnoreCase);
 
-        /// <summary>Set on ssh.exe's environment so PrintAway.exe, re-launched as SSH_ASKPASS, prints an empty password.</summary>
-        public const string AskPassEnvVar = "PRINTAWAY_SSH_ASKPASS";
+        /// <summary>How long to stay on the localhost.run backup before trying Cloudflare again.</summary>
+        private const int CloudflareRetryMinutes = 15;
+
+        /// <summary>Consecutive 15s watchdog failures tolerated before a Cloudflare tunnel is replaced (= new URL).</summary>
+        private const int CloudflareEdgeFailureLimit = 8;
+        private const int CloudflarePublicFailureLimit = 12;
 
         private readonly string _rootDir;
         private readonly int _localPort;
@@ -37,10 +40,17 @@ namespace PrintAway.Tunnel
         private DateTime _lastNtfyPublishUtc = DateTime.MinValue;
         private string _lastNtfyPublishedUrl;
         private DateTime _cloudflareCooldownUntilUtc = DateTime.MinValue;
-        private DateTime _localhostRunCooldownUntilUtc = DateTime.MinValue;
         private int _throttleSwitchGen;
         private static readonly Regex LocalhostRunThrottleRegex = new Regex(@"is being slowed|have been slowed by|will be slowed", RegexOptions.Compiled | RegexOptions.IgnoreCase);
-        private DateTime _pinggyCooldownUntilUtc = DateTime.MinValue;
+        private static readonly Regex ReadyConnectionsRegex = new Regex(@"""readyConnections""\s*:\s*(\d+)", RegexOptions.Compiled);
+
+        // Cloudflare health, read from cloudflared's local /ready endpoint (works even where this PC
+        // cannot open *.trycloudflare.com itself).
+        private bool _quickViaRelay;
+        private int _metricsPort;
+        private int _edgeFailures;
+        private int _publicFailures;
+        private bool _publicProbeEverOk;
         private int _consecutiveHealthFailures;
         private int _generation;
         private bool _disposed;
@@ -175,6 +185,7 @@ namespace PrintAway.Tunnel
                 _consecutiveHealthFailures = 0;
                 _isSwitchingToFallback = false;
                 _healthStatus = "Connecting";
+                _metricsPort = 0;
 
                 string token, customUrl, providerMode;
                 ReadConfig(out token, out customUrl, out providerMode);
@@ -209,14 +220,7 @@ namespace PrintAway.Tunnel
                     return;
                 }
 
-                // Case D: Explicit Pinggy SSH tunnel requested
-                if (providerMode == "pinggy")
-                {
-                    StartPinggySshTunnel(gen);
-                    return;
-                }
-
-                // Case E: Explicit Cloudflare mode requested -> force clear cooldown
+                // Case D: Explicit Cloudflare mode requested -> force clear cooldown
                 if (providerMode == "cloudflare")
                 {
                     _cloudflareCooldownUntilUtc = DateTime.MinValue;
@@ -224,11 +228,12 @@ namespace PrintAway.Tunnel
                     return;
                 }
 
-                // Case F: Resilient Auto Cascade (Cloudflare Quick -> Pinggy SSH -> OpenSSH localhost.run)
+                // Case E: Auto (also the old "pinggy" setting): Cloudflare Quick (direct or relay sign-up),
+                // localhost.run only while Cloudflare is cooling down.
                 if (DateTime.UtcNow < _cloudflareCooldownUntilUtc)
                 {
-                    Log("Cloudflare Quick Tunnel in cooldown. Launching SSH tunnel fallback...");
-                    StartBestFallback(gen);
+                    Log("Cloudflare Quick Tunnel in cooldown. Using localhost.run until it ends...");
+                    StartOpenSshTunnel(gen);
                 }
                 else
                 {
@@ -253,11 +258,15 @@ namespace PrintAway.Tunnel
             {
                 Log("Starting authenticated Cloudflare Named Tunnel (Zero Rate-Limit)...");
                 _activeProviderName = "Cloudflare Named Tunnel";
+                _metricsPort = FindFreeLocalPort();
+                ResetCloudflareHealth();
 
                 var psi = new ProcessStartInfo
                 {
                     FileName = exePath,
-                    Arguments = string.Format(CultureInfo.InvariantCulture, "tunnel --no-autoupdate --protocol http2 run --token {0}", token),
+                    Arguments = string.Format(CultureInfo.InvariantCulture,
+                        "tunnel --no-autoupdate --protocol http2 --edge-ip-version 4 --retries 8 --grace-period 10s --metrics 127.0.0.1:{0} run --token {1}",
+                        _metricsPort, token),
                     CreateNoWindow = true,
                     UseShellExecute = false,
                     RedirectStandardOutput = true,
@@ -334,160 +343,172 @@ namespace PrintAway.Tunnel
             }
         }
 
+        // ---- Cloudflare quick tunnel ----------------------------------------------------------------
+        // cloudflared asks api.trycloudflare.com for a quick tunnel once, then carries all traffic over
+        // Cloudflare's edge on port 7844. Some networks block every *.trycloudflare.com name but still
+        // allow the edge, so the sign-up can also go through the storefront's relay (api/cf-quick on
+        // Vercel). Each start uses the route that last worked, then tries the other one.
+
+        private static string QuickTunnelRelayUrl
+        {
+            get { return PrintAway.Config.StationConfig.ActiveStorefrontUrl.TrimEnd('/') + "/api/cf-quick"; }
+        }
+
         private void StartCloudflareQuickTunnel(int gen)
         {
-            if (_disposed || Volatile.Read(ref _generation) != gen) return;
+            StartCloudflareQuickTunnel(gen, _quickViaRelay, false);
+        }
 
-            string exePath = EnsureCloudflared();
-            if (string.IsNullOrEmpty(exePath))
+        private void StartCloudflareQuickTunnel(int gen, bool viaRelay, bool isRetry)
+        {
+            lock (_lock)
             {
-                Log("Cloudflare binary not found. Activating OpenSSH tunnel...");
-                StartOpenSshTunnel(gen);
-                return;
-            }
+                if (_disposed || Volatile.Read(ref _generation) != gen) return;
 
-            try
-            {
-                Log("Connecting Cloudflare HTTP/2 Quick Tunnel...");
-                _activeProviderName = "Cloudflare Quick Tunnel";
-                _isSwitchingToFallback = false;
-
-                var psi = new ProcessStartInfo
+                string exePath = EnsureCloudflared();
+                if (string.IsNullOrEmpty(exePath))
                 {
-                    FileName = exePath,
-                    Arguments = string.Format(CultureInfo.InvariantCulture, "tunnel --no-autoupdate --protocol http2 --url http://127.0.0.1:{0}", _localPort),
-                    CreateNoWindow = true,
-                    UseShellExecute = false,
-                    RedirectStandardOutput = true,
-                    RedirectStandardError = true,
-                    WorkingDirectory = Path.GetDirectoryName(exePath)
-                };
+                    Log("Cloudflare binary not found. Activating localhost.run tunnel...");
+                    StartOpenSshTunnel(gen);
+                    return;
+                }
 
-                _tunnelProcess = new Process { StartInfo = psi };
-                _tunnelProcess.OutputDataReceived += (s, e) => HandleCloudflareOutput(e.Data, gen);
-                _tunnelProcess.ErrorDataReceived += (s, e) => HandleCloudflareOutput(e.Data, gen);
-                _tunnelProcess.EnableRaisingEvents = true;
-                _tunnelProcess.Exited += (s, e) =>
+                try
                 {
-                    if (_disposed || _isSwitchingToFallback || Volatile.Read(ref _generation) != gen) return;
-
-                    bool hadUrl = !string.IsNullOrEmpty(_liveTunnelUrl);
+                    StopProcessOnly();
+                    _isSwitchingToFallback = false;
                     _liveTunnelUrl = null;
-                    _healthStatus = "Reconnecting";
-                    FireCaptured("");
+                    _metricsPort = FindFreeLocalPort();
+                    ResetCloudflareHealth();
+                    _activeProviderName = "Cloudflare Quick Tunnel";
+                    Log(viaRelay
+                        ? "Connecting Cloudflare Quick Tunnel (sign-up through the PrintAway relay)..."
+                        : "Connecting Cloudflare Quick Tunnel...");
 
-                    if (!hadUrl)
+                    // --protocol http2: TCP 7844 gets through networks that drop QUIC/UDP.
+                    // --retries 8: cloudflared re-dials dropped edge connections itself for a few minutes
+                    //   before giving up, so a network blip keeps the same public URL.
+                    // --metrics: its /ready endpoint is how the watchdog checks health from this PC.
+                    string args = string.Format(
+                        CultureInfo.InvariantCulture,
+                        "tunnel --no-autoupdate --protocol http2 --edge-ip-version 4 --retries 8 --grace-period 10s " +
+                        "--metrics 127.0.0.1:{0} --url http://127.0.0.1:{1}",
+                        _metricsPort, _localPort);
+                    if (viaRelay) args += " --quick-service " + QuickTunnelRelayUrl;
+
+                    var psi = new ProcessStartInfo
                     {
-                        Log("Cloudflare Quick Tunnel exited (rate-limited or offline). Activating OpenSSH fallback...");
-                        _cloudflareCooldownUntilUtc = DateTime.UtcNow.AddMinutes(5);
-                        SwitchToFallbackLocked(gen, true);
-                    }
-                    else
-                    {
-                        Log("Cloudflare Tunnel disconnected under load. Reconnecting automatically...");
-                        ScheduleRestart(3000, gen);
-                    }
-                };
+                        FileName = exePath,
+                        Arguments = args,
+                        CreateNoWindow = true,
+                        UseShellExecute = false,
+                        RedirectStandardOutput = true,
+                        RedirectStandardError = true,
+                        WorkingDirectory = Path.GetDirectoryName(exePath)
+                    };
 
-                _tunnelProcess.Start();
-                RecordOwnedPid(_tunnelProcess.Id);
-                _tunnelProcess.BeginOutputReadLine();
-                _tunnelProcess.BeginErrorReadLine();
-
-                // Startup timeout guard: if no URL is captured in 20s, do not hang -> fall back to OpenSSH
-                ThreadPool.QueueUserWorkItem(_ =>
-                {
-                    Thread.Sleep(20000);
-                    lock (_lock)
+                    _tunnelProcess = new Process { StartInfo = psi };
+                    _tunnelProcess.OutputDataReceived += (s, e) => HandleCloudflareOutput(e.Data, gen, viaRelay);
+                    _tunnelProcess.ErrorDataReceived += (s, e) => HandleCloudflareOutput(e.Data, gen, viaRelay);
+                    _tunnelProcess.EnableRaisingEvents = true;
+                    _tunnelProcess.Exited += (s, e) =>
                     {
                         if (_disposed || _isSwitchingToFallback || Volatile.Read(ref _generation) != gen) return;
-                        if (string.IsNullOrEmpty(_liveTunnelUrl))
+
+                        bool hadUrl = !string.IsNullOrEmpty(_liveTunnelUrl);
+                        _liveTunnelUrl = null;
+                        _healthStatus = "Reconnecting";
+                        FireCaptured("");
+
+                        if (hadUrl)
                         {
-                            Log("Cloudflare Quick Tunnel timed out after 20s. Switching to OpenSSH fallback...");
-                            _cloudflareCooldownUntilUtc = DateTime.UtcNow.AddMinutes(5);
-                            SwitchToFallbackLocked(gen, true);
+                            Log("Cloudflare Quick Tunnel ended. Reconnecting in 3s...");
+                            ScheduleRestart(3000, gen);
                         }
-                    }
-                });
-            }
-            catch (Exception ex)
-            {
-                Log("Cloudflare failed to start (" + ex.Message + "). Activating OpenSSH tunnel...");
-                _cloudflareCooldownUntilUtc = DateTime.UtcNow.AddMinutes(5);
-                StartOpenSshTunnel(gen);
+                        else
+                        {
+                            ThreadPool.QueueUserWorkItem(_ => OnQuickTunnelFailed(gen, viaRelay, isRetry, "Cloudflare Quick Tunnel sign-up failed"));
+                        }
+                    };
+
+                    _tunnelProcess.Start();
+                    RecordOwnedPid(_tunnelProcess.Id);
+                    _tunnelProcess.BeginOutputReadLine();
+                    _tunnelProcess.BeginErrorReadLine();
+
+                    // Startup guard: no URL within 25s counts as a failed attempt.
+                    ThreadPool.QueueUserWorkItem(_ =>
+                    {
+                        Thread.Sleep(25000);
+                        OnQuickTunnelFailed(gen, viaRelay, isRetry, "Cloudflare Quick Tunnel did not come up within 25s");
+                    });
+                }
+                catch (Exception ex)
+                {
+                    Log("Cloudflare failed to start (" + ex.Message + "). Using localhost.run for now...");
+                    _cloudflareCooldownUntilUtc = DateTime.UtcNow.AddMinutes(CloudflareRetryMinutes);
+                    StartOpenSshTunnel(gen);
+                }
             }
         }
 
-        private void HandleCloudflareOutput(string line, int gen)
+        // First failure: try the other sign-up route. Second failure: localhost.run until the cooldown ends.
+        private void OnQuickTunnelFailed(int gen, bool viaRelay, bool isRetry, string reason)
+        {
+            lock (_lock)
+            {
+                if (_disposed || Volatile.Read(ref _generation) != gen) return;
+                if (!string.IsNullOrEmpty(_liveTunnelUrl)) return;
+
+                int nextGen = Interlocked.Increment(ref _generation);
+                StopProcessOnly();
+
+                if (!isRetry)
+                {
+                    Log(reason + (viaRelay
+                        ? ". Trying direct sign-up with trycloudflare.com..."
+                        : ". This network may block trycloudflare.com; signing up through the PrintAway relay..."));
+                    StartCloudflareQuickTunnel(nextGen, !viaRelay, true);
+                    return;
+                }
+
+                Log(reason + " on both sign-up routes. Using localhost.run (slower) and retrying Cloudflare in " +
+                    CloudflareRetryMinutes.ToString(CultureInfo.InvariantCulture) + " minutes.");
+                _cloudflareCooldownUntilUtc = DateTime.UtcNow.AddMinutes(CloudflareRetryMinutes);
+                StartOpenSshTunnel(nextGen);
+            }
+        }
+
+        private void HandleCloudflareOutput(string line, int gen, bool viaRelay)
         {
             if (string.IsNullOrEmpty(line) || Volatile.Read(ref _generation) != gen) return;
             AppendTunnelLog("[CF-Quick] " + line);
 
-            if (line.IndexOf("status 429", StringComparison.OrdinalIgnoreCase) >= 0 ||
-                line.IndexOf("quick tunnel provisioning failed", StringComparison.OrdinalIgnoreCase) >= 0 ||
-                line.IndexOf("too many requests", StringComparison.OrdinalIgnoreCase) >= 0)
-            {
-                _cloudflareCooldownUntilUtc = DateTime.UtcNow.AddMinutes(5);
-                if (!_isSwitchingToFallback)
-                {
-                    Log("Cloudflare rate-limit active (HTTP 429). Switching immediately to resilient OpenSSH tunnel...");
-                    ThreadPool.QueueUserWorkItem(_ =>
-                    {
-                        lock (_lock)
-                        {
-                            SwitchToFallbackLocked(gen, true);
-                        }
-                    });
-                }
-                return;
-            }
-
             Match match = CloudflareUrlRegex.Match(line);
-            if (match.Success)
-            {
-                string capturedUrl = match.Value.Trim().TrimEnd('/');
-                if (!IsValidPublicTunnelUrl(capturedUrl)) return;
+            if (!match.Success) return;
 
-                if (!string.Equals(_liveTunnelUrl, capturedUrl, StringComparison.OrdinalIgnoreCase))
-                {
-                    _liveTunnelUrl = capturedUrl;
-                    _activeProviderName = "Cloudflare Tunnel";
-                    _healthStatus = "Live";
-                    _consecutiveHealthFailures = 0;
-                    _lastHealthOkUtc = DateTime.UtcNow;
-                    Log("Cloudflare Tunnel Live: " + capturedUrl);
-                    PublishToRegistry(capturedUrl, true);
-                    FireCaptured(capturedUrl);
-                }
+            string capturedUrl = match.Value.Trim().TrimEnd('/');
+            if (!IsValidPublicTunnelUrl(capturedUrl)) return;
+
+            lock (_lock)
+            {
+                if (Volatile.Read(ref _generation) != gen) return;
+                if (string.Equals(_liveTunnelUrl, capturedUrl, StringComparison.OrdinalIgnoreCase)) return;
+                _liveTunnelUrl = capturedUrl;
+                _quickViaRelay = viaRelay;
+                _activeProviderName = viaRelay ? "Cloudflare Tunnel (relay sign-up)" : "Cloudflare Tunnel";
+                _healthStatus = "Live";
+                _consecutiveHealthFailures = 0;
+                _lastHealthOkUtc = DateTime.UtcNow;
             }
+            Log("Cloudflare Tunnel Live: " + capturedUrl);
+            PublishToRegistry(capturedUrl, true);
+            FireCaptured(capturedUrl);
         }
 
-        private void SwitchToFallbackLocked(int expectedGen, bool useOpenSshFirst)
-        {
-            if (_disposed || Volatile.Read(ref _generation) != expectedGen) return;
-            _isSwitchingToFallback = true;
-            _liveTunnelUrl = null;
-            _healthStatus = "Reconnecting";
-            int newGen = Interlocked.Increment(ref _generation);
-            StopProcessOnly();
-            _isSwitchingToFallback = false;
-
-            StartBestFallback(newGen);
-        }
-
-        // Pinggy first (localhost.run's free tier throttles uploads to a crawl), localhost.run when Pinggy
-        // has recently failed. Never leaves the station without a tunnel: a slow tunnel beats none.
-        private void StartBestFallback(int gen)
-        {
-            if (DateTime.UtcNow >= _pinggyCooldownUntilUtc)
-            {
-                StartPinggySshTunnel(gen);
-            }
-            else
-            {
-                StartOpenSshTunnel(gen);
-            }
-        }
+        // ---- localhost.run backup ------------------------------------------------------------------
+        // Only used while Cloudflare is unavailable: its free tier throttles uploads heavily. The
+        // watchdog moves the station back to Cloudflare as soon as the Cloudflare cooldown ends.
 
         private void StartOpenSshTunnel(int gen)
         {
@@ -500,6 +521,7 @@ namespace PrintAway.Tunnel
                     StopProcessOnly();
                     _isSwitchingToFallback = false;
                     _liveTunnelUrl = null;
+                    _metricsPort = 0;
                     string sshExe = FindOpenSshExecutable();
                     Log("Connecting built-in OpenSSH Tunnel (localhost.run)...");
                     _activeProviderName = "OpenSSH (localhost.run)";
@@ -530,25 +552,15 @@ namespace PrintAway.Tunnel
                         _healthStatus = "Reconnecting";
                         FireCaptured("");
 
-                        if (!hadUrl)
-                        {
-                            Log("localhost.run SSH did not establish tunnel. Trying Pinggy SSH backup...");
-                            _localhostRunCooldownUntilUtc = DateTime.UtcNow.AddMinutes(3);
-                            ThreadPool.QueueUserWorkItem(_ =>
-                            {
-                                lock (_lock)
-                                {
-                                    if (_disposed || Volatile.Read(ref _generation) != gen) return;
-                                    int nextGen = Interlocked.Increment(ref _generation);
-                                    StopProcessOnly();
-                                    StartPinggySshTunnel(nextGen);
-                                }
-                            });
-                        }
-                        else
+                        if (hadUrl)
                         {
                             Log("OpenSSH tunnel disconnected. Reconnecting in 3s...");
                             ScheduleRestart(3000, gen);
+                        }
+                        else
+                        {
+                            Log("localhost.run did not connect. Retrying in 15s...");
+                            ScheduleRestart(15000, gen);
                         }
                     };
 
@@ -564,21 +576,18 @@ namespace PrintAway.Tunnel
                         lock (_lock)
                         {
                             if (_disposed || _isSwitchingToFallback || Volatile.Read(ref _generation) != gen) return;
-                            if (string.IsNullOrEmpty(_liveTunnelUrl))
-                            {
-                                Log("localhost.run timed out after 20s. Switching to Pinggy SSH backup...");
-                                _localhostRunCooldownUntilUtc = DateTime.UtcNow.AddMinutes(3);
-                                int nextGen = Interlocked.Increment(ref _generation);
-                                StopProcessOnly();
-                                StartPinggySshTunnel(nextGen);
-                            }
+                            if (!string.IsNullOrEmpty(_liveTunnelUrl)) return;
+                            Log("localhost.run timed out after 20s. Retrying in 15s...");
+                            int nextGen = Interlocked.Increment(ref _generation);
+                            StopProcessOnly();
+                            ScheduleRestart(15000, nextGen);
                         }
                     });
                 }
                 catch (Exception ex)
                 {
-                    Log("Failed to start OpenSSH tunnel: " + ex.Message + ". Trying Pinggy SSH...");
-                    StartPinggySshTunnel(gen);
+                    Log("Failed to start OpenSSH tunnel: " + ex.Message + ". Retrying in 15s...");
+                    ScheduleRestart(15000, gen);
                 }
             }
         }
@@ -588,26 +597,9 @@ namespace PrintAway.Tunnel
             if (string.IsNullOrEmpty(line) || Volatile.Read(ref _generation) != gen) return;
             AppendTunnelLog("[SSH-LHR] " + line);
 
-            // localhost.run's free tier throttles after a short burst: every request then waits up to a
-            // minute, which makes customer uploads hang. Move to Pinggy as soon as throttling is reported.
-            if (LocalhostRunThrottleRegex.IsMatch(line) && DateTime.UtcNow >= _pinggyCooldownUntilUtc &&
-                Interlocked.Exchange(ref _throttleSwitchGen, gen) != gen)
+            if (LocalhostRunThrottleRegex.IsMatch(line) && Interlocked.Exchange(ref _throttleSwitchGen, gen) != gen)
             {
-                ThreadPool.QueueUserWorkItem(_ =>
-                {
-                    lock (_lock)
-                    {
-                        if (_disposed || Volatile.Read(ref _generation) != gen) return;
-                        Log("localhost.run is throttling this tunnel (free-tier bandwidth limit). Switching to Pinggy SSH tunnel...");
-                        _localhostRunCooldownUntilUtc = DateTime.UtcNow.AddMinutes(30);
-                        _liveTunnelUrl = null;
-                        _healthStatus = "Reconnecting";
-                        FireCaptured("");
-                        int nextGen = Interlocked.Increment(ref _generation);
-                        StopProcessOnly();
-                        StartPinggySshTunnel(nextGen);
-                    }
-                });
+                Log("localhost.run is throttling this tunnel (free-tier limit); uploads will be slow until Cloudflare is back.");
                 return;
             }
 
@@ -631,194 +623,12 @@ namespace PrintAway.Tunnel
             }
         }
 
-        private void StartPinggySshTunnel(int gen)
-        {
-            lock (_lock)
-            {
-                if (_disposed || Volatile.Read(ref _generation) != gen) return;
-
-                try
-                {
-                    StopProcessOnly();
-                    _isSwitchingToFallback = false;
-                    _liveTunnelUrl = null;
-                    string sshExe = FindOpenSshExecutable();
-                    int debuggerPort = FindFreeLocalPort();
-                    Log("Connecting Pinggy SSH Tunnel...");
-                    _activeProviderName = "Pinggy SSH Tunnel";
-
-                    // - PubkeyAuthentication=no: a personal ~/.ssh key with loose permissions makes ssh stop and warn.
-                    // - Pinggy's free tier asks for a password and accepts an empty one; ssh gets it from SSH_ASKPASS
-                    //   (this exe re-launched with AskPassEnvVar) because there is no console to press Enter in.
-                    // - -L…:4300 exposes Pinggy's local web debugger, whose /urls endpoint reports the tunnel URL
-                    //   reliably even though ssh has no terminal to print it to.
-                    var psi = new ProcessStartInfo
-                    {
-                        FileName = sshExe,
-                        Arguments = string.Format(
-                            CultureInfo.InvariantCulture,
-                            "-T -p 443 -o StrictHostKeyChecking=no -o UserKnownHostsFile=NUL -o PubkeyAuthentication=no " +
-                            "-o PreferredAuthentications=none,keyboard-interactive,password -o NumberOfPasswordPrompts=1 " +
-                            "-o ServerAliveInterval=15 -o ServerAliveCountMax=3 -o ExitOnForwardFailure=yes -o ConnectTimeout=10 " +
-                            "-R0:127.0.0.1:{0} -L{1}:localhost:4300 free.pinggy.io",
-                            _localPort, debuggerPort),
-                        CreateNoWindow = true,
-                        UseShellExecute = false,
-                        RedirectStandardOutput = true,
-                        RedirectStandardError = true
-                    };
-                    string selfExe = System.Reflection.Assembly.GetEntryAssembly() != null
-                        ? System.Reflection.Assembly.GetEntryAssembly().Location
-                        : Process.GetCurrentProcess().MainModule.FileName;
-                    psi.EnvironmentVariables["SSH_ASKPASS"] = selfExe;
-                    psi.EnvironmentVariables["SSH_ASKPASS_REQUIRE"] = "force";
-                    psi.EnvironmentVariables["DISPLAY"] = "printaway:0";
-                    psi.EnvironmentVariables[AskPassEnvVar] = "1";
-
-                    _tunnelProcess = new Process { StartInfo = psi };
-                    _tunnelProcess.OutputDataReceived += (s, e) => HandlePinggyOutput(e.Data, gen);
-                    _tunnelProcess.ErrorDataReceived += (s, e) => HandlePinggyOutput(e.Data, gen);
-                    _tunnelProcess.EnableRaisingEvents = true;
-                    _tunnelProcess.Exited += (s, e) =>
-                    {
-                        if (_disposed || _isSwitchingToFallback || Volatile.Read(ref _generation) != gen) return;
-                        bool hadUrl = !string.IsNullOrEmpty(_liveTunnelUrl);
-                        _liveTunnelUrl = null;
-                        _healthStatus = "Reconnecting";
-                        FireCaptured("");
-                        if (hadUrl)
-                        {
-                            // Free Pinggy tunnels end after a while; reconnect (the registry gets the new URL).
-                            Log("Pinggy SSH tunnel ended. Reconnecting in 3s...");
-                            ScheduleRestart(3000, gen);
-                        }
-                        else
-                        {
-                            ThreadPool.QueueUserWorkItem(_ => FallBackFromPinggy(gen, "Pinggy SSH exited before the tunnel came up"));
-                        }
-                    };
-
-                    _tunnelProcess.Start();
-                    RecordOwnedPid(_tunnelProcess.Id);
-                    _tunnelProcess.BeginOutputReadLine();
-                    _tunnelProcess.BeginErrorReadLine();
-
-                    ThreadPool.QueueUserWorkItem(_ => PollPinggyDebuggerForUrl(debuggerPort, gen));
-
-                    // Startup timeout guard (25s)
-                    ThreadPool.QueueUserWorkItem(_ =>
-                    {
-                        Thread.Sleep(25000);
-                        if (string.IsNullOrEmpty(_liveTunnelUrl))
-                        {
-                            FallBackFromPinggy(gen, "Pinggy did not come up within 25s");
-                        }
-                    });
-                }
-                catch (Exception ex)
-                {
-                    Log("Pinggy SSH failed to start: " + ex.Message + ".");
-                    _pinggyCooldownUntilUtc = DateTime.UtcNow.AddMinutes(30);
-                    _localhostRunCooldownUntilUtc = DateTime.MinValue;
-                    StartOpenSshTunnel(gen);
-                }
-            }
-        }
-
-        // Pinggy failed: rest it for 30 minutes and use localhost.run (slow beats offline).
-        private void FallBackFromPinggy(int gen, string reason)
-        {
-            lock (_lock)
-            {
-                if (_disposed || _isSwitchingToFallback || Volatile.Read(ref _generation) != gen) return;
-                if (!string.IsNullOrEmpty(_liveTunnelUrl)) return;
-                Log(reason + ". Using localhost.run instead.");
-                _pinggyCooldownUntilUtc = DateTime.UtcNow.AddMinutes(30);
-                _localhostRunCooldownUntilUtc = DateTime.MinValue;
-                int nextGen = Interlocked.Increment(ref _generation);
-                StopProcessOnly();
-                StartOpenSshTunnel(nextGen);
-            }
-        }
-
         private static int FindFreeLocalPort()
         {
             var listener = new System.Net.Sockets.TcpListener(IPAddress.Loopback, 0);
             listener.Start();
             try { return ((IPEndPoint)listener.LocalEndpoint).Port; }
             finally { listener.Stop(); }
-        }
-
-        private void PollPinggyDebuggerForUrl(int debuggerPort, int gen)
-        {
-            var serializer = new JavaScriptSerializer();
-            for (int attempt = 0; attempt < 24; attempt++)
-            {
-                Thread.Sleep(1000);
-                if (_disposed || Volatile.Read(ref _generation) != gen || !string.IsNullOrEmpty(_liveTunnelUrl)) return;
-                try
-                {
-                    var req = (HttpWebRequest)WebRequest.Create("http://127.0.0.1:" + debuggerPort.ToString(CultureInfo.InvariantCulture) + "/urls");
-                    req.Timeout = 2000;
-                    req.ReadWriteTimeout = 2000;
-                    req.Proxy = null;
-                    using (var res = (HttpWebResponse)req.GetResponse())
-                    using (var reader = new StreamReader(res.GetResponseStream(), Encoding.UTF8))
-                    {
-                        var parsed = serializer.Deserialize<Dictionary<string, object>>(reader.ReadToEnd());
-                        object urlsObj;
-                        if (parsed == null || !parsed.TryGetValue("urls", out urlsObj)) continue;
-                        var urls = urlsObj as System.Collections.IEnumerable;
-                        if (urls == null) continue;
-                        foreach (object u in urls)
-                        {
-                            string s = Convert.ToString(u, CultureInfo.InvariantCulture);
-                            if (s != null && s.StartsWith("https://", StringComparison.OrdinalIgnoreCase))
-                            {
-                                AcceptPinggyUrl(s, gen);
-                                return;
-                            }
-                        }
-                    }
-                }
-                catch
-                {
-                    // Debugger not listening yet (ssh still connecting); keep polling.
-                }
-            }
-        }
-
-        private void HandlePinggyOutput(string line, int gen)
-        {
-            if (string.IsNullOrEmpty(line) || Volatile.Read(ref _generation) != gen) return;
-            AppendTunnelLog("[SSH-Pinggy] " + line);
-
-            Match match = PinggyUrlRegex.Match(line);
-            if (match.Success)
-            {
-                AcceptPinggyUrl(match.Value, gen);
-            }
-        }
-
-        private void AcceptPinggyUrl(string rawUrl, int gen)
-        {
-            if (Volatile.Read(ref _generation) != gen) return;
-            string url = (rawUrl ?? "").Trim().TrimEnd('/');
-            if (!IsValidPublicTunnelUrl(url)) return;
-            lock (_lock)
-            {
-                if (Volatile.Read(ref _generation) != gen) return;
-                if (string.Equals(_liveTunnelUrl, url, StringComparison.OrdinalIgnoreCase)) return;
-                _liveTunnelUrl = url;
-                _activeProviderName = "Pinggy SSH Tunnel";
-                _healthStatus = "Live";
-                _consecutiveHealthFailures = 0;
-                _lastHealthOkUtc = DateTime.UtcNow;
-                _pinggyCooldownUntilUtc = DateTime.MinValue;
-            }
-            Log("Pinggy Tunnel Live: " + url);
-            PublishToRegistry(url, true);
-            FireCaptured(url);
         }
 
         private string FindOpenSshExecutable()
@@ -869,8 +679,6 @@ namespace PrintAway.Tunnel
         {
             Log("Restarting tunnel connection...");
             _cloudflareCooldownUntilUtc = DateTime.MinValue;
-            _localhostRunCooldownUntilUtc = DateTime.MinValue;
-            _pinggyCooldownUntilUtc = DateTime.MinValue;
             Stop();
             _liveTunnelUrl = null;
             Start();
@@ -931,8 +739,93 @@ namespace PrintAway.Tunnel
                 detail = "Tunnel Healthy (" + (_activeProviderName ?? "Active") + ") -> " + url;
                 return true;
             }
+            int edgeConnections;
+            if (_metricsPort > 0 && ProbeCloudflaredReady(_metricsPort, out edgeConnections))
+            {
+                _lastHealthOkUtc = DateTime.UtcNow;
+                _healthStatus = "Live";
+                detail = "Cloudflare tunnel connected (" + edgeConnections.ToString(CultureInfo.InvariantCulture) +
+                         " edge connections) -> " + url + "\n\nThis PC could not open the link itself (" + err +
+                         "). Some networks block *.trycloudflare.com for the shop PC only; test the link from a phone on mobile data.";
+                return true;
+            }
             detail = "Public probe failed for " + url + ": " + err;
             return false;
+        }
+
+        private void ResetCloudflareHealth()
+        {
+            _edgeFailures = 0;
+            _publicFailures = 0;
+            _publicProbeEverOk = false;
+        }
+
+        // cloudflared's metrics server answers /ready with 200 and {"readyConnections":N} while at
+        // least one edge connection is up, and 503 while it is reconnecting.
+        private static bool ProbeCloudflaredReady(int metricsPort, out int readyConnections)
+        {
+            readyConnections = 0;
+            try
+            {
+                var req = (HttpWebRequest)WebRequest.Create("http://127.0.0.1:" + metricsPort.ToString(CultureInfo.InvariantCulture) + "/ready");
+                req.Timeout = 3000;
+                req.ReadWriteTimeout = 3000;
+                req.Proxy = null;
+                using (var resp = (HttpWebResponse)req.GetResponse())
+                using (var sr = new StreamReader(resp.GetResponseStream()))
+                {
+                    Match m = ReadyConnectionsRegex.Match(sr.ReadToEnd());
+                    if (m.Success) int.TryParse(m.Groups[1].Value, NumberStyles.Integer, CultureInfo.InvariantCulture, out readyConnections);
+                    return (int)resp.StatusCode == 200 && readyConnections > 0;
+                }
+            }
+            catch
+            {
+                return false;
+            }
+        }
+
+        // Replacing a quick tunnel changes its URL, so be patient: cloudflared reconnects dropped edge
+        // connections by itself, and a busy tunnel (large uploads) can answer slowly without being dead.
+        private void CheckCloudflareHealth(string url)
+        {
+            int edgeConnections;
+            if (ProbeCloudflaredReady(_metricsPort, out edgeConnections))
+            {
+                _edgeFailures = 0;
+                _consecutiveHealthFailures = 0;
+                _lastHealthOkUtc = DateTime.UtcNow;
+                _healthStatus = "Live";
+            }
+            else
+            {
+                _edgeFailures++;
+                _healthStatus = "Reconnecting";
+            }
+
+            // The public check only counts once it has worked from this PC at least once: some networks
+            // block *.trycloudflare.com for the station while customers on mobile data reach it fine.
+            string err;
+            if (ProbePublicTunnel(url, out err, 15000))
+            {
+                _publicProbeEverOk = true;
+                _publicFailures = 0;
+            }
+            else if (_publicProbeEverOk)
+            {
+                _publicFailures++;
+            }
+
+            string why = null;
+            if (_edgeFailures >= CloudflareEdgeFailureLimit) why = "cloudflared has had no edge connection for 2 minutes";
+            else if (_publicFailures >= CloudflarePublicFailureLimit) why = "the public link stopped answering for 3 minutes (" + err + ")";
+            if (why == null) return;
+
+            Log("Watchdog: " + why + ". Restarting the Cloudflare tunnel...");
+            _healthStatus = "Recovering";
+            _liveTunnelUrl = null;
+            FireCaptured("");
+            Start();
         }
 
         private void RunWatchdogCheck()
@@ -941,11 +834,32 @@ namespace PrintAway.Tunnel
             _probeInFlight = true;
             try
             {
+                string tok, cust, mode;
+                ReadConfig(out tok, out cust, out mode);
+                string provider = _activeProviderName ?? "";
+
+                // On the slow localhost.run backup: go back to Cloudflare as soon as its cooldown ends.
+                if (mode != "openssh" && mode != "custom" && string.IsNullOrWhiteSpace(tok) &&
+                    provider.IndexOf("localhost.run", StringComparison.OrdinalIgnoreCase) >= 0 &&
+                    DateTime.UtcNow >= _cloudflareCooldownUntilUtc)
+                {
+                    Log("Retrying Cloudflare (localhost.run is only the slow backup)...");
+                    Start();
+                    return;
+                }
+
                 // 1. Verify local server is accepting requests before blaming tunnel
                 if (!ProbeLocalServer()) return;
 
                 string url = _liveTunnelUrl;
                 if (!IsValidPublicTunnelUrl(url)) return;
+                if (mode == "custom" && string.IsNullOrWhiteSpace(tok)) return;
+
+                if (_metricsPort > 0 && provider.IndexOf("Cloudflare", StringComparison.OrdinalIgnoreCase) >= 0)
+                {
+                    CheckCloudflareHealth(url);
+                    return;
+                }
 
                 string err;
                 if (ProbePublicTunnel(url, out err))
@@ -970,26 +884,9 @@ namespace PrintAway.Tunnel
                 _consecutiveHealthFailures++;
                 Log("Watchdog detected dead/stalled tunnel (" + err + "). Auto-recovering...");
                 _healthStatus = "Recovering";
-
-                // If Cloudflare Quick Tunnel died under load, temporarily cool down Quick Tunnel so fallback takes over fast
-                string tok, cust, mode;
-                ReadConfig(out tok, out cust, out mode);
-                if (string.IsNullOrWhiteSpace(tok) && mode != "cloudflare" &&
-                    (_activeProviderName ?? "").IndexOf("Cloudflare", StringComparison.OrdinalIgnoreCase) >= 0)
-                {
-                    _cloudflareCooldownUntilUtc = DateTime.UtcNow.AddMinutes(5);
-                }
-                else if ((_activeProviderName ?? "").IndexOf("localhost.run", StringComparison.OrdinalIgnoreCase) >= 0 && mode == "auto")
-                {
-                    _localhostRunCooldownUntilUtc = DateTime.UtcNow.AddMinutes(10);
-                }
-
-                if (mode != "custom")
-                {
-                    _liveTunnelUrl = null;
-                    FireCaptured("");
-                    Start();
-                }
+                _liveTunnelUrl = null;
+                FireCaptured("");
+                Start();
             }
             catch { }
             finally
@@ -1018,17 +915,20 @@ namespace PrintAway.Tunnel
 
         private static bool ProbePublicTunnel(string baseUrl, out string error)
         {
+            return ProbePublicTunnel(baseUrl, out error, 6000);
+        }
+
+        private static bool ProbePublicTunnel(string baseUrl, out string error, int timeoutMs)
+        {
             error = null;
             try
             {
                 ServicePointManager.SecurityProtocol = SecurityProtocolType.Tls12 | SecurityProtocolType.Tls11 | SecurityProtocolType.Tls;
                 var req = (HttpWebRequest)WebRequest.Create(baseUrl.TrimEnd('/') + "/api/health");
                 req.Method = "GET";
-                req.Timeout = 6000;
-                req.ReadWriteTimeout = 6000;
+                req.Timeout = timeoutMs;
+                req.ReadWriteTimeout = timeoutMs;
                 req.UserAgent = "PrintAway-Watchdog/1.0";
-                // Pinggy free interstitial bypass header if applicable
-                req.Headers["X-Pinggy-No-Screen"] = "true";
                 using (var resp = (HttpWebResponse)req.GetResponse())
                 using (var sr = new StreamReader(resp.GetResponseStream()))
                 {
