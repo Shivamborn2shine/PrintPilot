@@ -15,7 +15,10 @@ namespace PrintAway.Tunnel
     {
         private static readonly Regex CloudflareUrlRegex = new Regex(@"https://(?!api\.|pkg\.|update\.|staging\.|www\.)([a-zA-Z0-9-]{5,}\.trycloudflare\.com)", RegexOptions.Compiled | RegexOptions.IgnoreCase);
         private static readonly Regex SshUrlRegex = new Regex(@"https://[a-zA-Z0-9.-]+\.lhr\.(?:life|rocks|pro)", RegexOptions.Compiled | RegexOptions.IgnoreCase);
-        private static readonly Regex PinggyUrlRegex = new Regex(@"https://[a-zA-Z0-9.-]+\.(?:free\.pinggy\.link|pinggy\.link|pinggy\.io)", RegexOptions.Compiled | RegexOptions.IgnoreCase);
+        private static readonly Regex PinggyUrlRegex = new Regex(@"https://[a-zA-Z0-9.-]+\.(?:pinggy-free\.link|free\.pinggy\.link|pinggy\.link|pinggy\.online)", RegexOptions.Compiled | RegexOptions.IgnoreCase);
+
+        /// <summary>Set on ssh.exe's environment so PrintAway.exe, re-launched as SSH_ASKPASS, prints an empty password.</summary>
+        public const string AskPassEnvVar = "PRINTAWAY_SSH_ASKPASS";
 
         private readonly string _rootDir;
         private readonly int _localPort;
@@ -221,18 +224,11 @@ namespace PrintAway.Tunnel
                     return;
                 }
 
-                // Case F: Resilient Auto Cascade (Cloudflare Quick -> OpenSSH localhost.run -> Pinggy SSH)
+                // Case F: Resilient Auto Cascade (Cloudflare Quick -> Pinggy SSH -> OpenSSH localhost.run)
                 if (DateTime.UtcNow < _cloudflareCooldownUntilUtc)
                 {
-                    Log("Cloudflare Quick Tunnel in rate-limit cooldown. Launching resilient OpenSSH tunnel...");
-                    if (DateTime.UtcNow < _localhostRunCooldownUntilUtc)
-                    {
-                        StartPinggySshTunnel(gen);
-                    }
-                    else
-                    {
-                        StartOpenSshTunnel(gen);
-                    }
+                    Log("Cloudflare Quick Tunnel in cooldown. Launching SSH tunnel fallback...");
+                    StartBestFallback(gen);
                 }
                 else
                 {
@@ -476,13 +472,20 @@ namespace PrintAway.Tunnel
             StopProcessOnly();
             _isSwitchingToFallback = false;
 
-            if (useOpenSshFirst && DateTime.UtcNow >= _localhostRunCooldownUntilUtc)
+            StartBestFallback(newGen);
+        }
+
+        // Pinggy first (localhost.run's free tier throttles uploads to a crawl), localhost.run when Pinggy
+        // has recently failed. Never leaves the station without a tunnel: a slow tunnel beats none.
+        private void StartBestFallback(int gen)
+        {
+            if (DateTime.UtcNow >= _pinggyCooldownUntilUtc)
             {
-                StartOpenSshTunnel(newGen);
+                StartPinggySshTunnel(gen);
             }
             else
             {
-                StartPinggySshTunnel(newGen);
+                StartOpenSshTunnel(gen);
             }
         }
 
@@ -587,7 +590,8 @@ namespace PrintAway.Tunnel
 
             // localhost.run's free tier throttles after a short burst: every request then waits up to a
             // minute, which makes customer uploads hang. Move to Pinggy as soon as throttling is reported.
-            if (LocalhostRunThrottleRegex.IsMatch(line) && Interlocked.Exchange(ref _throttleSwitchGen, gen) != gen)
+            if (LocalhostRunThrottleRegex.IsMatch(line) && DateTime.UtcNow >= _pinggyCooldownUntilUtc &&
+                Interlocked.Exchange(ref _throttleSwitchGen, gen) != gen)
             {
                 ThreadPool.QueueUserWorkItem(_ =>
                 {
@@ -595,7 +599,7 @@ namespace PrintAway.Tunnel
                     {
                         if (_disposed || Volatile.Read(ref _generation) != gen) return;
                         Log("localhost.run is throttling this tunnel (free-tier bandwidth limit). Switching to Pinggy SSH tunnel...");
-                        _localhostRunCooldownUntilUtc = DateTime.UtcNow.AddMinutes(60);
+                        _localhostRunCooldownUntilUtc = DateTime.UtcNow.AddMinutes(30);
                         _liveTunnelUrl = null;
                         _healthStatus = "Reconnecting";
                         FireCaptured("");
@@ -639,21 +643,37 @@ namespace PrintAway.Tunnel
                     _isSwitchingToFallback = false;
                     _liveTunnelUrl = null;
                     string sshExe = FindOpenSshExecutable();
-                    Log("Connecting backup Pinggy SSH Tunnel...");
+                    int debuggerPort = FindFreeLocalPort();
+                    Log("Connecting Pinggy SSH Tunnel...");
                     _activeProviderName = "Pinggy SSH Tunnel";
 
+                    // - PubkeyAuthentication=no: a personal ~/.ssh key with loose permissions makes ssh stop and warn.
+                    // - Pinggy's free tier asks for a password and accepts an empty one; ssh gets it from SSH_ASKPASS
+                    //   (this exe re-launched with AskPassEnvVar) because there is no console to press Enter in.
+                    // - -L…:4300 exposes Pinggy's local web debugger, whose /urls endpoint reports the tunnel URL
+                    //   reliably even though ssh has no terminal to print it to.
                     var psi = new ProcessStartInfo
                     {
                         FileName = sshExe,
                         Arguments = string.Format(
                             CultureInfo.InvariantCulture,
-                            "-T -p 443 -o StrictHostKeyChecking=no -o UserKnownHostsFile=NUL -o ServerAliveInterval=15 -o ServerAliveCountMax=3 -o ExitOnForwardFailure=yes -o ConnectTimeout=10 -R0:127.0.0.1:{0} qr@a.pinggy.io",
-                            _localPort),
+                            "-T -p 443 -o StrictHostKeyChecking=no -o UserKnownHostsFile=NUL -o PubkeyAuthentication=no " +
+                            "-o PreferredAuthentications=none,keyboard-interactive,password -o NumberOfPasswordPrompts=1 " +
+                            "-o ServerAliveInterval=15 -o ServerAliveCountMax=3 -o ExitOnForwardFailure=yes -o ConnectTimeout=10 " +
+                            "-R0:127.0.0.1:{0} -L{1}:localhost:4300 free.pinggy.io",
+                            _localPort, debuggerPort),
                         CreateNoWindow = true,
                         UseShellExecute = false,
                         RedirectStandardOutput = true,
                         RedirectStandardError = true
                     };
+                    string selfExe = System.Reflection.Assembly.GetEntryAssembly() != null
+                        ? System.Reflection.Assembly.GetEntryAssembly().Location
+                        : Process.GetCurrentProcess().MainModule.FileName;
+                    psi.EnvironmentVariables["SSH_ASKPASS"] = selfExe;
+                    psi.EnvironmentVariables["SSH_ASKPASS_REQUIRE"] = "force";
+                    psi.EnvironmentVariables["DISPLAY"] = "printaway:0";
+                    psi.EnvironmentVariables[AskPassEnvVar] = "1";
 
                     _tunnelProcess = new Process { StartInfo = psi };
                     _tunnelProcess.OutputDataReceived += (s, e) => HandlePinggyOutput(e.Data, gen);
@@ -662,12 +682,20 @@ namespace PrintAway.Tunnel
                     _tunnelProcess.Exited += (s, e) =>
                     {
                         if (_disposed || _isSwitchingToFallback || Volatile.Read(ref _generation) != gen) return;
+                        bool hadUrl = !string.IsNullOrEmpty(_liveTunnelUrl);
                         _liveTunnelUrl = null;
                         _healthStatus = "Reconnecting";
-                        _pinggyCooldownUntilUtc = DateTime.UtcNow.AddMinutes(2);
                         FireCaptured("");
-                        Log("Pinggy SSH tunnel disconnected. Reconnecting in 5s...");
-                        ScheduleRestart(5000, gen);
+                        if (hadUrl)
+                        {
+                            // Free Pinggy tunnels end after a while; reconnect (the registry gets the new URL).
+                            Log("Pinggy SSH tunnel ended. Reconnecting in 3s...");
+                            ScheduleRestart(3000, gen);
+                        }
+                        else
+                        {
+                            ThreadPool.QueueUserWorkItem(_ => FallBackFromPinggy(gen, "Pinggy SSH exited before the tunnel came up"));
+                        }
                     };
 
                     _tunnelProcess.Start();
@@ -675,25 +703,87 @@ namespace PrintAway.Tunnel
                     _tunnelProcess.BeginOutputReadLine();
                     _tunnelProcess.BeginErrorReadLine();
 
-                    // Startup timeout guard (20s)
+                    ThreadPool.QueueUserWorkItem(_ => PollPinggyDebuggerForUrl(debuggerPort, gen));
+
+                    // Startup timeout guard (25s)
                     ThreadPool.QueueUserWorkItem(_ =>
                     {
-                        Thread.Sleep(20000);
-                        lock (_lock)
+                        Thread.Sleep(25000);
+                        if (string.IsNullOrEmpty(_liveTunnelUrl))
                         {
-                            if (_disposed || _isSwitchingToFallback || Volatile.Read(ref _generation) != gen) return;
-                            if (string.IsNullOrEmpty(_liveTunnelUrl))
-                            {
-                                Log("All free public tunnels busy right now. Retrying in 8s...");
-                                ScheduleRestart(8000, gen);
-                            }
+                            FallBackFromPinggy(gen, "Pinggy did not come up within 25s");
                         }
                     });
                 }
                 catch (Exception ex)
                 {
-                    Log("Pinggy SSH fallback failed: " + ex.Message + ". Retrying in 10s...");
-                    ScheduleRestart(10000, gen);
+                    Log("Pinggy SSH failed to start: " + ex.Message + ".");
+                    _pinggyCooldownUntilUtc = DateTime.UtcNow.AddMinutes(30);
+                    _localhostRunCooldownUntilUtc = DateTime.MinValue;
+                    StartOpenSshTunnel(gen);
+                }
+            }
+        }
+
+        // Pinggy failed: rest it for 30 minutes and use localhost.run (slow beats offline).
+        private void FallBackFromPinggy(int gen, string reason)
+        {
+            lock (_lock)
+            {
+                if (_disposed || _isSwitchingToFallback || Volatile.Read(ref _generation) != gen) return;
+                if (!string.IsNullOrEmpty(_liveTunnelUrl)) return;
+                Log(reason + ". Using localhost.run instead.");
+                _pinggyCooldownUntilUtc = DateTime.UtcNow.AddMinutes(30);
+                _localhostRunCooldownUntilUtc = DateTime.MinValue;
+                int nextGen = Interlocked.Increment(ref _generation);
+                StopProcessOnly();
+                StartOpenSshTunnel(nextGen);
+            }
+        }
+
+        private static int FindFreeLocalPort()
+        {
+            var listener = new System.Net.Sockets.TcpListener(IPAddress.Loopback, 0);
+            listener.Start();
+            try { return ((IPEndPoint)listener.LocalEndpoint).Port; }
+            finally { listener.Stop(); }
+        }
+
+        private void PollPinggyDebuggerForUrl(int debuggerPort, int gen)
+        {
+            var serializer = new JavaScriptSerializer();
+            for (int attempt = 0; attempt < 24; attempt++)
+            {
+                Thread.Sleep(1000);
+                if (_disposed || Volatile.Read(ref _generation) != gen || !string.IsNullOrEmpty(_liveTunnelUrl)) return;
+                try
+                {
+                    var req = (HttpWebRequest)WebRequest.Create("http://127.0.0.1:" + debuggerPort.ToString(CultureInfo.InvariantCulture) + "/urls");
+                    req.Timeout = 2000;
+                    req.ReadWriteTimeout = 2000;
+                    req.Proxy = null;
+                    using (var res = (HttpWebResponse)req.GetResponse())
+                    using (var reader = new StreamReader(res.GetResponseStream(), Encoding.UTF8))
+                    {
+                        var parsed = serializer.Deserialize<Dictionary<string, object>>(reader.ReadToEnd());
+                        object urlsObj;
+                        if (parsed == null || !parsed.TryGetValue("urls", out urlsObj)) continue;
+                        var urls = urlsObj as System.Collections.IEnumerable;
+                        if (urls == null) continue;
+                        foreach (object u in urls)
+                        {
+                            string s = Convert.ToString(u, CultureInfo.InvariantCulture);
+                            if (s != null && s.StartsWith("https://", StringComparison.OrdinalIgnoreCase))
+                            {
+                                AcceptPinggyUrl(s, gen);
+                                return;
+                            }
+                        }
+                    }
+                }
+                catch
+                {
+                    // Debugger not listening yet (ssh still connecting); keep polling.
                 }
             }
         }
@@ -706,21 +796,29 @@ namespace PrintAway.Tunnel
             Match match = PinggyUrlRegex.Match(line);
             if (match.Success)
             {
-                string url = match.Value.Trim().TrimEnd('/');
-                if (!IsValidPublicTunnelUrl(url)) return;
-
-                if (!string.Equals(_liveTunnelUrl, url, StringComparison.OrdinalIgnoreCase))
-                {
-                    _liveTunnelUrl = url;
-                    _activeProviderName = "Pinggy SSH Tunnel";
-                    _healthStatus = "Live";
-                    _consecutiveHealthFailures = 0;
-                    _lastHealthOkUtc = DateTime.UtcNow;
-                    Log("Pinggy Backup Tunnel Live: " + url);
-                    PublishToRegistry(url, true);
-                    FireCaptured(url);
-                }
+                AcceptPinggyUrl(match.Value, gen);
             }
+        }
+
+        private void AcceptPinggyUrl(string rawUrl, int gen)
+        {
+            if (Volatile.Read(ref _generation) != gen) return;
+            string url = (rawUrl ?? "").Trim().TrimEnd('/');
+            if (!IsValidPublicTunnelUrl(url)) return;
+            lock (_lock)
+            {
+                if (Volatile.Read(ref _generation) != gen) return;
+                if (string.Equals(_liveTunnelUrl, url, StringComparison.OrdinalIgnoreCase)) return;
+                _liveTunnelUrl = url;
+                _activeProviderName = "Pinggy SSH Tunnel";
+                _healthStatus = "Live";
+                _consecutiveHealthFailures = 0;
+                _lastHealthOkUtc = DateTime.UtcNow;
+                _pinggyCooldownUntilUtc = DateTime.MinValue;
+            }
+            Log("Pinggy Tunnel Live: " + url);
+            PublishToRegistry(url, true);
+            FireCaptured(url);
         }
 
         private string FindOpenSshExecutable()
