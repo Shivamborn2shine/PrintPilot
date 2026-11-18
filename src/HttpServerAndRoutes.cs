@@ -135,6 +135,10 @@ namespace PrintAway.Web
             res.Headers["Access-Control-Allow-Headers"] = !string.IsNullOrWhiteSpace(reqCorsHeaders)
                 ? reqCorsHeaders
                 : "Content-Type, X-Admin-Session, X-CSRF-Token, X-Worker-Token, X-File-Name, X-PrintAway-Signature, Authorization, X-Pinggy-No-Screen";
+            if (!string.IsNullOrEmpty(req.Headers["Access-Control-Request-Private-Network"]))
+            {
+                res.Headers["Access-Control-Allow-Private-Network"] = "true";
+            }
             res.Headers["Access-Control-Max-Age"] = "86400";
 
             string path = (req.Url.AbsolutePath ?? "/").TrimEnd('/');
@@ -527,12 +531,15 @@ namespace PrintAway.Web
                         }
                         if (contentType.IndexOf("multipart/form-data", StringComparison.OrdinalIgnoreCase) >= 0)
                         {
-                            string mpName;
-                            byte[] mpBytes = ExtractMultipartSingleFile(rawBytes, contentType, out mpName);
-                            if (mpBytes != null && mpBytes.Length > 0)
+                            var mp = ParseMultipartForm(rawBytes, contentType);
+                            if (mp != null && mp.FileBytes != null && mp.FileBytes.Length > 0)
                             {
-                                rawBytes = mpBytes;
-                                if (!string.IsNullOrWhiteSpace(mpName)) fileName = mpName;
+                                rawBytes = mp.FileBytes;
+                                string fldName;
+                                if (mp.Fields.TryGetValue("fileName", out fldName) && !string.IsNullOrWhiteSpace(fldName))
+                                    fileName = fldName.Trim();
+                                else if (!string.IsNullOrWhiteSpace(mp.FileName))
+                                    fileName = mp.FileName;
                             }
                         }
                     }
@@ -549,7 +556,7 @@ namespace PrintAway.Web
                     return;
                 }
 
-                // ScanDrop-Style Chunked Binary Upload (POST /api/uploads/chunk & POST /api/uploads/complete)
+                // ScanDrop-Style Chunked Binary / FormData Upload (POST /api/uploads/chunk & POST /api/uploads/complete)
                 if (method == "POST" && path == "/api/uploads/chunk")
                 {
                     if (!CheckRateLimit("upload_chunk", 1200))
@@ -559,10 +566,8 @@ namespace PrintAway.Web
                     }
 
                     string uploadId = req.QueryString["uploadId"] ?? req.Headers["X-Upload-Id"] ?? "";
-                    int chunkIndex = 0;
-                    int totalChunks = 1;
-                    int.TryParse(req.QueryString["index"] ?? req.Headers["X-Chunk-Index"] ?? "0", NumberStyles.Integer, CultureInfo.InvariantCulture, out chunkIndex);
-                    int.TryParse(req.QueryString["total"] ?? req.Headers["X-Total-Chunks"] ?? "1", NumberStyles.Integer, CultureInfo.InvariantCulture, out totalChunks);
+                    string idxStr = req.QueryString["index"] ?? req.Headers["X-Chunk-Index"] ?? "";
+                    string totStr = req.QueryString["total"] ?? req.Headers["X-Total-Chunks"] ?? "";
 
                     byte[] chunkBytes;
                     using (var ms = new MemoryStream())
@@ -574,13 +579,38 @@ namespace PrintAway.Web
                     string contentType = req.ContentType ?? "";
                     if (contentType.IndexOf("multipart/form-data", StringComparison.OrdinalIgnoreCase) >= 0)
                     {
-                        string unusedName;
-                        byte[] mpChunk = ExtractMultipartSingleFile(chunkBytes, contentType, out unusedName);
-                        if (mpChunk != null && mpChunk.Length > 0)
+                        var mp = ParseMultipartForm(chunkBytes, contentType);
+                        if (mp != null)
                         {
-                            chunkBytes = mpChunk;
+                            if (string.IsNullOrWhiteSpace(uploadId))
+                            {
+                                string fVal;
+                                if (mp.Fields.TryGetValue("uploadId", out fVal) || mp.Fields.TryGetValue("fileId", out fVal))
+                                    uploadId = fVal;
+                            }
+                            if (string.IsNullOrWhiteSpace(idxStr))
+                            {
+                                string fVal;
+                                if (mp.Fields.TryGetValue("chunkIndex", out fVal) || mp.Fields.TryGetValue("index", out fVal))
+                                    idxStr = fVal;
+                            }
+                            if (string.IsNullOrWhiteSpace(totStr))
+                            {
+                                string fVal;
+                                if (mp.Fields.TryGetValue("totalChunks", out fVal) || mp.Fields.TryGetValue("total", out fVal))
+                                    totStr = fVal;
+                            }
+                            if (mp.FileBytes != null && mp.FileBytes.Length > 0)
+                            {
+                                chunkBytes = mp.FileBytes;
+                            }
                         }
                     }
+
+                    int chunkIndex = 0;
+                    int totalChunks = 1;
+                    int.TryParse(string.IsNullOrWhiteSpace(idxStr) ? "0" : idxStr, NumberStyles.Integer, CultureInfo.InvariantCulture, out chunkIndex);
+                    int.TryParse(string.IsNullOrWhiteSpace(totStr) ? "1" : totStr, NumberStyles.Integer, CultureInfo.InvariantCulture, out totalChunks);
 
                     string errCode, errMsg;
                     var chunkRes = _repo.SaveUploadChunk(uploadId, chunkIndex, totalChunks, chunkBytes, out errCode, out errMsg);
@@ -1552,17 +1582,24 @@ namespace PrintAway.Web
             }
         }
 
-        private static byte[] ExtractMultipartSingleFile(byte[] body, string contentType, out string fileName)
+        public sealed class MultipartFormResult
         {
-            fileName = null;
-            if (body == null || body.Length == 0 || string.IsNullOrEmpty(contentType)) return null;
+            public Dictionary<string, string> Fields = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+            public byte[] FileBytes;
+            public string FileName;
+        }
+
+        public static MultipartFormResult ParseMultipartForm(byte[] body, string contentType)
+        {
+            var result = new MultipartFormResult();
+            if (body == null || body.Length == 0 || string.IsNullOrEmpty(contentType)) return result;
             int bIdx = contentType.IndexOf("boundary=", StringComparison.OrdinalIgnoreCase);
-            if (bIdx < 0) return null;
+            if (bIdx < 0) return result;
             string rawBoundary = contentType.Substring(bIdx + 9).Trim();
             int semi = rawBoundary.IndexOf(';');
             if (semi >= 0) rawBoundary = rawBoundary.Substring(0, semi).Trim();
             rawBoundary = rawBoundary.Trim('"');
-            if (string.IsNullOrEmpty(rawBoundary)) return null;
+            if (string.IsNullOrEmpty(rawBoundary)) return result;
 
             byte[] boundaryBytes = Encoding.ASCII.GetBytes("--" + rawBoundary);
             byte[] headerSep = new byte[] { 13, 10, 13, 10 };
@@ -1584,28 +1621,49 @@ namespace PrintAway.Web
                 if (hdrEnd > pos && hdrEnd < partEnd)
                 {
                     string hdrText = Encoding.UTF8.GetString(body, pos, hdrEnd - pos);
+                    int dataStart = hdrEnd + 4;
+                    int dataLen = partEnd - dataStart;
+
+                    string fieldName = null;
+                    int nmIdx = hdrText.IndexOf("name=\"", StringComparison.OrdinalIgnoreCase);
+                    if (nmIdx >= 0)
+                    {
+                        nmIdx += 6;
+                        int nmEnd = hdrText.IndexOf('"', nmIdx);
+                        if (nmEnd > nmIdx) fieldName = hdrText.Substring(nmIdx, nmEnd - nmIdx);
+                    }
+
                     int fnIdx = hdrText.IndexOf("filename=\"", StringComparison.OrdinalIgnoreCase);
-                    if (fnIdx >= 0)
+                    if (fnIdx >= 0 && result.FileBytes == null)
                     {
                         fnIdx += 10;
                         int fnEnd = hdrText.IndexOf('"', fnIdx);
                         if (fnEnd > fnIdx)
                         {
-                            fileName = Path.GetFileName(hdrText.Substring(fnIdx, fnEnd - fnIdx));
+                            result.FileName = Path.GetFileName(hdrText.Substring(fnIdx, fnEnd - fnIdx));
                         }
-                        int dataStart = hdrEnd + 4;
-                        int dataLen = partEnd - dataStart;
                         if (dataLen > 0)
                         {
                             var fileBuf = new byte[dataLen];
                             Buffer.BlockCopy(body, dataStart, fileBuf, 0, dataLen);
-                            return fileBuf;
+                            result.FileBytes = fileBuf;
                         }
+                    }
+                    else if (!string.IsNullOrEmpty(fieldName) && dataLen >= 0)
+                    {
+                        result.Fields[fieldName] = Encoding.UTF8.GetString(body, dataStart, dataLen);
                     }
                 }
                 pos = next;
             }
-            return null;
+            return result;
+        }
+
+        private static byte[] ExtractMultipartSingleFile(byte[] body, string contentType, out string fileName)
+        {
+            var parsed = ParseMultipartForm(body, contentType);
+            fileName = parsed.FileName;
+            return parsed.FileBytes;
         }
 
         private static int IndexOfBytes(byte[] haystack, byte[] needle, int startIndex)

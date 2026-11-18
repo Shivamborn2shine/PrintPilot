@@ -1246,15 +1246,17 @@
       const badgeEl = document.getElementById('lblAdminShopBadge');
       if (badgeEl) badgeEl.textContent = shopId;
 
-      // Helper to ping candidate tunnel before trusting it (verifies JSON response, never HTML splash/SPA page)
+      // Helper to ping candidate tunnel before trusting it (verifies JSON response, bypasses Pinggy splash only on Pinggy hosts)
       async function isTunnelAlive(candidateUrl) {
         if (!candidateUrl || !candidateUrl.startsWith('https://')) return false;
         if (candidateUrl.includes('api.trycloudflare.com') || candidateUrl.includes('pkg.trycloudflare.com') ||
             candidateUrl.includes('update.trycloudflare.com') || candidateUrl.includes('staging.trycloudflare.com')) return false;
+        const isPinggy = candidateUrl.toLowerCase().includes('pinggy');
+        const opts = (sig) => isPinggy ? { signal: sig, headers: { 'X-Pinggy-No-Screen': '1' } } : { signal: sig };
         try {
           const ctrl = new AbortController();
           const tid = setTimeout(() => ctrl.abort(), 3000);
-          const res = await fetch(candidateUrl + '/api/health', { signal: ctrl.signal });
+          const res = await fetch(candidateUrl + '/api/health', opts(ctrl.signal));
           clearTimeout(tid);
           if (res.ok) {
             const txt = await res.text();
@@ -1264,7 +1266,7 @@
         try {
           const ctrl2 = new AbortController();
           const tid2 = setTimeout(() => ctrl2.abort(), 2500);
-          const res2 = await fetch(candidateUrl + '/api/shop/status', { signal: ctrl2.signal });
+          const res2 = await fetch(candidateUrl + '/api/shop/status', opts(ctrl2.signal));
           clearTimeout(tid2);
           if (res2.ok) {
             const txt2 = await res2.text();
@@ -2683,24 +2685,75 @@
       return JSON.parse(txt);
     }
 
+    function xhrAdminFormDataPost(fullUrl, formData, onPct) {
+      return new Promise((resolve, reject) => {
+        const xhr = new XMLHttpRequest();
+        xhr.open('POST', fullUrl, true);
+        if (fullUrl.toLowerCase().includes('pinggy')) {
+          xhr.setRequestHeader('X-Pinggy-No-Screen', '1');
+        }
+        xhr.timeout = 90000;
+        xhr.upload.onprogress = (ev) => {
+          if (ev.lengthComputable && typeof onPct === 'function') {
+            onPct(Math.max(1, Math.min(99, Math.round((ev.loaded / ev.total) * 100))));
+          }
+        };
+        xhr.onload = () => {
+          const raw = xhr.responseText || '';
+          if ([502, 503, 504, 530].includes(xhr.status)) {
+            return reject(new Error('Tunnel edge HTTP ' + xhr.status));
+          }
+          if (raw.trimStart().startsWith('<')) {
+            return reject(new Error('Tunnel returned HTML instead of JSON API'));
+          }
+          const parsed = raw ? JSON.parse(raw) : {};
+          if (xhr.status >= 200 && xhr.status < 300 && !parsed.error) return resolve(parsed);
+          return reject(new Error(parsed.message || ('Upload HTTP ' + xhr.status)));
+        };
+        xhr.onerror = () => reject(new Error('Failed to fetch (tunnel connection dropped)'));
+        xhr.ontimeout = () => reject(new Error('Upload timed out'));
+        xhr.send(formData);
+      });
+    }
+
     async function uploadSingleAdminFileSmart(file, onProgressText) {
       const buf = new Uint8Array(await file.arrayBuffer());
       if (buf.byteLength > 50 * 1024 * 1024) {
         throw new Error('File exceeds 50 MB limit');
       }
-      const CHUNK_THRESHOLD = 1500 * 1024;
-      const CHUNK_SIZE = 1024 * 1024;
+      const isCloudHosted = window.location.hostname !== 'localhost' && window.location.hostname !== '127.0.0.1';
+      if (isCloudHosted && apiUrl('/api/uploads').startsWith('/api/')) {
+        await autoDiscoverLiveStation(true);
+      }
+
+      const CHUNK_THRESHOLD = 12 * 1024 * 1024;
+      const CHUNK_SIZE = 4 * 1024 * 1024;
 
       if (buf.byteLength <= CHUNK_THRESHOLD) {
         if (onProgressText) onProgressText('Uploading...');
-        const res = await fetch(apiUrl('/api/uploads?filename=' + encodeURIComponent(file.name)), {
-          method: 'POST',
-          headers: { 'Content-Type': file.type || 'application/octet-stream', 'X-File-Name': file.name },
-          body: buf
-        });
-        const data = await parseAdminJsonSafe(res, file.name);
-        if (!res.ok || data.error) throw new Error(data.message || ('HTTP ' + res.status));
-        return data;
+        const fd = new FormData();
+        fd.append('fileName', file.name);
+        fd.append('file', new Blob([buf], { type: file.type || 'application/octet-stream' }), file.name);
+        try {
+          return await xhrAdminFormDataPost(
+            apiUrl('/api/uploads?filename=' + encodeURIComponent(file.name)),
+            fd,
+            (pct) => { if (onProgressText) onProgressText(`Uploading ${pct}%`); }
+          );
+        } catch (err) {
+          if (isCloudHosted) {
+            await autoDiscoverLiveStation(true);
+            const fdRetry = new FormData();
+            fdRetry.append('fileName', file.name);
+            fdRetry.append('file', new Blob([buf], { type: file.type || 'application/octet-stream' }), file.name);
+            return await xhrAdminFormDataPost(
+              apiUrl('/api/uploads?filename=' + encodeURIComponent(file.name)),
+              fdRetry,
+              (pct) => { if (onProgressText) onProgressText(`Uploading ${pct}%`); }
+            );
+          }
+          throw err;
+        }
       }
 
       const uploadId = 'adm_' + Date.now() + '_' + Math.random().toString(36).slice(2, 8);
@@ -2709,22 +2762,21 @@
         const slice = buf.subarray(i * CHUNK_SIZE, Math.min(buf.byteLength, (i + 1) * CHUNK_SIZE));
         const pct = Math.min(95, Math.round(((i + 1) / totalChunks) * 95));
         if (onProgressText) onProgressText(`Uploading chunk ${i + 1}/${totalChunks} (${pct}%)`);
-        const cRes = await fetch(
+        const fd = new FormData();
+        fd.append('uploadId', uploadId);
+        fd.append('chunkIndex', String(i));
+        fd.append('totalChunks', String(totalChunks));
+        fd.append('chunk', new Blob([slice], { type: 'application/octet-stream' }), file.name);
+        await xhrAdminFormDataPost(
           apiUrl(`/api/uploads/chunk?uploadId=${encodeURIComponent(uploadId)}&index=${i}&total=${totalChunks}`),
-          {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/octet-stream' },
-            body: slice
-          }
+          fd
         );
-        const cData = await parseAdminJsonSafe(cRes, file.name);
-        if (!cRes.ok || cData.error) throw new Error(cData.message || ('Chunk HTTP ' + cRes.status));
       }
 
       if (onProgressText) onProgressText('Finalizing PDF...');
       const compRes = await fetch(apiUrl('/api/uploads/complete'), {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 'Content-Type': 'text/plain;charset=UTF-8' },
         body: JSON.stringify({ uploadId, fileName: file.name, totalChunks })
       });
       const compData = await parseAdminJsonSafe(compRes, file.name);

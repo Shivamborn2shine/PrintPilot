@@ -1,7 +1,7 @@
 {
-  "version": "2.6.1",
+  "version": "2.6.2",
   "releaseDate": "2026-11-18",
-  "releaseNotes": "Fix the Pinggy backup tunnel (blank-password sign-in, new free.pinggy.io host and URL detection) and prefer it over the throttled localhost.run, so customer uploads go through on networks that block Cloudflare quick tunnels. Storefront moved to printaway-ten.vercel.app (QR links, admin links and updater). Uploads no longer hang: the station leaves a throttled localhost.run tunnel for Pinggy automatically, and the website uploads in 512 KB parts with progress, timeouts and retries. Multi-document orders with previews, auto-crop and a sticky pay bar.",
+  "releaseNotes": "Adapt ScanDrop dual-layer upload architecture on top of Pinggy SSH_ASKPASS fix: preflight-free FormData XMLHttpRequest transfers (12 MB single-shot + 4 MB chunks), conditional Pinggy X-Pinggy-No-Screen bypass, parallel tunnel discovery, 15s watchdog recovery, and Supabase Cloud Relay support.",
   "downloadUrl": "https://raw.githubusercontent.com/Shivamborn2shine/PrintPilot/main/bin/PrintAway.exe",
   "fallbackUrl": "https://printaway-ten.vercel.app/downloads/PrintAway.exe"
 }

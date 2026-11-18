@@ -34,6 +34,7 @@ namespace PrintAway.SaaS
         private readonly PrintAwayRepository _repo;
         private readonly TunnelManager _tunnel;
         private readonly Timer _syncTimer;
+        private readonly Timer _relayTimer;
         private readonly JavaScriptSerializer _serializer;
 
         public string ShopId
@@ -67,6 +68,8 @@ namespace PrintAway.SaaS
         private QuotaStatus _currentQuota;
         private bool _disposed;
         private int _inFlightSync;
+        private int _inFlightRelay;
+        private DateTime _relayBackoffUntilUtc = DateTime.MinValue;
 
         public event Action<QuotaStatus> OnQuotaStatusChanged;
 
@@ -105,6 +108,8 @@ namespace PrintAway.SaaS
 
                 // Run initial sync after 3 seconds, then every 30 seconds
                 _syncTimer = new Timer(state => PerformSync(), null, TimeSpan.FromSeconds(3), TimeSpan.FromSeconds(30));
+                // ScanDrop-style Cloud Relay Inbox Worker: polls Supabase relay_orders every 4s for offline/tunnel-blocked uploads
+                _relayTimer = new Timer(state => ProcessPendingCloudRelayOrders(), null, TimeSpan.FromSeconds(5), TimeSpan.FromSeconds(4));
             }
         }
 
@@ -553,12 +558,175 @@ namespace PrintAway.SaaS
             }
         }
 
+        private byte[] DownloadBytesFromSupabaseStorage(string bucketName, string objectPath)
+        {
+            ServicePointManager.SecurityProtocol = SecurityProtocolType.Tls12 | SecurityProtocolType.Tls11 | SecurityProtocolType.Tls;
+            string cleanPath = (objectPath ?? "").TrimStart('/');
+            string url = string.Format(CultureInfo.InvariantCulture, "{0}/storage/v1/object/{1}/{2}",
+                _supabaseUrl, Uri.EscapeDataString(bucketName), cleanPath);
+            var req = (HttpWebRequest)WebRequest.Create(url);
+            req.Method = "GET";
+            req.Headers["apikey"] = _apiKey;
+            req.Headers["Authorization"] = "Bearer " + _apiKey;
+            req.UserAgent = "PrintAwayStation/" + PrintAway.Updater.AutoUpdater.CurrentVersion;
+            req.Timeout = 30000;
+            using (var resp = (HttpWebResponse)req.GetResponse())
+            using (var ms = new MemoryStream())
+            {
+                resp.GetResponseStream().CopyTo(ms);
+                return ms.ToArray();
+            }
+        }
+
+        private void DeleteSupabaseStorageObject(string bucketName, string objectPath)
+        {
+            try
+            {
+                string cleanPath = (objectPath ?? "").TrimStart('/');
+                string url = string.Format(CultureInfo.InvariantCulture, "{0}/storage/v1/object/{1}/{2}",
+                    _supabaseUrl, Uri.EscapeDataString(bucketName), cleanPath);
+                ExecuteHttpRequest(url, "DELETE", null, null);
+            }
+            catch { }
+        }
+
+        /// <summary>
+        /// ScanDrop-style Cloud Relay Inbox Worker:
+        /// Polls pending uploads saved to Supabase when direct tunnel was unreachable/502,
+        /// downloads PDF cleanly over HTTPS, validates &amp; creates local quote+order, then purges cloud object.
+        /// </summary>
+        public void ProcessPendingCloudRelayOrders()
+        {
+            if (!IsConfigured || _disposed || _repo == null) return;
+            if (!PrintAway.Config.StationConfig.IsUsableSlug(ShopId)) return;
+            if (DateTime.UtcNow < _relayBackoffUntilUtc) return;
+            if (Interlocked.CompareExchange(ref _inFlightRelay, 1, 0) != 0) return;
+
+            try
+            {
+                string fetchUrl = string.Format(CultureInfo.InvariantCulture,
+                    "{0}/rest/v1/relay_orders?shop_id=eq.{1}&status=eq.pending&order=created_at.asc&limit=5",
+                    _supabaseUrl, Uri.EscapeDataString(ShopId));
+
+                string rawJson = ExecuteHttpRequest(fetchUrl, "GET", null, null);
+                var pending = _serializer.Deserialize<List<Dictionary<string, object>>>(rawJson ?? "[]");
+                if (pending == null || pending.Count == 0) return;
+
+                foreach (var row in pending)
+                {
+                    if (_disposed) break;
+                    string relayId = row.ContainsKey("relay_id") ? Convert.ToString(row["relay_id"]) : "";
+                    if (string.IsNullOrWhiteSpace(relayId)) continue;
+
+                    // Atomically claim row so duplicate workers never double-process
+                    string claimUrl = string.Format(CultureInfo.InvariantCulture,
+                        "{0}/rest/v1/relay_orders?relay_id=eq.{1}&status=eq.pending",
+                        _supabaseUrl, Uri.EscapeDataString(relayId));
+                    var claimHdrs = new Dictionary<string, string> { { "Prefer", "return=representation" } };
+                    string claimResp = ExecuteHttpRequest(claimUrl, "PATCH",
+                        _serializer.Serialize(new Dictionary<string, object> { { "status", "processing" } }),
+                        claimHdrs);
+                    var claimed = _serializer.Deserialize<List<Dictionary<string, object>>>(claimResp ?? "[]");
+                    if (claimed == null || claimed.Count == 0) continue;
+
+                    string storagePath = row.ContainsKey("storage_path") ? Convert.ToString(row["storage_path"]) : "";
+                    string fileName = row.ContainsKey("file_name") ? Convert.ToString(row["file_name"]) : "document.pdf";
+                    int copies = row.ContainsKey("copies") && row["copies"] != null ? Convert.ToInt32(row["copies"], CultureInfo.InvariantCulture) : 1;
+                    string duplex = row.ContainsKey("duplex_mode") && row["duplex_mode"] != null ? Convert.ToString(row["duplex_mode"]) : "OneSided";
+                    string color = row.ContainsKey("color_mode") && row["color_mode"] != null ? Convert.ToString(row["color_mode"]) : "bw";
+                    string paperSize = row.ContainsKey("paper_size") && row["paper_size"] != null ? Convert.ToString(row["paper_size"]) : "A4";
+                    int pagesPerSheet = row.ContainsKey("pages_per_sheet") && row["pages_per_sheet"] != null ? Convert.ToInt32(row["pages_per_sheet"], CultureInfo.InvariantCulture) : 1;
+                    string pageRange = row.ContainsKey("page_range") && row["page_range"] != null ? Convert.ToString(row["page_range"]) : "all";
+                    string custName = row.ContainsKey("customer_name") && row["customer_name"] != null ? Convert.ToString(row["customer_name"]) : "Walk-in Customer";
+                    string custPhone = row.ContainsKey("customer_phone") && row["customer_phone"] != null ? Convert.ToString(row["customer_phone"]) : "";
+                    string payMethod = row.ContainsKey("payment_method") && row["payment_method"] != null ? Convert.ToString(row["payment_method"]) : "cash";
+
+                    try
+                    {
+                        byte[] fileBytes = DownloadBytesFromSupabaseStorage("printaway-relay", storagePath);
+                        string errCode, errMsg;
+                        var saved = _repo.SaveValidatedPdf(fileName, fileBytes, out errCode, out errMsg);
+                        if (saved == null) throw new InvalidOperationException(errMsg ?? errCode ?? "PDF validation failed");
+
+                        string qErr;
+                        var quote = _repo.CreateServerQuote(
+                            Convert.ToString(saved["fileToken"]), copies, duplex, pageRange, out qErr,
+                            color, paperSize, "auto", pagesPerSheet, true);
+                        if (quote == null) throw new InvalidOperationException(qErr ?? "Could not price relayed file");
+
+                        string oErr;
+                        var order = _repo.CreateOrderAndPaymentIntent(
+                            Convert.ToString(quote["quoteToken"]), custName, custPhone, true, out oErr, null, payMethod);
+                        if (order == null) throw new InvalidOperationException(oErr ?? "Could not create local order");
+
+                        DeleteSupabaseStorageObject("printaway-relay", storagePath);
+
+                        string doneUrl = string.Format(CultureInfo.InvariantCulture,
+                            "{0}/rest/v1/relay_orders?relay_id=eq.{1}", _supabaseUrl, Uri.EscapeDataString(relayId));
+                        ExecuteHttpRequest(doneUrl, "PATCH", _serializer.Serialize(new Dictionary<string, object>
+                        {
+                            { "status", "accepted" },
+                            { "order_id", order["orderId"] },
+                            { "order_code", order["orderCode"] },
+                            { "public_token", order["publicToken"] },
+                            { "amount_inr", order["amountInr"] },
+                            { "amount_paise", order["amountPaise"] },
+                            { "payment_status", order["paymentStatus"] },
+                            { "order_state", order["state"] },
+                            { "gateway_order_id", order.ContainsKey("gatewayOrderId") ? order["gatewayOrderId"] : null },
+                            { "razorpay_order_id", order.ContainsKey("razorpayOrderId") ? order["razorpayOrderId"] : null },
+                            { "razorpay_key_id", order.ContainsKey("razorpayKeyId") ? order["razorpayKeyId"] : null },
+                            { "processed_at_utc", DateTime.UtcNow.ToString("o", CultureInfo.InvariantCulture) }
+                        }), null);
+                        Console.WriteLine(string.Format(CultureInfo.InvariantCulture,
+                            "[Cloud Relay] Imported {0} -> Order {1} ({2})", relayId, order["orderCode"], fileName));
+                    }
+                    catch (Exception itemEx)
+                    {
+                        DeleteSupabaseStorageObject("printaway-relay", storagePath);
+                        string failUrl = string.Format(CultureInfo.InvariantCulture,
+                            "{0}/rest/v1/relay_orders?relay_id=eq.{1}", _supabaseUrl, Uri.EscapeDataString(relayId));
+                        try
+                        {
+                            ExecuteHttpRequest(failUrl, "PATCH", _serializer.Serialize(new Dictionary<string, object>
+                            {
+                                { "status", "failed" },
+                                { "error_message", itemEx.Message }
+                            }), null);
+                        }
+                        catch { }
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                if (ex.Message != null && (ex.Message.IndexOf("HTTP 404", StringComparison.OrdinalIgnoreCase) >= 0 ||
+                    ex.Message.IndexOf("PGRST", StringComparison.OrdinalIgnoreCase) >= 0))
+                {
+                    // Relay table not yet provisioned in Supabase -> back off quietly for 60s
+                    _relayBackoffUntilUtc = DateTime.UtcNow.AddSeconds(60);
+                }
+                else
+                {
+                    _relayBackoffUntilUtc = DateTime.UtcNow.AddSeconds(15);
+                }
+            }
+            finally
+            {
+                Interlocked.Exchange(ref _inFlightRelay, 0);
+            }
+        }
+
         public void Dispose()
         {
             _disposed = true;
             if (_syncTimer != null)
             {
                 _syncTimer.Dispose();
+            }
+            if (_relayTimer != null)
+            {
+                _relayTimer.Dispose();
             }
         }
     }

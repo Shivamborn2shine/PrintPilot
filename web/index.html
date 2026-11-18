@@ -2040,6 +2040,34 @@
       }
     }
 
+    const SUPABASE_URL = 'https://zduoifzakiojfqbtxqqm.supabase.co';
+    const SUPABASE_ANON_KEY = 'sb_publishable_rhmUZZbKhXiJxrChcPTbsg_gFIH9FdO';
+
+    function buildTunnelFetchInit(targetUrl, options = {}) {
+      const next = Object.assign({}, options);
+      const hdrs = Object.assign({}, options.headers || {});
+      const isPinggy = typeof targetUrl === 'string' && targetUrl.toLowerCase().includes('pinggy');
+      const isCrossOrigin = typeof targetUrl === 'string' && targetUrl.startsWith('http') && !targetUrl.startsWith(window.location.origin);
+
+      if (isPinggy) {
+        hdrs['X-Pinggy-No-Screen'] = '1';
+      }
+      // On cross-origin tunnels (Cloudflare / localhost.run), sending 'text/plain;charset=UTF-8' for JSON payloads
+      // avoids CORS OPTIONS preflight roundtrips that often stall/fail on free SSH tunnels.
+      if (isCrossOrigin && !isPinggy && typeof next.body === 'string') {
+        const ct = hdrs['Content-Type'] || hdrs['content-type'] || '';
+        if (ct.toLowerCase().includes('application/json')) {
+          delete hdrs['Content-Type'];
+          delete hdrs['content-type'];
+          hdrs['Content-Type'] = 'text/plain;charset=UTF-8';
+        }
+      }
+      if (Object.keys(hdrs).length > 0) {
+        next.headers = hdrs;
+      }
+      return next;
+    }
+
     async function apiFetch(path, options = {}) {
       const isCloudHosted = window.location.hostname !== 'localhost' && window.location.hostname !== '127.0.0.1';
       let targetUrl = apiUrl(path);
@@ -2054,7 +2082,7 @@
       let lastErr = null;
       if (targetUrl) {
         try {
-          const res = await fetch(targetUrl, options);
+          const res = await fetch(targetUrl, buildTunnelFetchInit(targetUrl, options));
           const htmlFallback = await isHtmlResponse(res);
           if (![502, 503, 504, 530].includes(res.status) && !htmlFallback) {
             return res;
@@ -2066,14 +2094,14 @@
           console.warn(`[PrintAway Network] Fetch failed for ${targetUrl} (${err.message}). Attempting automatic tunnel discovery...`);
         }
       } else {
-        lastErr = new Error('No cached tunnel URL found');
+        lastErr = new Error('No live tunnel URL found');
       }
 
       // Auto-heal: re-discover freshest live tunnel and retry cleanly up to 2 times
       for (let attempt = 1; attempt <= 2; attempt++) {
         try {
           if (attempt > 1) {
-            await new Promise(r => setTimeout(r, 1500));
+            await new Promise(r => setTimeout(r, 1200));
           }
           const freshTunnel = await autoDiscoverLiveStation(true);
           if (freshTunnel && freshTunnel.startsWith('https://')) {
@@ -2084,7 +2112,7 @@
             continue;
           }
           console.log(`[PrintAway Network] Retry #${attempt} via live station: ${targetUrl}`);
-          const retryRes = await fetch(targetUrl, options);
+          const retryRes = await fetch(targetUrl, buildTunnelFetchInit(targetUrl, options));
           const retryHtml = await isHtmlResponse(retryRes);
           if (![502, 503, 504, 530].includes(retryRes.status) && !retryHtml) {
             return retryRes;
@@ -2351,15 +2379,19 @@
           badgeEl.textContent = shopId;
         }
 
-        // Helper to ping candidate tunnel before trusting it (verifies JSON response, never HTML splash/SPA page)
+        // Helper to ping candidate tunnel before trusting it (sends X-Pinggy-No-Screen only on Pinggy hosts)
         async function isTunnelAlive(candidateUrl) {
           if (!candidateUrl || !candidateUrl.startsWith('https://')) return false;
           if (candidateUrl.includes('api.trycloudflare.com') || candidateUrl.includes('pkg.trycloudflare.com') ||
               candidateUrl.includes('update.trycloudflare.com') || candidateUrl.includes('staging.trycloudflare.com')) return false;
+          const isPinggy = candidateUrl.toLowerCase().includes('pinggy');
+          const probeOpts = (sig) => isPinggy
+            ? { signal: sig, headers: { 'X-Pinggy-No-Screen': '1' } }
+            : { signal: sig };
           try {
             const ctrl = new AbortController();
-            const tid = setTimeout(() => ctrl.abort(), 3000);
-            const res = await fetch(candidateUrl + '/api/health', { signal: ctrl.signal });
+            const tid = setTimeout(() => ctrl.abort(), 3200);
+            const res = await fetch(candidateUrl + '/api/health', probeOpts(ctrl.signal));
             clearTimeout(tid);
             if (res.ok) {
               const txt = await res.text();
@@ -2369,7 +2401,7 @@
           try {
             const ctrl2 = new AbortController();
             const tid2 = setTimeout(() => ctrl2.abort(), 2500);
-            const res2 = await fetch(candidateUrl + '/api/shop/status', { signal: ctrl2.signal });
+            const res2 = await fetch(candidateUrl + '/api/shop/status', probeOpts(ctrl2.signal));
             clearTimeout(tid2);
             if (res2.ok) {
               const txt2 = await res2.text();
@@ -2384,47 +2416,60 @@
         }
         localStorage.removeItem('printaway_api_base');
 
-        // Priority 1: Supabase Fleet Lookup
-        try {
-          const sbRes = await fetch(`https://zduoifzakiojfqbtxqqm.supabase.co/rest/v1/shops?shop_id=eq.${encodeURIComponent(shopId)}&select=live_tunnel_url,shop_name,upi_vpa`, {
-            headers: {
-              'apikey': 'sb_publishable_rhmUZZbKhXiJxrChcPTbsg_gFIH9FdO',
-              'Accept': 'application/json'
-            },
-            cache: 'no-store'
-          });
-          if (sbRes.ok) {
-            const list = await sbRes.json();
-            if (list && list.length > 0 && list[0].live_tunnel_url) {
-              const live = list[0].live_tunnel_url.trim().replace(/\/+$/, '');
-              if (live.startsWith('https://') && !live.includes('api.trycloudflare.com') && !live.includes('pkg.trycloudflare.com')) {
-                if (await isTunnelAlive(live)) {
-                  localStorage.setItem('printaway_api_base', live);
-                  return live;
-                }
-              }
-            }
-          }
-        } catch (sbErr) { }
+        // Fetch Supabase + ntfy.sh candidates in parallel, deduplicate, and race live probes concurrently
+        const candidates = [];
+        const addCandidate = (raw) => {
+          if (!raw || typeof raw !== 'string') return;
+          const clean = raw.trim().replace(/\/+$/, '');
+          if (!clean.startsWith('https://')) return;
+          if (clean.includes('api.trycloudflare.com') || clean.includes('pkg.trycloudflare.com') ||
+              clean.includes('update.trycloudflare.com') || clean.includes('staging.trycloudflare.com')) return;
+          if (!candidates.includes(clean)) candidates.push(clean);
+        };
 
-        // Priority 2: ntfy.sh registry topic (check newest entries first)
-        try {
-          const topic = getRegistryTopicForShop(shopId);
-          const res = await fetch('https://ntfy.sh/' + topic + '/raw?poll=1&since=12h', { cache: 'no-store' });
-          if (res.ok) {
-            const text = await res.text();
-            const lines = text.split(/\r?\n/)
-              .map(l => l.trim())
-              .filter(l => l.startsWith('https://') && !l.includes('api.trycloudflare.com') && !l.includes('pkg.trycloudflare.com'));
-            for (let i = lines.length - 1; i >= Math.max(0, lines.length - 4); i--) {
-              const candidate = lines[i].replace(/\/+$/, '');
-              if (await isTunnelAlive(candidate)) {
-                localStorage.setItem('printaway_api_base', candidate);
-                return candidate;
-              }
-            }
+        const topic = getRegistryTopicForShop(shopId);
+        const [sbSettled, ntfySettled] = await Promise.allSettled([
+          fetch(`${SUPABASE_URL}/rest/v1/shops?shop_id=eq.${encodeURIComponent(shopId)}&select=live_tunnel_url,shop_name,upi_vpa`, {
+            headers: { 'apikey': SUPABASE_ANON_KEY, 'Accept': 'application/json' },
+            cache: 'no-store'
+          }).then(r => r.ok ? r.json() : null),
+          fetch('https://ntfy.sh/' + topic + '/raw?poll=1&since=12h', { cache: 'no-store' }).then(r => r.ok ? r.text() : '')
+        ]);
+
+        if (sbSettled.status === 'fulfilled' && Array.isArray(sbSettled.value) && sbSettled.value[0]) {
+          addCandidate(sbSettled.value[0].live_tunnel_url);
+        }
+        if (ntfySettled.status === 'fulfilled' && ntfySettled.value) {
+          const lines = ntfySettled.value.split(/\r?\n/).map(l => l.trim()).filter(Boolean);
+          for (let i = lines.length - 1; i >= Math.max(0, lines.length - 6); i--) {
+            addCandidate(lines[i]);
           }
-        } catch (e) { }
+        }
+
+        if (candidates.length > 0) {
+          const raceWinner = await new Promise((resolve) => {
+            let pending = candidates.length;
+            let settled = false;
+            candidates.slice(0, 6).forEach(url => {
+              isTunnelAlive(url).then(ok => {
+                if (ok && !settled) {
+                  settled = true;
+                  resolve(url);
+                } else {
+                  pending--;
+                  if (pending <= 0 && !settled) resolve('');
+                }
+              }).catch(() => {
+                pending--;
+                if (pending <= 0 && !settled) resolve('');
+              });
+            });
+          });
+          if (raceWinner) {
+            localStorage.setItem('printaway_api_base', raceWinner);
+            return raceWinner;
+          }
+        }
       } catch (e) {
         console.warn('Live station registry lookup skipped:', e);
       }
@@ -2940,19 +2985,62 @@
     }
 
     /**
-     * Sends a file to the shop's station PC.
-     * - Up to 512 KB: one POST (/api/uploads).
-     * - Larger: 512 KB chunks (/api/uploads/chunk + /api/uploads/complete) with progress and retries.
-     * Every request has a timeout, so a slow or throttled tunnel shows a clear error instead of hanging.
+     * ScanDrop-inspired fast dual-path upload:
+     * - Tier 1 (Direct-to-Shop-PC): Uses XMLHttpRequest + multipart FormData with ZERO custom headers
+     *   (eliminates CORS OPTIONS preflight stalls) up to 12 MB in a single request, or 4 MB FormData chunks
+     *   up to 50 MB, with live upload progress and automatic tunnel re-discovery on failure.
+     * - Tier 2 (Cloud Relay): Used by placeOrder() fallback via Supabase Storage when direct tunnel fails.
      */
-    const UPLOAD_CHUNK_BYTES = 512 * 1024;
-    const UPLOAD_REQUEST_TIMEOUT_MS = 45000;
+    const UPLOAD_SINGLE_MAX_BYTES = 12 * 1024 * 1024; // 12 MB single-shot FormData XHR (avoids burst throttling)
+    const UPLOAD_CHUNK_BYTES = 4 * 1024 * 1024; // 4 MB FormData chunks for 12-50 MB files
+    const UPLOAD_REQUEST_TIMEOUT_MS = 90000;
 
     class StationTimeoutError extends Error { }
 
     function setUploadProgress(text) {
       const subEl = document.getElementById('loaderModalSub');
       if (subEl) subEl.textContent = text;
+    }
+
+    function xhrFormDataPost(fullUrl, formData, timeoutMs, onProgressPct) {
+      return new Promise((resolve, reject) => {
+        const xhr = new XMLHttpRequest();
+        xhr.open('POST', fullUrl, true);
+        if (fullUrl.toLowerCase().includes('pinggy')) {
+          xhr.setRequestHeader('X-Pinggy-No-Screen', '1');
+        }
+        xhr.timeout = timeoutMs || UPLOAD_REQUEST_TIMEOUT_MS;
+        xhr.upload.onprogress = (ev) => {
+          if (ev.lengthComputable && typeof onProgressPct === 'function') {
+            onProgressPct(Math.max(1, Math.min(99, Math.round((ev.loaded / ev.total) * 100))), ev.loaded, ev.total);
+          }
+        };
+        xhr.onload = () => {
+          const raw = xhr.responseText || '';
+          const trimmed = raw.trimStart();
+          if ([502, 503, 504, 530].includes(xhr.status)) {
+            return reject(new Error('Tunnel edge returned HTTP ' + xhr.status));
+          }
+          if (trimmed.startsWith('<')) {
+            return reject(new Error('Tunnel returned HTML page instead of JSON response'));
+          }
+          try {
+            const parsed = raw ? JSON.parse(raw) : {};
+            if (xhr.status >= 200 && xhr.status < 300 && !parsed.error) {
+              return resolve(parsed);
+            }
+            const errMsg = parsed.message || ('Upload rejected (HTTP ' + xhr.status + ')');
+            const appErr = new Error(errMsg);
+            appErr.isValidationError = xhr.status >= 400 && xhr.status < 500;
+            return reject(appErr);
+          } catch (parseErr) {
+            return reject(new Error('Invalid JSON response (' + xhr.status + '): ' + parseErr.message));
+          }
+        };
+        xhr.onerror = () => reject(new Error('Failed to fetch (tunnel connection dropped or blocked)'));
+        xhr.ontimeout = () => reject(new StationTimeoutError('Upload timed out after ' + Math.round((timeoutMs || UPLOAD_REQUEST_TIMEOUT_MS) / 1000) + 's'));
+        xhr.send(formData);
+      });
     }
 
     async function stationFetchWithTimeout(path, options, timeoutMs, label) {
@@ -2976,6 +3064,16 @@
         'Please try again in a minute. If it keeps happening, ask the shopkeeper to restart PrintAway Station.';
     }
 
+    async function resolveDirectTunnelBaseForUpload(force = false) {
+      const isCloudHosted = window.location.hostname !== 'localhost' && window.location.hostname !== '127.0.0.1';
+      if (!isCloudHosted) return '';
+      const base = await autoDiscoverLiveStation(force);
+      if (!base || !base.startsWith('https://')) {
+        throw new Error('Shop station tunnel appears offline or reconnecting (no live tunnel).');
+      }
+      return base.replace(/\/+$/, '');
+    }
+
     async function uploadDocumentSmart(bytesOrBuffer, fileName, contentType) {
       const u8 = bytesOrBuffer instanceof Uint8Array ? bytesOrBuffer : new Uint8Array(bytesOrBuffer);
       const maxBytes = 50 * 1024 * 1024;
@@ -2985,42 +3083,77 @@
       const sizeLabel = u8.byteLength >= 1048576 ? (u8.byteLength / 1048576).toFixed(1) + ' MB' : Math.max(1, Math.round(u8.byteLength / 1024)) + ' KB';
 
       try {
-        if (u8.byteLength <= UPLOAD_CHUNK_BYTES) {
-          setUploadProgress('Sending ' + sizeLabel + ' to the shop…');
-          const { res, data } = await stationFetchWithTimeout('/api/uploads?filename=' + encodeURIComponent(fileName), {
-            method: 'POST',
-            headers: { 'Content-Type': contentType || 'application/octet-stream', 'X-File-Name': fileName },
-            body: u8
-          }, UPLOAD_REQUEST_TIMEOUT_MS, 'Upload');
-          if (!res.ok || data.error) throw new Error(data.message || ('Upload rejected (HTTP ' + res.status + ')'));
-          return data;
+        let baseUrl = await resolveDirectTunnelBaseForUpload(false);
+
+        if (u8.byteLength <= UPLOAD_SINGLE_MAX_BYTES) {
+          const blob = new Blob([u8], { type: contentType || 'application/octet-stream' });
+          let lastErr = null;
+          for (let attempt = 1; attempt <= 2; attempt++) {
+            try {
+              const fd = new FormData();
+              fd.append('fileName', fileName);
+              fd.append('file', blob, fileName);
+              setUploadProgress('⚡ Sending ' + sizeLabel + ' directly to shop PC...');
+              return await xhrFormDataPost(
+                baseUrl + '/api/uploads?filename=' + encodeURIComponent(fileName),
+                fd,
+                UPLOAD_REQUEST_TIMEOUT_MS,
+                (pct) => setUploadProgress('⚡ Sending ' + sizeLabel + ' directly to shop PC · ' + pct + '%')
+              );
+            } catch (err) {
+              if (err && err.isValidationError) throw err;
+              lastErr = err;
+              if (attempt === 1) {
+                setUploadProgress('Reconnecting to shop PC tunnel...');
+                baseUrl = await resolveDirectTunnelBaseForUpload(true);
+              }
+            }
+          }
+          throw lastErr;
         }
 
         const uploadId = 'pa_' + Date.now() + '_' + Math.random().toString(36).slice(2, 8);
         const totalChunks = Math.ceil(u8.byteLength / UPLOAD_CHUNK_BYTES);
         for (let i = 0; i < totalChunks; i++) {
-          const slice = u8.subarray(i * UPLOAD_CHUNK_BYTES, Math.min(u8.byteLength, (i + 1) * UPLOAD_CHUNK_BYTES));
-          const pct = Math.round((i / totalChunks) * 100);
+          const start = i * UPLOAD_CHUNK_BYTES;
+          const end = Math.min(u8.byteLength, (i + 1) * UPLOAD_CHUNK_BYTES);
+          const slice = u8.subarray(start, end);
+          const chunkBlob = new Blob([slice], { type: 'application/octet-stream' });
+          const basePct = Math.round((i / totalChunks) * 100);
           let lastErr = null;
           for (let attempt = 1; attempt <= 3; attempt++) {
-            setUploadProgress('Uploading ' + sizeLabel + ' · ' + pct + '%' + (attempt > 1 ? ' (retry ' + (attempt - 1) + ')' : ''));
+            setUploadProgress('⚡ Uploading ' + sizeLabel + ' · ' + basePct + '%' + (attempt > 1 ? ' (retry ' + (attempt - 1) + ')' : ''));
             try {
-              const { res, data } = await stationFetchWithTimeout(
-                '/api/uploads/chunk?uploadId=' + encodeURIComponent(uploadId) + '&index=' + i + '&total=' + totalChunks,
-                { method: 'POST', headers: { 'Content-Type': 'application/octet-stream' }, body: slice },
-                UPLOAD_REQUEST_TIMEOUT_MS, 'Upload part ' + (i + 1));
-              if (!res.ok || data.error) throw new Error(data.message || ('Upload part ' + (i + 1) + ' failed (HTTP ' + res.status + ')'));
+              const fd = new FormData();
+              fd.append('uploadId', uploadId);
+              fd.append('chunkIndex', String(i));
+              fd.append('totalChunks', String(totalChunks));
+              fd.append('chunk', chunkBlob, fileName);
+              const resObj = await xhrFormDataPost(
+                baseUrl + '/api/uploads/chunk?uploadId=' + encodeURIComponent(uploadId) + '&index=' + i + '&total=' + totalChunks,
+                fd,
+                UPLOAD_REQUEST_TIMEOUT_MS,
+                (cPct) => {
+                  const overall = Math.min(99, Math.round(((i + cPct / 100) / totalChunks) * 100));
+                  setUploadProgress('⚡ Uploading ' + sizeLabel + ' · ' + overall + '%');
+                }
+              );
+              if (!resObj || resObj.error) throw new Error((resObj && resObj.message) || ('Upload part ' + (i + 1) + ' failed'));
               lastErr = null;
               break;
             } catch (err) {
+              if (err && err.isValidationError) throw err;
               lastErr = err;
-              if (attempt < 3) await new Promise(r => setTimeout(r, 800 * attempt));
+              if (attempt < 3) {
+                await new Promise(r => setTimeout(r, 700 * attempt));
+                try { baseUrl = await resolveDirectTunnelBaseForUpload(true); } catch { }
+              }
             }
           }
           if (lastErr) throw lastErr;
         }
 
-        setUploadProgress('Uploading ' + sizeLabel + ' · 100% · checking pages on the shop PC…');
+        setUploadProgress('Uploading ' + sizeLabel + ' · 100% · validating pages on the shop PC…');
         const { res, data } = await stationFetchWithTimeout('/api/uploads/complete', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
@@ -3035,6 +3168,128 @@
         }
         throw err;
       }
+    }
+
+    async function computeSha256HexClient(u8) {
+      try {
+        if (window.crypto && window.crypto.subtle) {
+          const digest = await window.crypto.subtle.digest('SHA-256', u8);
+          return Array.from(new Uint8Array(digest)).map(b => b.toString(16).padStart(2, '0')).join('');
+        }
+      } catch { }
+      return 'client_' + u8.byteLength + '_' + Date.now();
+    }
+
+    // Tier 2 (ScanDrop Cloud Relay Fallback via Supabase Storage + relay_orders table)
+    async function submitOrderViaCloudRelay(bytesU8, fileName, pageRange, paymentMethod, custName, custPhone) {
+      const shopId = getActiveShopId();
+      if (!shopId) throw new Error('No shop selected.');
+      const sizeLabel = bytesU8.byteLength >= 1048576 ? (bytesU8.byteLength / 1048576).toFixed(1) + ' MB' : Math.max(1, Math.round(bytesU8.byteLength / 1024)) + ' KB';
+      const relayId = 'REL-' + Math.random().toString(36).slice(2, 6).toUpperCase() + Math.floor(1000 + Math.random() * 9000);
+      const safePath = encodeURIComponent(shopId) + '/' + encodeURIComponent(relayId + '.pdf');
+
+      setUploadProgress('☁️ Direct tunnel unreachable — sending ' + sizeLabel + ' via PrintAway Cloud Relay...');
+      const shaHex = await computeSha256HexClient(bytesU8);
+
+      // 1. Upload PDF directly to Supabase Storage bucket 'printaway-relay'
+      await new Promise((resolve, reject) => {
+        const xhr = new XMLHttpRequest();
+        xhr.open('POST', `${SUPABASE_URL}/storage/v1/object/printaway-relay/${safePath}`, true);
+        xhr.setRequestHeader('apikey', SUPABASE_ANON_KEY);
+        xhr.setRequestHeader('Authorization', 'Bearer ' + SUPABASE_ANON_KEY);
+        xhr.setRequestHeader('Content-Type', 'application/pdf');
+        xhr.timeout = 120000;
+        xhr.upload.onprogress = (ev) => {
+          if (ev.lengthComputable) {
+            const pct = Math.min(95, Math.round((ev.loaded / ev.total) * 95));
+            setUploadProgress('☁️ Uploading via Cloud Relay · ' + pct + '%');
+          }
+        };
+        xhr.onload = () => {
+          if (xhr.status >= 200 && xhr.status < 300) return resolve();
+          reject(new Error('Cloud relay storage unavailable (' + xhr.status + ')'));
+        };
+        xhr.onerror = () => reject(new Error('Cloud relay network error'));
+        xhr.ontimeout = () => reject(new Error('Cloud relay upload timeout'));
+        xhr.send(new Blob([bytesU8], { type: 'application/pdf' }));
+      });
+
+      // 2. Enqueue relay_orders row for shop PC background worker
+      setUploadProgress('⏳ Waiting for Shop PC to receive & price your order...');
+      const relayPayload = {
+        relay_id: relayId,
+        shop_id: shopId,
+        file_name: fileName,
+        storage_path: shopId + '/' + relayId + '.pdf',
+        file_sha256: shaHex,
+        file_size_bytes: bytesU8.byteLength,
+        copies: orderSettings.copies || 1,
+        duplex_mode: orderSettings.duplexMode || 'OneSided',
+        color_mode: orderSettings.colorMode || 'bw',
+        paper_size: orderSettings.paperSize || 'A4',
+        pages_per_sheet: orderSettings.pagesPerSheet || 1,
+        page_range: pageRange || 'all',
+        customer_name: (custName || '').trim() || 'Walk-in Customer',
+        customer_phone: (custPhone || '').trim(),
+        payment_method: paymentMethod === 'cash' ? 'cash' : 'online',
+        status: 'pending'
+      };
+
+      const insRes = await fetch(`${SUPABASE_URL}/rest/v1/relay_orders`, {
+        method: 'POST',
+        headers: {
+          'apikey': SUPABASE_ANON_KEY,
+          'Authorization': 'Bearer ' + SUPABASE_ANON_KEY,
+          'Content-Type': 'application/json',
+          'Prefer': 'return=representation'
+        },
+        body: JSON.stringify(relayPayload)
+      });
+      if (!insRes.ok) {
+        const msg = await insRes.text().catch(() => '');
+        throw new Error('Cloud relay queue unavailable (' + insRes.status + '): ' + msg);
+      }
+
+      // 3. Poll relay_orders up to 24s for Shop PC pickup
+      for (let w = 0; w < 20; w++) {
+        await new Promise(r => setTimeout(r, 1200));
+        const pRes = await fetch(`${SUPABASE_URL}/rest/v1/relay_orders?relay_id=eq.${encodeURIComponent(relayId)}&select=*`, {
+          headers: { 'apikey': SUPABASE_ANON_KEY, 'Authorization': 'Bearer ' + SUPABASE_ANON_KEY },
+          cache: 'no-store'
+        });
+        if (!pRes.ok) continue;
+        const rows = await pRes.json();
+        const row = Array.isArray(rows) ? rows[0] : null;
+        if (!row) continue;
+        if (row.status === 'accepted' && row.public_token) {
+          return {
+            orderId: row.order_id,
+            orderCode: row.order_code,
+            publicToken: row.public_token,
+            amountInr: row.amount_inr,
+            amountPaise: row.amount_paise,
+            paymentStatus: row.payment_status,
+            state: row.order_state || (paymentMethod === 'cash' ? 'paid_awaiting_approval' : 'awaiting_payment'),
+            gatewayOrderId: row.gateway_order_id,
+            razorpayOrderId: row.razorpay_order_id,
+            razorpayKeyId: row.razorpay_key_id,
+            viaCloudRelay: true,
+            relayId
+          };
+        }
+        if (row.status === 'failed') {
+          throw new Error(row.error_message || 'Shop PC could not process relayed file.');
+        }
+      }
+
+      return {
+        orderCode: relayId,
+        publicToken: 'relay_' + relayId,
+        relayId,
+        pendingPickup: true,
+        fileName,
+        viaCloudRelay: true
+      };
     }
 
     /* ==========================================================================
@@ -4395,6 +4650,24 @@
       return data;
     }
 
+    async function prepareRelayPayloadBytes() {
+      if (cart.length === 1 && cart[0].kind === 'pdf' && cart[0].bytes) {
+        const d = cart[0];
+        const pages = sortedPages(d);
+        return {
+          bytes: d.bytes,
+          fileName: pdfFileName(d.name),
+          pageRange: pages.length === d.pageCount ? 'all' : compressPages(pages, d.pageCount)
+        };
+      }
+      if (cart.length >= 1 && cart.every(x => x.kind === 'pdf' && x.bytes)) {
+        const bytes = await buildCombinedPdf(cart);
+        const name = cart.length === 1 ? pdfFileName(cart[0].name) : pdfFileName(cart.length + ' docs - ' + cart[0].name);
+        return { bytes, fileName: name, pageRange: 'all' };
+      }
+      return null;
+    }
+
     async function placeOrder(paymentMethod) {
       if (placingOrder) return;
       showCheckoutError(null);
@@ -4408,29 +4681,69 @@
       $id('btnCreateOrder').disabled = true;
       $id('btnCreateOrderCash').disabled = true;
       try {
-        showMascotLoader('Preparing your print job…', 'Packing your pages');
-        const job = await prepareJobUpload();
-        showMascotLoader('Checking the final price…', 'The shop station confirms pages and rates');
-        const quote = await fetchQuote(job);
-        showMascotLoader(isCash ? 'Sending order to the counter…' : 'Securing your order…',
-          isCash ? 'The shopkeeper will collect cash and approve it' : 'Reserving the printer and opening payment');
-        const res = await apiFetch('/api/orders', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            quoteToken: quote.quoteToken,
-            customerName: $id('custName').value,
-            customerPhone: $id('custPhone').value,
-            consentAccepted: consent,
-            paymentMethod
-          })
-        });
-        const data = await parseJsonSafe(res, 'Order');
-        if (!res.ok || data.error) throw new Error(data.message || 'The order could not be created.');
+        let data = null;
+        try {
+          showMascotLoader('Preparing your print job…', 'Packing your pages');
+          const job = await prepareJobUpload();
+          showMascotLoader('Checking the final price…', 'The shop station confirms pages and rates');
+          const quote = await fetchQuote(job);
+          showMascotLoader(isCash ? 'Sending order to the counter…' : 'Securing your order…',
+            isCash ? 'The shopkeeper will collect cash and approve it' : 'Reserving the printer and opening payment');
+          const res = await apiFetch('/api/orders', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              quoteToken: quote.quoteToken,
+              customerName: $id('custName').value,
+              customerPhone: $id('custPhone').value,
+              consentAccepted: consent,
+              paymentMethod
+            })
+          });
+          data = await parseJsonSafe(res, 'Order');
+          if (!res.ok || data.error) throw new Error(data.message || 'The order could not be created.');
+        } catch (directErr) {
+          // ScanDrop-style Tier 2 Cloud Relay Fallback when direct station tunnel fails/drops (502 / Failed to fetch)
+          const isConnectivityErr = directErr && !directErr.isValidationError &&
+            /tunnel|fetch|offline|slowly|502|503|504|530|network|abort|reconnecting|HTML/i.test(directErr.message || '');
+          const relaySrc = isConnectivityErr ? await prepareRelayPayloadBytes().catch(() => null) : null;
+          if (!relaySrc) throw directErr;
+          try {
+            showMascotLoader('Switching to Cloud Relay…', 'Direct shop tunnel is busy; delivering safely via PrintAway Cloud');
+            data = await submitOrderViaCloudRelay(
+              relaySrc.bytes,
+              relaySrc.fileName,
+              relaySrc.pageRange,
+              paymentMethod,
+              $id('custName').value,
+              $id('custPhone').value
+            );
+          } catch (relayErr) {
+            console.warn('[PrintAway] Cloud relay unavailable:', relayErr);
+            throw directErr;
+          }
+        }
+
         hideMascotLoader();
         placingOrder = false;
         $id('modalCheckout').classList.remove('active');
         currentOrder = data;
+        if (data.pendingPickup) {
+          $id('orderWizard').classList.add('hidden');
+          $id('payBar').classList.add('hidden');
+          document.body.classList.remove('has-paybar');
+          $id('trackingCard').classList.remove('hidden');
+          updateStepper(4);
+          triggerConfetti();
+          document.getElementById('trkOrderCode').textContent = data.orderCode;
+          document.getElementById('trkStateBadge').textContent = 'QUEUED IN CLOUD INBOX';
+          document.getElementById('trkStateDesc').textContent = 'Delivered safely to PrintAway Cloud! Waiting for shop PC (' + (getActiveShopId() || 'station') + ') to pick up & print.';
+          document.getElementById('trkFileName').textContent = data.fileName || 'Document.pdf';
+          document.getElementById('trkPubToken').textContent = data.publicToken;
+          if (pollTimer) clearInterval(pollTimer);
+          pollTimer = setInterval(refreshCurrentOrder, 3000);
+          return;
+        }
         const trkInput = $id('trackTokenInput');
         if (trkInput) trkInput.value = data.publicToken;
         $id('orderWizard').classList.add('hidden');
@@ -4659,6 +4972,36 @@
     async function refreshCurrentOrder() {
       if (!currentOrder || !currentOrder.publicToken) return;
       try {
+        if (String(currentOrder.publicToken).startsWith('relay_')) {
+          const rid = currentOrder.relayId || String(currentOrder.publicToken).substring(6);
+          const rRes = await fetch(`${SUPABASE_URL}/rest/v1/relay_orders?relay_id=eq.${encodeURIComponent(rid)}&select=*`, {
+            headers: { 'apikey': SUPABASE_ANON_KEY, 'Authorization': 'Bearer ' + SUPABASE_ANON_KEY },
+            cache: 'no-store'
+          });
+          if (rRes.ok) {
+            const rows = await rRes.json();
+            const row = Array.isArray(rows) ? rows[0] : null;
+            if (row && row.status === 'accepted' && row.public_token) {
+              currentOrder.publicToken = row.public_token;
+              currentOrder.orderId = row.order_id;
+              currentOrder.orderCode = row.order_code;
+              currentOrder.gatewayOrderId = row.gateway_order_id;
+              currentOrder.razorpayOrderId = row.razorpay_order_id;
+              currentOrder.razorpayKeyId = row.razorpay_key_id;
+              currentOrder.amountPaise = row.amount_paise;
+              if (row.payment_method !== 'cash' && row.razorpay_order_id && row.razorpay_key_id && typeof Razorpay !== 'undefined') {
+                setTimeout(launchRazorpayCheckout, 200);
+              }
+            } else if (row && row.status === 'failed') {
+              showError(row.error_message || 'Shop PC could not process relayed upload.');
+              return;
+            } else {
+              return;
+            }
+          } else {
+            return;
+          }
+        }
         const res = await apiFetch('/api/orders/' + encodeURIComponent(currentOrder.publicToken));
         const data = await res.json();
         if (!res.ok || data.error) {

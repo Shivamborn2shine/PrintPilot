@@ -10,7 +10,7 @@ namespace PrintAway.Updater
 {
     public static class AutoUpdater
     {
-        public const string CurrentVersion = "2.6.1";
+        public const string CurrentVersion = "2.6.2";
         private const string VersionEndpoint = "https://raw.githubusercontent.com/Shivamborn2shine/PrintPilot/main/version.json";
         private const string FallbackVersionEndpoint = "https://printaway-ten.vercel.app/downloads/version.json";
 

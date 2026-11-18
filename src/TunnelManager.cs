@@ -905,7 +905,7 @@ namespace PrintAway.Tunnel
         private void StartWatchdogTimer()
         {
             if (_watchdogTimer != null) return;
-            _watchdogTimer = new Timer(_ => RunWatchdogCheck(), null, TimeSpan.FromSeconds(30), TimeSpan.FromSeconds(30));
+            _watchdogTimer = new Timer(_ => RunWatchdogCheck(), null, TimeSpan.FromSeconds(15), TimeSpan.FromSeconds(15));
         }
 
         public bool RunManualProbe(out string detail)
@@ -981,7 +981,7 @@ namespace PrintAway.Tunnel
                 }
                 else if ((_activeProviderName ?? "").IndexOf("localhost.run", StringComparison.OrdinalIgnoreCase) >= 0 && mode == "auto")
                 {
-                    _localhostRunCooldownUntilUtc = DateTime.UtcNow.AddMinutes(3);
+                    _localhostRunCooldownUntilUtc = DateTime.UtcNow.AddMinutes(10);
                 }
 
                 if (mode != "custom")

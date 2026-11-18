@@ -578,6 +578,39 @@ namespace PrintAway
                     Assert(!PrintAway.Updater.AutoUpdater.IsVersionNewer("2.4.1", "2.4.1"), "AutoUpdater must not flag identical version as newer");
                     Assert(!PrintAway.Updater.AutoUpdater.IsVersionNewer("2.4.1", "2.2.9"), "AutoUpdater must never downgrade to 2.2.9");
                 });
+
+                // Test 14: ScanDrop FormData Multipart Parser (extracts fields & binary payload cleanly)
+                runTest("T14: ScanDrop FormData multipart parser extracts upload fields and binary PDF bytes", () =>
+                {
+                    string boundary = "----PrintAwayTestBoundary12345";
+                    byte[] samplePdf = PdfAndPrinterEngine.GenerateSamplePdfBytes(2, "Multipart FormData Test");
+                    var ms = new System.IO.MemoryStream();
+                    byte[] headPart = System.Text.Encoding.UTF8.GetBytes(
+                        "--" + boundary + "\r\n" +
+                        "Content-Disposition: form-data; name=\"uploadId\"\r\n\r\n" +
+                        "up_multi_01\r\n" +
+                        "--" + boundary + "\r\n" +
+                        "Content-Disposition: form-data; name=\"chunkIndex\"\r\n\r\n" +
+                        "0\r\n" +
+                        "--" + boundary + "\r\n" +
+                        "Content-Disposition: form-data; name=\"totalChunks\"\r\n\r\n" +
+                        "1\r\n" +
+                        "--" + boundary + "\r\n" +
+                        "Content-Disposition: form-data; name=\"file\"; filename=\"Naming convention (1).pdf\"\r\n" +
+                        "Content-Type: application/pdf\r\n\r\n");
+                    byte[] tailPart = System.Text.Encoding.UTF8.GetBytes("\r\n--" + boundary + "--\r\n");
+                    ms.Write(headPart, 0, headPart.Length);
+                    ms.Write(samplePdf, 0, samplePdf.Length);
+                    ms.Write(tailPart, 0, tailPart.Length);
+
+                    var parsed = PrintAway.Web.PrintAwayHttpServer.ParseMultipartForm(
+                        ms.ToArray(), "multipart/form-data; boundary=" + boundary);
+                    Assert(parsed.FileName == "Naming convention (1).pdf", "Multipart filename mismatch: " + parsed.FileName);
+                    Assert(parsed.FileBytes != null && parsed.FileBytes.Length == samplePdf.Length, "Multipart PDF byte length mismatch");
+                    Assert(parsed.Fields["uploadId"] == "up_multi_01", "Multipart field uploadId mismatch");
+                    Assert(parsed.Fields["chunkIndex"] == "0", "Multipart field chunkIndex mismatch");
+                    Assert(parsed.Fields["totalChunks"] == "1", "Multipart field totalChunks mismatch");
+                });
             }
 
             Console.WriteLine("------------------------------------------------------------------");
