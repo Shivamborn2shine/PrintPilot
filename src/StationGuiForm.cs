@@ -982,7 +982,7 @@ namespace PrintAway.Gui
 
                 var lblDesc = new Label
                 {
-                    Text = "Auto mode probes every 30s & cascades Cloudflare -> localhost.run -> Pinggy SSH automatically.\nFor heavy print load (100% uptime, fixed URL, zero 429 rate-limits), paste a free Cloudflare Named Token:",
+                    Text = "Auto mode uses a Cloudflare tunnel (signing up via the PrintAway relay if trycloudflare.com is blocked) and only drops to localhost.run while Cloudflare is down.\nFor heavy print load (100% uptime, fixed URL, zero 429 rate-limits), paste a free Cloudflare Named Token:",
                     Font = new Font("Segoe UI", 8.25f),
                     ForeColor = Color.FromArgb(100, 116, 139),
                     Location = new Point(20, 42),
@@ -991,10 +991,9 @@ namespace PrintAway.Gui
 
                 var lblMode = new Label { Text = "Tunnel Provider Mode:", Location = new Point(20, 85), AutoSize = true, Font = new Font("Segoe UI", 8.5f, FontStyle.Bold) };
                 var cmbMode = new ComboBox { Location = new Point(20, 105), Width = 495, DropDownStyle = ComboBoxStyle.DropDownList };
-                cmbMode.Items.Add("Auto Cascade: Cloudflare -> OpenSSH (localhost.run) -> Pinggy SSH (Recommended)");
+                cmbMode.Items.Add("Auto: Cloudflare Quick Tunnel, localhost.run backup (Recommended)");
                 cmbMode.Items.Add("Cloudflare Named Tunnel (Requires Token + Domain below - Permanent & Unlimited)");
                 cmbMode.Items.Add("Built-in Windows OpenSSH Only (localhost.run - Zero Config)");
-                cmbMode.Items.Add("Pinggy SSH Tunnel Only (a.pinggy.io:443 - Zero Config)");
                 cmbMode.Items.Add("Custom Static Domain / Reverse Proxy");
 
                 var lblToken = new Label { Text = "Cloudflare Named Tunnel Token (Free from Cloudflare Zero Trust -> Tunnels -> http://127.0.0.1:8080):", Location = new Point(20, 140), AutoSize = true, Font = new Font("Segoe UI", 8.5f, FontStyle.Bold) };
@@ -1029,8 +1028,7 @@ namespace PrintAway.Gui
                 txtCustom.Text = curCustom;
                 if (curMode == "cloudflare") cmbMode.SelectedIndex = 1;
                 else if (curMode == "openssh") cmbMode.SelectedIndex = 2;
-                else if (curMode == "pinggy") cmbMode.SelectedIndex = 3;
-                else if (curMode == "custom") cmbMode.SelectedIndex = 4;
+                else if (curMode == "custom") cmbMode.SelectedIndex = 3;
                 else cmbMode.SelectedIndex = 0;
 
                 var btnTest = new Button
@@ -1078,8 +1076,7 @@ namespace PrintAway.Gui
                     string selectedMode = "auto";
                     if (cmbMode.SelectedIndex == 1) selectedMode = "cloudflare";
                     else if (cmbMode.SelectedIndex == 2) selectedMode = "openssh";
-                    else if (cmbMode.SelectedIndex == 3) selectedMode = "pinggy";
-                    else if (cmbMode.SelectedIndex == 4) selectedMode = "custom";
+                    else if (cmbMode.SelectedIndex == 3) selectedMode = "custom";
 
                     UpdateStationJson("tunnelProvider", selectedMode);
                     UpdateStationJson("cloudflareTunnelToken", txtToken.Text.Trim());

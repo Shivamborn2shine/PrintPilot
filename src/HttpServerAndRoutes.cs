@@ -134,7 +134,7 @@ namespace PrintAway.Web
             string reqCorsHeaders = req.Headers["Access-Control-Request-Headers"];
             res.Headers["Access-Control-Allow-Headers"] = !string.IsNullOrWhiteSpace(reqCorsHeaders)
                 ? reqCorsHeaders
-                : "Content-Type, X-Admin-Session, X-CSRF-Token, X-Worker-Token, X-File-Name, X-PrintAway-Signature, Authorization, X-Pinggy-No-Screen";
+                : "Content-Type, X-Admin-Session, X-CSRF-Token, X-Worker-Token, X-File-Name, X-PrintAway-Signature, Authorization";
             res.Headers["Access-Control-Max-Age"] = "86400";
 
             string path = (req.Url.AbsolutePath ?? "/").TrimEnd('/');

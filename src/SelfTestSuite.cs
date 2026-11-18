@@ -524,7 +524,7 @@ namespace PrintAway
                     Assert(Convert.ToInt32(savedRtf["pageCount"]) >= 1, "RTF must convert into >= 1 PDF page");
                 });
 
-                // Test 12: Tunnel URL validation (no placeholder leak, valid Cloudflare/OpenSSH/Pinggy/Custom hosts)
+                // Test 12: Tunnel URL validation (no placeholder leak, valid Cloudflare/OpenSSH/Custom hosts)
                 runTest("T12: Tunnel URL sanitization & multi-provider validator rejects placeholders", () =>
                 {
                     Assert(!PrintAway.Tunnel.TunnelManager.IsValidPublicTunnelUrl("https://api.trycloudflare.com"), "api.trycloudflare.com must be rejected");
@@ -533,7 +533,6 @@ namespace PrintAway
                     Assert(PrintAway.Tunnel.TunnelManager.IsValidPublicTunnelUrl("https://bright-river-station.trycloudflare.com"), "Valid trycloudflare.com must be accepted");
                     Assert(PrintAway.Tunnel.TunnelManager.IsValidPublicTunnelUrl("https://abc123.lhr.life"), "Valid localhost.run must be accepted");
                     Assert(PrintAway.Tunnel.TunnelManager.IsValidPublicTunnelUrl("https://ec48a85ffbf6af.app.lhr.life"), "Valid multi-label localhost.run app.lhr.life must be accepted");
-                    Assert(PrintAway.Tunnel.TunnelManager.IsValidPublicTunnelUrl("https://xyz.a.free.pinggy.link"), "Valid Pinggy link must be accepted");
                     Assert(PrintAway.Tunnel.TunnelManager.IsValidPublicTunnelUrl("https://shop1.printaway.in"), "Custom HTTPS domain must be accepted");
                 });
 

@@ -1,7 +1,7 @@
 {
-  "version": "2.6.1",
+  "version": "2.6.2",
   "releaseDate": "2026-11-18",
-  "releaseNotes": "Fix the Pinggy backup tunnel (blank-password sign-in, new free.pinggy.io host and URL detection) and prefer it over the throttled localhost.run, so customer uploads go through on networks that block Cloudflare quick tunnels. Storefront moved to printaway-ten.vercel.app (QR links, admin links and updater). Uploads no longer hang: the station leaves a throttled localhost.run tunnel for Pinggy automatically, and the website uploads in 512 KB parts with progress, timeouts and retries. Multi-document orders with previews, auto-crop and a sticky pay bar.",
+  "releaseNotes": "Cloudflare tunnel works on networks that block trycloudflare.com: the station now signs up for its quick tunnel through a PrintAway relay on Vercel when the direct sign-up is blocked, then runs over Cloudflare's normal edge. The watchdog reads cloudflared's own health status instead of opening the public link from the shop PC, so a busy or locally-blocked tunnel is no longer torn down (which changed the customer link); cloudflared re-dials dropped connections itself. localhost.run is only a backup and the station returns to Cloudflare within 15 minutes. Pinggy removed.",
   "downloadUrl": "https://raw.githubusercontent.com/Shivamborn2shine/PrintPilot/main/bin/PrintAway.exe",
   "fallbackUrl": "https://printaway-ten.vercel.app/downloads/PrintAway.exe"
 }
