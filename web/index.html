@@ -1220,6 +1220,207 @@
         padding: 12px 10px !important;
       }
     }
+
+    /* ==========================================================================
+       MULTI-DOCUMENT ORDER WORKSPACE (upload → documents → settings → pay bar)
+       ========================================================================== */
+    .up-head { display:flex; align-items:center; gap:10px; margin-bottom:14px; }
+    .up-head h2 { margin:0; }
+    .up-step-note { font-size:0.78rem; color:var(--muted); font-weight:600; }
+
+    .drop-row { display:flex; align-items:center; gap:18px; text-align:left; justify-content:center; }
+    .drop-row .upload-icon-circle { margin:0; flex-shrink:0; }
+    .drop-title { font-weight:800; font-size:1.15rem; color:#0f172a; }
+    .drop-sub { font-size:0.92rem; color:#334155; margin-top:2px; }
+    .drop-types { font-size:0.8rem; color:var(--muted); margin-top:8px; line-height:1.5; }
+
+    .up-tools { display:flex; justify-content:center; gap:10px; flex-wrap:wrap; margin-top:14px; }
+    .tool-chip {
+      display:inline-flex; align-items:center; gap:8px; min-height:40px;
+      padding:8px 16px; border-radius:10px; border:1.5px solid #c7d2fe;
+      background:#eef2ff; color:#3730a3; font-weight:700; font-size:0.86rem; cursor:pointer;
+      font-family:inherit;
+    }
+    .tool-chip[aria-pressed="false"] { background:#fff; color:#475569; border-color:#cbd5e1; }
+    .tool-chip .dot { width:9px; height:9px; border-radius:50%; background:#94a3b8; }
+    .tool-chip[aria-pressed="true"] .dot { background:#4f46e5; }
+    .secure-note {
+      margin-top:14px; padding:12px 14px; border-radius:12px; font-size:0.84rem;
+      background:#eff6ff; border:1px solid #bfdbfe; color:#1e40af;
+    }
+
+    /* Source picker sheet */
+    .src-grid { display:grid; grid-template-columns:repeat(3,1fr); gap:12px; margin-top:16px; }
+    .src-btn {
+      display:flex; flex-direction:column; align-items:center; justify-content:center; gap:10px;
+      padding:22px 8px; border-radius:14px; border:1.5px solid #e2e8f0; background:#fff;
+      font-weight:800; font-size:0.95rem; color:#0f172a; cursor:pointer; font-family:inherit;
+      transition:all .15s ease; min-height:110px;
+    }
+    .src-btn:hover, .src-btn:focus-visible { border-color:var(--primary); background:#eff6ff; outline:none; }
+    .src-btn svg { width:30px; height:30px; color:#4f46e5; }
+    .sheet-close {
+      width:36px; height:36px; border-radius:50%; border:none; background:#f1f5f9; cursor:pointer;
+      font-size:1rem; color:#334155; flex-shrink:0;
+    }
+
+    /* Documents strip */
+    .docs-head { display:flex; justify-content:space-between; align-items:center; gap:10px; margin-bottom:10px; }
+    .docs-head h2 { margin:0; }
+    .btn-add-doc {
+      border:1.5px solid #c7d2fe; background:#eef2ff; color:#3730a3; font-weight:800;
+      border-radius:999px; padding:8px 16px; cursor:pointer; font-size:0.86rem; font-family:inherit; min-height:40px;
+    }
+    .merge-bar {
+      display:flex; justify-content:space-between; align-items:center; gap:10px; flex-wrap:wrap;
+      padding:8px 12px; border-radius:10px; background:#f8fafc; border:1px solid var(--border);
+      margin-bottom:10px; font-size:0.82rem;
+    }
+    .link-btn { background:none; border:none; color:var(--primary); font-weight:800; cursor:pointer; font-size:0.82rem; font-family:inherit; padding:4px 2px; }
+    .link-btn:disabled { color:#94a3b8; cursor:default; }
+    .doc-strip { display:flex; gap:10px; overflow-x:auto; padding:2px 2px 8px; scroll-snap-type:x proximity; }
+    .doc-card {
+      flex:0 0 150px; scroll-snap-align:start; border:1.5px solid var(--border); border-radius:12px;
+      padding:10px; background:#fff; cursor:pointer; position:relative; text-align:left; font-family:inherit;
+      transition:border-color .15s, box-shadow .15s;
+    }
+    .doc-card:hover { border-color:#cbd5e1; }
+    .doc-card.active { border-color:var(--primary); background:#f5f8ff; box-shadow:0 0 0 1px var(--primary); }
+    .doc-card .dc-top { display:flex; justify-content:space-between; align-items:center; margin-bottom:4px; }
+    .doc-card .dc-label { font-size:0.72rem; font-weight:800; color:var(--primary); }
+    .doc-card .dc-name { font-size:0.84rem; font-weight:800; color:#0f172a; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+    .doc-card .dc-meta { font-size:0.74rem; color:var(--muted); margin-top:2px; line-height:1.35; }
+    .doc-card .dc-del {
+      border:none; background:#fef2f2; color:#dc2626; border-radius:8px; width:28px; height:28px;
+      cursor:pointer; font-size:0.8rem; display:inline-flex; align-items:center; justify-content:center;
+    }
+    .doc-card .dc-pick { margin-top:6px; display:flex; align-items:center; gap:6px; font-size:0.72rem; color:#475569; }
+    .doc-card .dc-pick input { width:18px; height:18px; accent-color:var(--primary); }
+    .doc-card .dc-warn { font-size:0.7rem; color:#b45309; font-weight:700; margin-top:4px; }
+
+    /* Preview panel */
+    .pv-panel { margin-top:10px; border-radius:14px; overflow:hidden; background:#0f172a; color:#e2e8f0; }
+    .pv-bar { display:flex; justify-content:space-between; align-items:center; gap:10px; padding:9px 12px; font-size:0.78rem; background:#1e293b; }
+    .pv-bar .pv-name { white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+    .pv-bar .pv-count { flex-shrink:0; font-weight:700; }
+    .pv-stage { position:relative; display:flex; align-items:center; justify-content:center; min-height:260px; padding:16px 12px 40px; }
+    .pv-stage canvas, .pv-stage .pv-placeholder { max-width:100%; max-height:420px; background:#fff; box-shadow:0 8px 24px rgba(0,0,0,.4); }
+    .pv-stage canvas.bw { filter:grayscale(1); }
+    .pv-stage canvas.excluded { opacity:.35; }
+    .pv-placeholder {
+      width:210px; height:297px; display:flex; flex-direction:column; align-items:center; justify-content:center;
+      gap:8px; color:#475569; font-size:0.82rem; text-align:center; padding:16px;
+    }
+    .pv-placeholder .big { font-size:2.4rem; }
+    .pv-edit {
+      position:absolute; top:12px; right:12px; background:#fff; color:#1d4ed8; border:none; border-radius:10px;
+      padding:8px 14px; font-weight:800; font-size:0.82rem; cursor:pointer; font-family:inherit; min-height:36px;
+    }
+    .pv-badges { position:absolute; left:0; right:0; bottom:10px; display:flex; justify-content:center; gap:6px; flex-wrap:wrap; padding:0 8px; }
+    .pv-badges span { background:rgba(15,23,42,.85); border:1px solid rgba(255,255,255,.18); border-radius:999px; padding:2px 10px; font-size:0.7rem; font-weight:700; }
+    .pv-excluded-tag { position:absolute; top:12px; left:12px; background:#dc2626; color:#fff; border-radius:8px; padding:4px 10px; font-size:0.74rem; font-weight:800; }
+    .pv-nav { display:flex; justify-content:center; align-items:center; gap:12px; padding:8px; border-top:1px solid rgba(255,255,255,.08); }
+    .pv-nav button {
+      width:40px; height:36px; border-radius:10px; border:1px solid rgba(255,255,255,.15); background:#1e293b; color:#e2e8f0;
+      cursor:pointer; font-size:1rem;
+    }
+    .pv-nav button:disabled { opacity:.35; cursor:default; }
+    .pv-nav .pv-pos { font-size:0.82rem; font-weight:700; min-width:64px; text-align:center; }
+    .pv-include { font-size:0.78rem; display:flex; align-items:center; gap:6px; cursor:pointer; }
+    .pv-include input { width:18px; height:18px; accent-color:#60a5fa; }
+    .thumb-grid {
+      display:grid; grid-template-columns:repeat(auto-fill, minmax(74px, 1fr)); gap:8px;
+      padding:10px 12px 14px; max-height:330px; overflow-y:auto; border-top:1px solid rgba(255,255,255,.08);
+    }
+    .thumb {
+      position:relative; border-radius:8px; border:2px solid transparent; background:#1e293b; cursor:pointer;
+      padding:4px 4px 2px; text-align:center; font-family:inherit; color:#cbd5e1;
+    }
+    .thumb.current { border-color:#60a5fa; }
+    .thumb .t-img { width:100%; aspect-ratio:1/1.414; background:#334155; border-radius:4px; display:flex; align-items:center; justify-content:center; overflow:hidden; }
+    .thumb .t-img img { width:100%; height:100%; object-fit:contain; background:#fff; }
+    .thumb-grid.bw .t-img img { filter:grayscale(1); }
+    .thumb .t-lbl { font-size:0.68rem; font-weight:700; margin-top:2px; }
+    .thumb.off .t-img { opacity:.3; }
+    .thumb .t-tick {
+      position:absolute; top:-6px; right:-6px; width:24px; height:24px; border-radius:50%;
+      border:2px solid #0f172a; background:#2563eb; color:#fff; font-size:0.72rem; font-weight:900;
+      display:flex; align-items:center; justify-content:center; cursor:pointer; padding:0;
+    }
+    .thumb.off .t-tick { background:#475569; }
+    .pv-foot { font-size:0.74rem; color:var(--muted); padding:6px 2px 0; }
+
+    /* Settings */
+    .set-sec { padding:14px 0; border-top:1px solid var(--border); }
+    .set-sec:first-of-type { border-top:none; padding-top:2px; }
+    .set-title { font-size:0.9rem; font-weight:800; color:#0f172a; margin-bottom:8px; display:flex; justify-content:space-between; align-items:baseline; gap:8px; }
+    .set-title small { font-weight:600; color:var(--muted); font-size:0.76rem; }
+    .opt-grid { display:grid; grid-template-columns:repeat(auto-fit, minmax(130px, 1fr)); gap:10px; }
+    .opt {
+      border:1.5px solid var(--border); border-radius:12px; padding:10px 12px; background:#fff; cursor:pointer;
+      text-align:left; font-family:inherit; display:flex; justify-content:space-between; align-items:center; gap:8px; min-height:52px;
+      color:#0f172a;
+    }
+    .opt:hover { border-color:#cbd5e1; }
+    .opt.active { border-color:var(--primary); background:#eff6ff; box-shadow:0 0 0 1px var(--primary); }
+    .opt:disabled { opacity:.45; cursor:not-allowed; }
+    .opt .o-t { font-weight:800; font-size:0.88rem; }
+    .opt.active .o-t { color:#1d4ed8; }
+    .opt .o-s { font-size:0.74rem; color:var(--muted); font-weight:600; }
+    .opt.active .o-s { color:#2563eb; }
+    .opt .o-i { font-size:1.1rem; flex-shrink:0; }
+    .range-row { display:flex; gap:8px; align-items:center; margin-top:8px; flex-wrap:wrap; font-size:0.84rem; font-weight:600; }
+    .range-row input { width:84px; padding:8px 10px; border:1.5px solid #cbd5e1; border-radius:8px; font-size:16px; }
+    .range-row input.wide { flex:1; min-width:160px; width:auto; }
+    .set-hint { font-size:0.76rem; color:var(--muted); margin-top:6px; }
+    .set-select { width:100%; padding:11px 12px; border:1.5px solid #cbd5e1; border-radius:10px; font-size:16px; font-weight:700; background:#fff; color:#0f172a; }
+
+    /* Sticky pay bar */
+    body.has-paybar { padding-bottom:150px; }
+    .paybar {
+      position:fixed; left:0; right:0; bottom:0; z-index:60; padding:0 12px calc(10px + env(safe-area-inset-bottom));
+      pointer-events:none;
+    }
+    .paybar-inner {
+      pointer-events:auto; max-width:824px; margin:0 auto; background:#fff; border:1px solid var(--border);
+      border-radius:16px; box-shadow:0 -6px 30px rgba(15,23,42,.14); padding:10px 14px 12px;
+    }
+    .paybar-row { display:flex; justify-content:space-between; align-items:center; gap:10px; margin-bottom:8px; }
+    .paybar .pb-lbl { font-size:0.72rem; color:var(--muted); font-weight:700; }
+    .paybar .pb-total { font-size:1.45rem; font-weight:900; color:#1d4ed8; line-height:1.1; font-variant-numeric:tabular-nums; }
+    .paybar .pb-sub { font-size:0.72rem; color:var(--muted); }
+    .stepper-num { display:flex; align-items:center; gap:8px; }
+    .stepper-num .pb-lbl { margin-right:2px; }
+    .stepper-box { display:flex; align-items:center; border:1.5px solid var(--border); border-radius:10px; overflow:hidden; }
+    .stepper-box button { width:40px; height:40px; border:none; background:#fff; color:#2563eb; font-size:1.2rem; font-weight:800; cursor:pointer; }
+    .stepper-box button:disabled { color:#cbd5e1; cursor:default; }
+    .stepper-box span { min-width:34px; text-align:center; font-weight:800; font-variant-numeric:tabular-nums; }
+    .btn-pay { width:100%; padding:13px; font-size:1rem; border-radius:12px; background:linear-gradient(135deg,#2563eb,#4f46e5); }
+    .paybar .pb-warn { font-size:0.76rem; color:#b45309; font-weight:700; margin-bottom:6px; }
+
+    /* Checkout sheet */
+    .co-card { max-width:520px !important; text-align:left !important; padding:22px 22px 24px !important; max-height:92vh; overflow-y:auto; }
+    .co-row { display:flex; justify-content:space-between; gap:12px; font-size:0.86rem; padding:5px 0; }
+    .co-row span:first-child { color:var(--muted); }
+    .co-row strong { text-align:right; }
+    .co-total { display:flex; justify-content:space-between; align-items:center; font-weight:900; font-size:1.15rem; padding-top:10px; margin-top:6px; border-top:1px dashed #cbd5e1; }
+    .co-field label { display:block; font-size:0.8rem; font-weight:700; color:#334155; margin:10px 0 4px; }
+    .co-field input { width:100%; padding:11px 12px; border:1.5px solid #cbd5e1; border-radius:10px; font-size:16px; }
+    .co-actions { display:grid; grid-template-columns:1fr 1fr; gap:10px; margin-top:14px; }
+    .co-actions .btn { padding:13px 10px; font-size:0.94rem; }
+
+    @media (max-width: 600px) {
+      .drop-row { flex-direction:column; text-align:center; gap:12px; }
+      .src-grid { gap:8px; }
+      .src-btn { padding:16px 4px; min-height:96px; font-size:0.86rem; }
+      .doc-card { flex-basis:136px; }
+      .pv-stage { min-height:220px; }
+      .pv-stage canvas, .pv-stage .pv-placeholder { max-height:340px; }
+      .co-actions { grid-template-columns:1fr; }
+      .paybar .pb-total { font-size:1.25rem; }
+    }
+
+    #mascotLoaderModal { z-index: 100000; }
   </style>
 </head>
 
@@ -1443,22 +1644,22 @@
     <div class="stepper-bar">
       <div class="step-item active" id="stepIndicator1">
         <span class="step-num">1</span>
-        <span>Upload Document</span>
+        <span>Upload</span>
       </div>
       <span class="step-sep">&rarr;</span>
       <div class="step-item" id="stepIndicator2">
         <span class="step-num">2</span>
-        <span>Options &amp; Quote</span>
+        <span>Customize</span>
       </div>
       <span class="step-sep">&rarr;</span>
       <div class="step-item" id="stepIndicator3">
         <span class="step-num">3</span>
-        <span>Pay via UPI / Card</span>
+        <span>Pay</span>
       </div>
       <span class="step-sep">&rarr;</span>
       <div class="step-item" id="stepIndicator4">
         <span class="step-num">4</span>
-        <span>Collect Print</span>
+        <span>Collect</span>
       </div>
     </div>
 
@@ -1485,274 +1686,240 @@
     <!-- ORDER CREATION WIZARD -->
     <div id="orderWizard">
 
-      <!-- STEP 1: Upload PDF / Image / Document -->
-      <div class="card">
-        <h2><span class="step-badge" style="background:linear-gradient(135deg,#4f46e5,#6366f1);color:#fff;">1</span> Select Document or Image to Print</h2>
-        <div class="upload-zone" id="uploadDropZone" onclick="document.getElementById('pdfInput').click()">
-          <input type="file" id="pdfInput" accept=".pdf,application/pdf,image/*,.png,.jpg,.jpeg,.webp,.bmp,.jfif,.docx,.doc,.rtf,.odt,.html,.htm,.txt,.csv,.md,application/msword,application/vnd.openxmlformats-officedocument.wordprocessingml.document,application/rtf" class="hidden"
-            onchange="handleFileSelected(this)" />
-          <div class="upload-icon-circle">
-            📄
-          </div>
-          <div style="font-weight:800;font-size:1.15rem;margin-bottom:6px;color:#0f172a;">
-            Tap to Upload or Drop PDF / Word Docs / Photos Here
-          </div>
-          <div style="font-size:0.86rem;color:var(--muted);max-width:560px;margin:0 auto 12px;line-height:1.5;">
-            Supports <strong>PDF, Word (.DOCX, .DOC, .RTF, .ODT), Photos (JPG, PNG, WEBP) &amp; Text Docs</strong> (up to <strong>500 pages / 50 MB</strong>). Fast chunked direct-to-station upload!
-          </div>
-          <div>
-            <button type="button" class="btn" style="pointer-events:none;padding:10px 22px;">
-              📁 Browse Files / Gallery &rarr;
-            </button>
+      <!-- STEP 1: Upload (shown while the order has no documents) -->
+      <div class="card" id="uploadCard">
+        <div class="up-head">
+          <span class="step-badge" style="background:linear-gradient(135deg,#4f46e5,#6366f1);color:#fff;">1</span>
+          <h2>Upload your documents</h2>
+        </div>
+        <div class="upload-zone" id="uploadDropZone" role="button" tabindex="0" aria-label="Add documents to print"
+          onclick="openSourcePicker()" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();openSourcePicker();}">
+          <div class="drop-row">
+            <div class="upload-icon-circle">📂</div>
+            <div>
+              <div class="drop-title">Drop your files here</div>
+              <div class="drop-sub">or tap to choose one or more files</div>
+              <div class="drop-types">PDF, Word, Excel, PowerPoint, TXT and photos · up to 50 MB and 500 pages per order</div>
+            </div>
           </div>
         </div>
-
-        <div style="margin-top:14px;display:flex;justify-content:center;align-items:center;">
-          <button type="button" class="btn btn-secondary"
-            style="font-size:0.82rem;padding:7px 16px;display:inline-flex;align-items:center;gap:6px;border-radius:10px;"
-            onclick="printBlankPagePdf()">
-            <span>📄</span>
-            <span>Print 1 Blank Page PDF</span>
+        <div class="up-tools">
+          <button type="button" class="tool-chip" id="btnAutoCrop" aria-pressed="true" onclick="toggleAutoCrop()"
+            title="Trim the table/background around photographed pages">
+            <span class="dot"></span> Auto-crop photos
+          </button>
+          <button type="button" class="tool-chip" aria-pressed="false" onclick="addBlankPageDoc()">
+            📄 Add a blank page
           </button>
         </div>
+        <div class="secure-note">🔒 Files go straight to the shop's print station and are only used for your print order.</div>
+      </div>
 
-        <!-- Validated File Preview Box -->
-        <div id="uploadedFileInfo" class="file-preview-card hidden">
-          <div class="file-preview-left">
-            <span class="pdf-badge" id="lblDocBadge">PDF</span>
-            <div>
-              <strong id="lblFileName" style="font-size:0.95rem;color:#0f172a;">document.pdf</strong>
-              <div style="margin-top:4px;">
-                <span class="meta-pill">📄 <strong id="lblPageCount">0</strong> pages</span>
-                <span class="meta-pill">💾 <span id="lblFileSize">0</span> KB</span>
-                <span class="meta-pill">🔒 SHA-256: <code id="lblSha"
-                    style="font-family:var(--font-mono);"></code></span>
-              </div>
+      <!-- STEP 2: Documents workspace (shown once at least one document is added) -->
+      <div id="workspace" class="hidden">
+        <div class="card">
+          <div class="docs-head">
+            <h2><span class="step-badge">2</span> Documents</h2>
+            <button type="button" class="btn-add-doc" onclick="openSourcePicker()">+ Doc</button>
+          </div>
+          <div class="merge-bar hidden" id="mergeBar">
+            <button type="button" class="link-btn" id="btnSelectAllImgs" onclick="toggleSelectAllImages()">Select all photos</button>
+            <span style="color:var(--muted);" id="lblMergeHint">Tick photos to merge them into one document</span>
+            <button type="button" class="link-btn" id="btnMergeImgs" onclick="openMergeSheet()" disabled>Merge</button>
+          </div>
+          <div class="doc-strip" id="docStrip" role="list"></div>
+
+          <div class="pv-panel" id="pvPanel">
+            <div class="pv-bar">
+              <span class="pv-name" id="pvName">document.pdf</span>
+              <span class="pv-count" id="pvCount"></span>
+            </div>
+            <div class="pv-stage" id="pvStage">
+              <canvas id="pvCanvas" class="hidden" aria-label="Page preview"></canvas>
+              <div class="pv-placeholder" id="pvPlaceholder"><span class="big">📄</span><span id="pvPlaceholderText">Preparing preview…</span></div>
+              <span class="pv-excluded-tag hidden" id="pvExcluded">Not printing this page</span>
+              <button type="button" class="pv-edit hidden" id="pvEditBtn" onclick="editActivePhoto()">✏️ Edit</button>
+              <div class="pv-badges" id="pvBadges"></div>
+            </div>
+            <div class="pv-nav" id="pvNav">
+              <button type="button" id="pvPrev" onclick="stepPreviewPage(-1)" aria-label="Previous page">‹</button>
+              <span class="pv-pos" id="pvPos">1 / 1</span>
+              <button type="button" id="pvNext" onclick="stepPreviewPage(1)" aria-label="Next page">›</button>
+              <label class="pv-include"><input type="checkbox" id="pvIncludeChk" onchange="toggleIncludePage(previewPageIdx + 1)" /> Print this page</label>
+            </div>
+            <div class="thumb-grid hidden" id="thumbGrid"></div>
+          </div>
+          <div class="pv-foot" id="pvFoot"></div>
+        </div>
+
+        <!-- Settings for the selected document -->
+        <div class="card" id="docSettingsCard">
+          <div class="set-sec" id="secPages">
+            <div class="set-title">Pages to print <small id="lblPagesSummary"></small></div>
+            <select class="set-select" id="pageModeSelect" onchange="onPageModeChange(this.value)">
+              <option value="all">All pages</option>
+              <option value="range">Page range (from – to)</option>
+              <option value="odd">Odd pages only</option>
+              <option value="even">Even pages only</option>
+              <option value="custom">Custom (e.g. 1-3, 5, 8)</option>
+            </select>
+            <div class="range-row hidden" id="rowRange">
+              From <input type="number" inputmode="numeric" id="inpFrom" min="1" value="1" onchange="onRangeInputs()" />
+              to <input type="number" inputmode="numeric" id="inpTo" min="1" value="1" onchange="onRangeInputs()" />
+            </div>
+            <div class="range-row hidden" id="rowCustom">
+              <input type="text" class="wide" id="inpCustom" placeholder="e.g. 1-3, 5, 8-10" onchange="onCustomRange()"
+                onkeydown="if(event.key==='Enter'){event.preventDefault();onCustomRange();}" />
+            </div>
+            <div class="set-hint">Tip: tap the ✓ on any page thumbnail to include or skip it. Your file isn't changed.</div>
+          </div>
+
+          <div class="set-sec hidden" id="secPhoto">
+            <div class="set-title">Photo layout <small>on the A4 sheet</small></div>
+            <div class="opt-grid" style="margin-bottom:10px;">
+              <button type="button" class="opt" data-photo-ori="auto" onclick="setPhotoOption('orientation','auto')"><span><span class="o-t">Auto</span><br /><span class="o-s">Match the photo</span></span><span class="o-i">🔄</span></button>
+              <button type="button" class="opt" data-photo-ori="portrait" onclick="setPhotoOption('orientation','portrait')"><span><span class="o-t">Portrait</span><br /><span class="o-s">Tall page</span></span><span class="o-i">↕</span></button>
+              <button type="button" class="opt" data-photo-ori="landscape" onclick="setPhotoOption('orientation','landscape')"><span><span class="o-t">Landscape</span><br /><span class="o-s">Wide page</span></span><span class="o-i">↔</span></button>
+            </div>
+            <div class="opt-grid">
+              <button type="button" class="opt" data-photo-fit="fit" onclick="setPhotoOption('fitMode','fit')"><span><span class="o-t">Fit to page</span><br /><span class="o-s">Whole photo, white margins</span></span></button>
+              <button type="button" class="opt" data-photo-fit="fill" onclick="setPhotoOption('fitMode','fill')"><span><span class="o-t">Fill page</span><br /><span class="o-s">Edge to edge, may trim</span></span></button>
+              <button type="button" class="opt" data-photo-crop="1" onclick="togglePhotoCrop()"><span><span class="o-t" id="lblPhotoCrop">Auto-cropped</span><br /><span class="o-s" id="lblPhotoCropSub">Tap to use the original</span></span><span class="o-i">✂️</span></button>
             </div>
           </div>
-          <div style="display:flex;gap:8px;align-items:center;">
-            <button type="button" id="btnReAdjustCrop" class="btn btn-secondary hidden" style="font-size:0.82rem;padding:6px 14px;background:#eff6ff;color:#1d4ed8;border-color:#bfdbfe;font-weight:700;"
-              onclick="reopenA4CropStudio()">
-              📐 Re-adjust A4 Crop
-            </button>
-            <button type="button" class="btn btn-secondary" style="font-size:0.8rem;padding:6px 12px;"
-              onclick="document.getElementById('pdfInput').click()">
-              Change File
-            </button>
+        </div>
+
+        <!-- Settings for the whole order -->
+        <div class="card" id="orderSettingsCard">
+          <div class="set-sec">
+            <div class="set-title">Colour mode <small>applies to every document</small></div>
+            <div class="opt-grid">
+              <button type="button" class="opt" id="optBw" onclick="setOrderOption('colorMode','bw')"><span><span class="o-t">B/W</span><br /><span class="o-s" id="lblBwRate">₹2.00/page</span></span><span class="o-i">⚫</span></button>
+              <button type="button" class="opt" id="optColor" onclick="setOrderOption('colorMode','color')"><span><span class="o-t">Colour</span><br /><span class="o-s" id="lblColorRate">₹10.00/page</span></span><span class="o-i">🎨</span></button>
+            </div>
+          </div>
+          <div class="set-sec">
+            <div class="set-title">Print style</div>
+            <div class="opt-grid">
+              <button type="button" class="opt" id="optSimplex" onclick="setOrderOption('duplexMode','OneSided')"><span><span class="o-t">1-sided</span><br /><span class="o-s" id="lblSimplexRate">One side per sheet</span></span><span class="o-i">📄</span></button>
+              <button type="button" class="opt" id="optDuplex" onclick="setOrderOption('duplexMode','TwoSidedLongEdge')"><span><span class="o-t">2-sided</span><br /><span class="o-s" id="lblDuplexRate">Both sides, saves paper</span></span><span class="o-i">📑</span></button>
+            </div>
+            <div class="set-hint hidden" id="lblDuplexNote"></div>
+          </div>
+          <div class="set-sec">
+            <div class="set-title">Paper &amp; layout</div>
+            <div class="opt-grid" id="paperGrid" style="margin-bottom:10px;"></div>
+            <select class="set-select" id="ppsSelect" onchange="setOrderOption('pagesPerSheet', parseInt(this.value, 10))" aria-label="Pages per side">
+              <option value="1">1 page per side (normal)</option>
+              <option value="2">2 pages per side (handout)</option>
+              <option value="4">4 pages per side (notes)</option>
+            </select>
           </div>
         </div>
       </div>
+    </div>
 
-      <!-- STEP 2: Print Settings & Live Digital Receipt Quote -->
-      <div id="configCard" class="card hidden">
-        <h2><span class="step-badge">2</span> Customize Print Settings &amp; Review Live Quote</h2>
-
-        <!-- 2A: Color Mode -->
-        <div style="margin-bottom:16px;">
-          <label>Print Color Mode</label>
-          <div class="mode-card-group">
-            <div id="cardModeBw" class="mode-option active" onclick="selectColorMode('bw')">
-              <div style="display:flex;align-items:center;gap:8px;font-weight:800;font-size:1rem;color:#0f172a;">
-                <span>⚫</span> Black &amp; White (Monochrome)
-              </div>
-              <div style="font-size:0.8rem;color:var(--muted);margin-top:4px;" id="lblBwRates">
-                Simplex: ₹2.00/side | Duplex: ₹1.50/side
-              </div>
-            </div>
-            <div id="cardModeColor" class="mode-option" onclick="selectColorMode('color')">
-              <div style="display:flex;align-items:center;gap:8px;font-weight:800;font-size:1rem;color:#0f172a;">
-                <span>🎨</span> Full Colour Print
-              </div>
-              <div style="font-size:0.8rem;color:var(--muted);margin-top:4px;" id="lblColorRates">
-                Simplex: ₹10.00/side | Duplex: ₹8.00/side
-              </div>
-            </div>
+    <!-- SOURCE PICKER SHEET -->
+    <div id="modalSource" class="mascot-modal-overlay" role="dialog" aria-modal="true" aria-labelledby="srcTitle" onclick="if(event.target===this) closeSourcePicker()">
+      <div class="mascot-loader-card" style="max-width:520px;text-align:left;padding:24px;">
+        <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:10px;">
+          <div>
+            <h3 id="srcTitle" style="margin:0;font-size:1.3rem;font-weight:900;color:#0f172a;">Select a source</h3>
+            <p style="margin:6px 0 0;font-size:0.86rem;color:#64748b;">Up to <strong>50 MB</strong> per order. PDF, photos, Word, Excel, PowerPoint and TXT supported.</p>
           </div>
-          <input type="hidden" id="colorModeInput" value="bw" />
+          <button type="button" class="sheet-close" onclick="closeSourcePicker()" aria-label="Close">✕</button>
         </div>
-
-        <!-- 2B: Granular Page Selection -->
-        <div class="section-divider">
-          <label for="pageSelectionMode">Which Pages Do You Want to Print? (Document has <span
-              id="lblInlineTotalPages">1</span> pages)</label>
-          <div class="grid-2" style="align-items:start;">
-            <div>
-              <select id="pageSelectionMode" onchange="onPageModeChanged()">
-                <option value="all">All Pages (Entire Document)</option>
-                <option value="first_n">First N Pages Only (e.g. First 1, 2, 3...)</option>
-                <option value="from_to">Page Range (From Page X to Page Y)</option>
-                <option value="custom_chips">Pick Individual Pages / Custom (e.g. 1-3, 5)</option>
-                <option value="odd">Odd Pages Only (1, 3, 5...)</option>
-                <option value="even">Even Pages Only (2, 4, 6...)</option>
-              </select>
-            </div>
-
-            <div id="subPageFirstN" class="hidden">
-              <div style="display:flex;align-items:center;gap:8px;">
-                <span style="font-size:0.86rem;font-weight:600;white-space:nowrap;">Print First</span>
-                <input type="number" id="inpFirstN" min="1" value="1" onchange="syncPageRangeAndQuote()"
-                  onkeyup="syncPageRangeAndQuote()" />
-                <span style="font-size:0.86rem;font-weight:600;white-space:nowrap;">page(s)</span>
-              </div>
-            </div>
-
-            <div id="subPageFromTo" class="hidden">
-              <div style="display:flex;align-items:center;gap:6px;">
-                <span style="font-size:0.84rem;font-weight:600;">From</span>
-                <input type="number" id="inpPageFrom" min="1" value="1" onchange="syncPageRangeAndQuote()" />
-                <span style="font-size:0.84rem;font-weight:600;">To</span>
-                <input type="number" id="inpPageTo" min="1" value="1" onchange="syncPageRangeAndQuote()" />
-              </div>
-            </div>
-
-            <div id="subPageCustomText" class="hidden">
-              <input type="text" id="pageRangeInput" value="all" placeholder="e.g. 1-3, 5, 8-10"
-                onchange="onCustomRangeTextEdited()" onkeyup="if(event.key==='Enter') onCustomRangeTextEdited()" />
-            </div>
-          </div>
-
-          <!-- Interactive Page Chips -->
-          <div id="visualPagePickerWrap"
-            style="margin-top:12px;background:#f8fafc;border:1px solid #e2e8f0;border-radius:12px;padding:12px;">
-            <div
-              style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:6px;margin-bottom:8px;">
-              <span style="font-size:0.78rem;font-weight:700;color:var(--muted);text-transform:uppercase;">Interactive
-                Page Selector (Click page to toggle):</span>
-              <div style="display:flex;gap:6px;">
-                <button type="button" class="btn btn-secondary" style="padding:4px 9px;font-size:0.75rem;"
-                  onclick="quickSelectPages('all')">Select All</button>
-                <button type="button" class="btn btn-secondary" style="padding:4px 9px;font-size:0.75rem;"
-                  onclick="quickSelectPages('first1')">Only Page 1</button>
-                <button type="button" class="btn btn-secondary" style="padding:4px 9px;font-size:0.75rem;"
-                  onclick="quickSelectPages('odd')">Odd</button>
-                <button type="button" class="btn btn-secondary" style="padding:4px 9px;font-size:0.75rem;"
-                  onclick="quickSelectPages('even')">Even</button>
-              </div>
-            </div>
-            <div id="pageChipsContainer"></div>
-          </div>
+        <div class="src-grid">
+          <button type="button" class="src-btn" onclick="pickFrom('inpFiles')">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8z"/><path d="M14 3v5h5M9 13h6M9 17h6"/></svg>
+            Files
+          </button>
+          <button type="button" class="src-btn" onclick="pickFrom('inpGallery')">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="3"/><circle cx="9" cy="9" r="2"/><path d="m21 15-5-5L5 21"/></svg>
+            Gallery
+          </button>
+          <button type="button" class="src-btn" onclick="pickFrom('inpCamera')">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 8h3l2-3h6l2 3h3a1 1 0 0 1 1 1v10a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1V9a1 1 0 0 1 1-1z"/><circle cx="12" cy="13.5" r="3.5"/></svg>
+            Camera
+          </button>
         </div>
-
-        <!-- 2C: Copies, Duplex & Layout -->
-        <div class="section-divider grid-3">
-          <div>
-            <label for="copiesInput">Number of Copies (1–<span id="lblMaxCopies">50</span>)</label>
-            <input type="number" id="copiesInput" min="1" max="50" value="1" onchange="requestServerQuote()" />
-          </div>
-          <div>
-            <label for="duplexSelect">Sides (Duplex / Simplex)</label>
-            <select id="duplexSelect" onchange="requestServerQuote()">
-              <option value="OneSided">Single-Sided (1 Side/Sheet)</option>
-              <option value="TwoSidedLongEdge" id="optDuplexLong">Double-Sided — Long Edge (Book)</option>
-              <option value="TwoSidedShortEdge" id="optDuplexShort">Double-Sided — Short Edge (Flip)</option>
-            </select>
-          </div>
-          <div>
-            <label for="pagesPerSheetSelect">Pages per Side (N-Up)</label>
-            <select id="pagesPerSheetSelect" onchange="requestServerQuote()">
-              <option value="1">1 Page per Side (100%)</option>
-              <option value="2">2 Pages per Side (2-in-1)</option>
-              <option value="4">4 Pages per Side (Handout)</option>
-            </select>
-          </div>
-          <div>
-            <label for="orientationSelect">Page Orientation</label>
-            <select id="orientationSelect" onchange="requestServerQuote()">
-              <option value="auto">Auto-Detect (Match PDF)</option>
-              <option value="portrait">Portrait (Vertical)</option>
-              <option value="landscape">Landscape (Horizontal)</option>
-            </select>
-          </div>
-          <div>
-            <label for="paperSizeSelect">Paper Size</label>
-            <select id="paperSizeSelect" onchange="requestServerQuote()">
-              <option value="A4">ISO A4 (210 × 297 mm)</option>
-              <option value="Legal">Legal (216 × 356 mm)</option>
-              <option value="Letter">US Letter (216 × 279 mm)</option>
-            </select>
-          </div>
-          <div style="display:flex;flex-direction:column;justify-content:end;">
-            <label
-              style="display:flex;align-items:center;gap:8px;cursor:pointer;padding:10px 12px;border:1px solid #cbd5e1;border-radius:8px;background:#fff;color:var(--text);margin-bottom:0;">
-              <input type="checkbox" id="collateCheck" checked onchange="requestServerQuote()" />
-              <span style="font-size:0.86rem;font-weight:600;">Collate Copies</span>
-            </label>
-          </div>
-        </div>
-
-        <!-- DIGITAL RECEIPT TICKET (LIVE QUOTE) -->
-        <div id="quoteBox" class="receipt-ticket hidden">
-          <div class="receipt-header">
-            <span class="receipt-title">🧾 AUTHORITATIVE SERVER ESTIMATE</span>
-            <span style="font-size:0.75rem;font-family:var(--font-mono);color:var(--muted);">Zero Hidden Charges</span>
-          </div>
-          <div class="quote-row">
-            <span style="color:var(--muted);">Print Mode &amp; Paper:</span>
-            <strong id="qModeSummary">A4 Black &amp; White | OneSided</strong>
-          </div>
-          <div class="quote-row">
-            <span style="color:var(--muted);">Selected Pages per Copy:</span>
-            <strong><span id="qSelectedPages">0</span> of <span id="qDocPages">0</span> pages (<span
-                id="qRange">all</span>)</strong>
-          </div>
-          <div class="quote-row">
-            <span style="color:var(--muted);">Layout &amp; Copies:</span>
-            <strong><span id="qLayoutInfo">1 page/side × 1 copy</span></strong>
-          </div>
-          <div class="quote-row">
-            <span style="color:var(--muted);">Total Printed Sides:</span>
-            <strong><span id="qPrintedSides">0</span> sides (at ₹<span id="qRate">0.00</span>/side)</strong>
-          </div>
-          <div class="quote-row">
-            <span style="color:var(--muted);">Physical Paper Sheets:</span>
-            <strong><span id="qPhysicalSheets">0</span> sheets</strong>
-          </div>
-          <div class="quote-total">
-            <span>TOTAL AMOUNT DUE:</span>
-            <span>₹<span id="qTotalInr">0.00</span></span>
-          </div>
-        </div>
+        <input type="file" id="inpFiles" class="hidden" multiple
+          accept=".pdf,application/pdf,image/*,.docx,.doc,.rtf,.odt,.pptx,.xlsx,.html,.htm,.txt,.csv,.md,application/msword,application/vnd.openxmlformats-officedocument.wordprocessingml.document,application/vnd.openxmlformats-officedocument.presentationml.presentation,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,application/rtf"
+          onchange="addFilesFromInput(this)" />
+        <input type="file" id="inpGallery" class="hidden" multiple accept="image/*" onchange="addFilesFromInput(this)" />
+        <input type="file" id="inpCamera" class="hidden" accept="image/*" capture="environment" onchange="addFilesFromInput(this)" />
       </div>
+    </div>
 
-      <!-- STEP 3: Customer Details, Consent & Checkout -->
-      <div id="checkoutCard" class="card hidden">
-        <h2><span class="step-badge">3</span> Confirm Details &amp; Instant UPI / Card Checkout</h2>
-        <div class="grid-2" style="margin-bottom:14px;">
+    <!-- MERGE PHOTOS SHEET -->
+    <div id="modalMerge" class="mascot-modal-overlay" role="dialog" aria-modal="true" aria-labelledby="mergeTitle" onclick="if(event.target===this) closeMergeSheet()">
+      <div class="mascot-loader-card" style="max-width:480px;text-align:left;padding:24px;">
+        <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:10px;">
           <div>
-            <label for="custName">Your Name (for counter pickup)</label>
-            <input type="text" id="custName" placeholder="e.g. Vikash / Student Name" value="Walk-in Customer" />
+            <h3 id="mergeTitle" style="margin:0;font-size:1.2rem;font-weight:900;color:#0f172a;">Merge <span id="lblMergeCount">2</span> photos</h3>
+            <p style="margin:6px 0 0;font-size:0.86rem;color:#64748b;">They become one document, in the order shown.</p>
           </div>
+          <button type="button" class="sheet-close" onclick="closeMergeSheet()" aria-label="Close">✕</button>
+        </div>
+        <div class="opt-grid" style="margin-top:16px;">
+          <button type="button" class="opt" id="btnMergeOnePage" onclick="mergeSelectedImages('grid')"><span><span class="o-t">All on one page</span><br /><span class="o-s">e.g. ID card front + back</span></span><span class="o-i">🗂️</span></button>
+          <button type="button" class="opt" onclick="mergeSelectedImages('pages')"><span><span class="o-t">One page each</span><br /><span class="o-s">A single multi-page PDF</span></span><span class="o-i">📚</span></button>
+        </div>
+        <div class="set-hint" id="lblMergeLimit"></div>
+      </div>
+    </div>
+
+    <!-- CHECKOUT SHEET -->
+    <div id="modalCheckout" class="mascot-modal-overlay" role="dialog" aria-modal="true" aria-labelledby="coTitle" onclick="if(event.target===this) closeCheckout()">
+      <div class="mascot-loader-card co-card">
+        <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:10px;margin-bottom:10px;">
           <div>
-            <label for="custPhone">Mobile Number (optional for SMS/WhatsApp)</label>
-            <input type="text" id="custPhone" placeholder="10-digit mobile number" />
+            <h3 id="coTitle" style="margin:0;font-size:1.2rem;font-weight:900;color:#0f172a;">Confirm your order</h3>
+            <p style="margin:4px 0 0;font-size:0.82rem;color:#64748b;" id="coShop"></p>
           </div>
+          <button type="button" class="sheet-close" onclick="closeCheckout()" aria-label="Close">✕</button>
         </div>
-
-        <div class="alert alert-warn" style="font-size:0.86rem;line-height:1.6;">
-          <strong>Counter Approval &amp; Privacy Guarantee:</strong><br />
-          • Your print job appears instantly on the shopkeeper's counter screen.<br />
-          • Pay online via UPI/Cards OR pay directly at the counter — printing starts as soon as the store admin
-          approves your order.<br />
-          • Your document is encrypted and automatically deleted from the station after handover.
+        <div id="coLines"></div>
+        <div class="co-total"><span>Estimated total</span><span>₹<span id="coTotal">0.00</span></span></div>
+        <div class="set-hint">The shop's station confirms the final amount before you pay.</div>
+        <div class="co-field">
+          <label for="custName">Your name (for counter pickup)</label>
+          <input type="text" id="custName" placeholder="e.g. Vikash" autocomplete="name" value="Walk-in Customer" />
+          <label for="custPhone">Mobile number (optional)</label>
+          <input type="tel" id="custPhone" placeholder="10-digit mobile number" autocomplete="tel" inputmode="tel" />
         </div>
-
-        <label
-          style="display:flex;align-items:center;gap:10px;cursor:pointer;margin:14px 0 18px;color:var(--text);font-size:0.88rem;">
-          <input type="checkbox" id="consentCheck" checked style="width:18px;height:18px;" />
-          <span>I agree to the document retention policy and counter pickup terms.</span>
+        <label style="display:flex;align-items:flex-start;gap:10px;cursor:pointer;margin:14px 0 0;color:var(--text);font-size:0.84rem;">
+          <input type="checkbox" id="consentCheck" checked style="width:18px;height:18px;margin-top:2px;" />
+          <span>I agree to the document retention policy and counter pickup terms. Printing starts once the shop approves the order.</span>
         </label>
-
-        <div style="display:grid;grid-template-columns:repeat(auto-fit, minmax(230px, 1fr));gap:12px;">
-          <button id="btnCreateOrder" class="btn" style="width:100%;padding:14px;font-size:1.02rem;"
-            onclick="createOrderAndStartUpi('online')">
-            💳 Pay Online — UPI / Cards (₹<span id="btnAmountSpan">0.00</span>)
-          </button>
-          <button id="btnCreateOrderCash" class="btn"
-            style="width:100%;padding:14px;font-size:1.02rem;background:linear-gradient(135deg,#059669,#047857);color:#fff;box-shadow:0 4px 14px rgba(5,150,105,0.28);"
-            onclick="createOrderAndStartUpi('cash')">
-            🏪 Pay at Counter
-          </button>
+        <div id="coError" class="alert alert-error hidden" role="alert"></div>
+        <div class="co-actions">
+          <button id="btnCreateOrder" class="btn" onclick="placeOrder('online')">💳 Pay online</button>
+          <button id="btnCreateOrderCash" class="btn" style="background:linear-gradient(135deg,#059669,#047857);" onclick="placeOrder('cash')">🏪 Pay at counter</button>
         </div>
+      </div>
+    </div>
+
+    <!-- STICKY PAY BAR -->
+    <div class="paybar hidden" id="payBar">
+      <div class="paybar-inner">
+        <div class="pb-warn hidden" id="pbWarn"></div>
+        <div class="paybar-row">
+          <div>
+            <div class="pb-lbl">Estimated total</div>
+            <div class="pb-total">₹<span id="pbTotal">0.00</span></div>
+            <div class="pb-sub" id="pbSub"></div>
+          </div>
+          <div class="stepper-num">
+            <span class="pb-lbl">Copies</span>
+            <div class="stepper-box">
+              <button type="button" id="btnCopiesMinus" onclick="changeCopies(-1)" aria-label="Fewer copies">−</button>
+              <span id="lblCopies" aria-live="polite">1</span>
+              <button type="button" id="btnCopiesPlus" onclick="changeCopies(1)" aria-label="More copies">+</button>
+            </div>
+          </div>
+        </div>
+        <button type="button" class="btn btn-pay" id="btnConfirmPay" onclick="openCheckout()">Confirm &amp; Pay</button>
       </div>
     </div>
 
@@ -2296,10 +2463,6 @@
     /* ==========================================================================
        APPLICATION STATE
        ========================================================================== */
-    let currentFileToken = null;
-    let currentDocPages = 1;
-    let selectedChipPages = new Set([1]);
-    let currentQuoteToken = null;
     let currentOrder = null;
     let shopCapabilities = { supportsColor: true, supportsDuplex: true, supportsPageRange: true, maxCopies: 50 };
     let pollTimer = null;
@@ -2356,42 +2519,8 @@
           turn.textContent = 'Orders paused';
         }
 
-        if (data.pricing) {
-          const p = data.pricing;
-          document.getElementById('lblBwRates').textContent =
-            `Simplex: ₹${Number(p.simplexPerSideInr).toFixed(2)}/side | Duplex: ₹${Number(p.duplexPerSideInr).toFixed(2)}/side`;
-          document.getElementById('lblColorRates').textContent =
-            `Simplex: ₹${Number(p.colorSimplexPerSideInr || 10).toFixed(2)}/side | Duplex: ₹${Number(p.colorDuplexPerSideInr || 8).toFixed(2)}/side`;
-        }
-
-        const cardColor = document.getElementById('cardModeColor');
-        if (!data.supportsColor) {
-          cardColor.classList.add('disabled');
-          if (document.getElementById('colorModeInput').value === 'color') selectColorMode('bw');
-        } else {
-          cardColor.classList.remove('disabled');
-        }
-
-        const optDuplexLong = document.getElementById('optDuplexLong');
-        const optDuplexShort = document.getElementById('optDuplexShort');
-        if (optDuplexLong) optDuplexLong.disabled = !data.supportsDuplex;
-        if (optDuplexShort) optDuplexShort.disabled = !data.supportsDuplex;
-
-        if (data.maxCopies) {
-          document.getElementById('lblMaxCopies').textContent = data.maxCopies;
-          document.getElementById('copiesInput').max = data.maxCopies;
-        }
-
-        if (data.allowedPaperSizes) {
-          const allowed = data.allowedPaperSizes.split(',').map(s => s.trim()).filter(Boolean);
-          const sel = document.getElementById('paperSizeSelect');
-          const curVal = sel.value || 'A4';
-          sel.innerHTML = allowed.map(p => {
-            const desc = p === 'A4' ? 'ISO A4 (210 × 297 mm)' : (p === 'Legal' ? 'Legal (216 × 356 mm)' : (p === 'Letter' ? 'US Letter (216 × 279 mm)' : p));
-            return `<option value="${p}">${desc}</option>`;
-          }).join('');
-          if (allowed.includes(curVal)) sel.value = curVal;
-        }
+        renderOrderSettings();
+        if (cart.length) refreshEstimate();
       } catch (e) {
         console.error(e);
         const banner = document.getElementById('shopBanner');
@@ -2402,17 +2531,6 @@
           : 'Check if PrintAway.exe is running on port 8080';
       }
     }
-          function selectColorMode(mode) {
-      if (mode === 'color' && !shopCapabilities.supportsColor) {
-        showError('Color printing is currently disabled by the shopkeeper on this printer.');
-        return;
-      }
-      document.getElementById('colorModeInput').value = mode;
-      document.getElementById('cardModeBw').classList.toggle('active', mode === 'bw');
-      document.getElementById('cardModeColor').classList.toggle('active', mode === 'color');
-      requestServerQuote();
-    }
-
     // =========================================================================
     // A4 CROP & FIT STUDIO FOR IMAGES & PHOTOS
     // =========================================================================
@@ -2427,7 +2545,8 @@
       panY: 0,
       isDragging: false,
       lastMouseX: 0,
-      lastMouseY: 0
+      lastMouseY: 0,
+      targetDocId: null
     };
 
     function isImageFile(file) {
@@ -2541,7 +2660,7 @@
             page.drawImage(embeddedImg, { x: 0, y: 0, width: ptW, height: ptH });
           }
 
-          const pdfBytes = await pdfDoc.save();
+          const pdfBytes = await pdfDoc.save(STATION_PDF_SAVE);
           return { pdfBytes, pdfName: baseName + '_Doc.pdf', contentType: 'application/pdf' };
         } finally {
           if (host.parentNode) host.parentNode.removeChild(host);
@@ -2615,61 +2734,11 @@
           });
         }
 
-        const pdfBytes = await pdfDoc.save();
+        const pdfBytes = await pdfDoc.save(STATION_PDF_SAVE);
         const pdfName = file.name.replace(/\.[^/.]+$/, '') + '_Doc.pdf';
         return { pdfBytes, pdfName, contentType: 'application/pdf' };
       } catch (winAnsiErr) {
         return { pdfBytes: rawBuf, pdfName: file.name, contentType: 'text/plain' };
-      }
-    }
-
-    function openA4CropStudio(file) {
-      a4Studio.file = file;
-      showMascotLoader('Opening A4 Crop Studio...', 'Loading high-resolution photo preview');
-      const reader = new FileReader();
-      reader.onerror = function() {
-        hideMascotLoader();
-        showError('Unable to read selected photo file. Please try another image.');
-      };
-      reader.onload = function(e) {
-        const img = new Image();
-        img.onerror = function() {
-          hideMascotLoader();
-          showError('Invalid or corrupted image format. Please select a valid PNG, JPG, or WEBP file.');
-        };
-        img.onload = function() {
-          hideMascotLoader();
-          a4Studio.img = img;
-          a4Studio.orientation = (img.width > img.height * 1.15) ? 'landscape' : 'portrait';
-          a4Studio.fitMode = 'fit';
-          a4Studio.rotationDeg = 0;
-          a4Studio.zoom = 1.0;
-          a4Studio.panX = 0;
-          a4Studio.panY = 0;
-          const rng = document.getElementById('rngA4Zoom');
-          if (rng) rng.value = '1.0';
-          const lblVal = document.getElementById('lblA4ZoomVal');
-          if (lblVal) lblVal.textContent = '100%';
-          updateA4StudioButtons();
-          renderA4Preview();
-          const modal = document.getElementById('modalA4CropStudio');
-          modal.classList.remove('hidden');
-          modal.classList.add('active');
-          setupA4CanvasEvents();
-        };
-        img.src = e.target.result;
-      };
-      reader.readAsDataURL(file);
-    }
-
-    function reopenA4CropStudio() {
-      if (a4Studio.img) {
-        const modal = document.getElementById('modalA4CropStudio');
-        modal.classList.remove('hidden');
-        modal.classList.add('active');
-        renderA4Preview();
-      } else {
-        document.getElementById('pdfInput').click();
       }
     }
 
@@ -2748,9 +2817,12 @@
       });
     }
 
+    function a4DimsFor(orientation) {
+      return orientation === 'portrait' ? { w: 320, h: Math.round(320 * 1.4142) } : { w: 452, h: 320 };
+    }
+
     function getA4Dimensions() {
-      const isPort = a4Studio.orientation === 'portrait';
-      return isPort ? { w: 320, h: Math.round(320 * 1.4142) } : { w: 452, h: 320 };
+      return a4DimsFor(a4Studio.orientation);
     }
 
     function renderA4Preview() {
@@ -2853,119 +2925,18 @@
     }
 
     async function confirmA4CropAndGeneratePdf() {
-      if (!a4Studio.img) return;
-      showMascotLoader('Rendering High-Resolution A4 PDF...', 'Embedding adjusted photo onto ISO A4 sheet');
-      try {
-        const isPort = a4Studio.orientation === 'portrait';
-        // True 300 DPI Ultra-HD resolution for crystal clear print (2480 x 3508 px)
-        const exportW = isPort ? 2480 : 3508;
-        const exportH = isPort ? 3508 : 2480;
-        const offCanvas = document.createElement('canvas');
-        offCanvas.width = exportW;
-        offCanvas.height = exportH;
-        const ctx = offCanvas.getContext('2d');
-        ctx.imageSmoothingEnabled = true;
-        ctx.imageSmoothingQuality = 'high';
-
-        ctx.fillStyle = '#ffffff';
-        ctx.fillRect(0, 0, exportW, exportH);
-
-        const dims = getA4Dimensions();
-        const scaleMultiplier = exportW / dims.w;
-
-        const img = a4Studio.img;
-        const rot = a4Studio.rotationDeg;
-        const isRotated = (rot === 90 || rot === 270);
-        const effectiveImgW = isRotated ? img.height : img.width;
-        const effectiveImgH = isRotated ? img.width : img.height;
-
-        let drawW, drawH;
-        if (a4Studio.fitMode === 'fill') {
-          const s = Math.max(dims.w / effectiveImgW, dims.h / effectiveImgH) * a4Studio.zoom;
-          drawW = effectiveImgW * s * scaleMultiplier;
-          drawH = effectiveImgH * s * scaleMultiplier;
-        } else if (a4Studio.fitMode === 'fit') {
-          const safeW = dims.w - 16;
-          const safeH = dims.h - 16;
-          const s = Math.min(safeW / effectiveImgW, safeH / effectiveImgH);
-          drawW = effectiveImgW * s * scaleMultiplier;
-          drawH = effectiveImgH * s * scaleMultiplier;
-        } else {
-          const safeW = dims.w - 16;
-          const safeH = dims.h - 16;
-          const baseScale = Math.min(safeW / effectiveImgW, safeH / effectiveImgH);
-          const s = baseScale * a4Studio.zoom;
-          drawW = effectiveImgW * s * scaleMultiplier;
-          drawH = effectiveImgH * s * scaleMultiplier;
-        }
-
-        ctx.save();
-        ctx.translate(exportW / 2 + a4Studio.panX * scaleMultiplier, exportH / 2 + a4Studio.panY * scaleMultiplier);
-        ctx.rotate((rot * Math.PI) / 180);
-
-        const drawImgW = isRotated ? drawH : drawW;
-        const drawImgH = isRotated ? drawW : drawH;
-        ctx.drawImage(img, -drawImgW / 2, -drawImgH / 2, drawImgW, drawImgH);
-        ctx.restore();
-
-        const imgDataUrl = offCanvas.toDataURL('image/jpeg', 0.96);
-        const base64Data = imgDataUrl.split(',')[1];
-        const binaryStr = atob(base64Data);
-        const imgBytes = new Uint8Array(binaryStr.length);
-        for (let i = 0; i < binaryStr.length; i++) {
-          imgBytes[i] = binaryStr.charCodeAt(i);
-        }
-
-        const originalName = a4Studio.file ? a4Studio.file.name : 'Photo';
-        const baseName = originalName.replace(/\.[^/.]+$/, '');
-
-        let uploadBytes = null;
-        let uploadFileName = '';
-        let uploadContentType = 'application/pdf';
-
-        if (typeof PDFLib !== 'undefined' && PDFLib.PDFDocument) {
-          const pdfDoc = await PDFLib.PDFDocument.create();
-          const pageW = isPort ? 595.28 : 841.89;
-          const pageH = isPort ? 841.89 : 595.28;
-          const pdfPage = pdfDoc.addPage([pageW, pageH]);
-          const embeddedImg = await pdfDoc.embedJpg(imgBytes);
-
-          pdfPage.drawImage(embeddedImg, {
-            x: 0,
-            y: 0,
-            width: pageW,
-            height: pageH
-          });
-
-          uploadBytes = await pdfDoc.save();
-          uploadFileName = baseName + '_A4.pdf';
-          uploadContentType = 'application/pdf';
-        } else {
-          // Direct backend fallback: PrintAway station engine natively turns cropped JPEG into ISO A4 PDF!
-          uploadBytes = imgBytes;
-          uploadFileName = baseName + '_A4.jpg';
-          uploadContentType = 'image/jpeg';
-        }
-
-        closeA4CropStudio();
-
-        const data = await uploadDocumentSmart(uploadBytes, uploadFileName, uploadContentType);
-        hideMascotLoader();
-        if (!data || data.error) {
-          showError((data && data.message) || 'Upload validation failed.');
-          return;
-        }
-
-        onFileValidated(data);
-        const btnReCrop = document.getElementById('btnReAdjustCrop');
-        if (btnReCrop) btnReCrop.classList.remove('hidden');
-        const lblBadge = document.getElementById('lblDocBadge');
-        if (lblBadge) lblBadge.textContent = 'A4 PHOTO';
-      } catch (err) {
-        hideMascotLoader();
-        console.error('A4 generation error:', err);
-        showError('Could not generate A4 PDF from image: ' + err.message);
-      }
+      const doc = findDoc(a4Studio.targetDocId);
+      if (!doc || !doc.photo || !a4Studio.img) { closeA4CropStudio(); return; }
+      doc.photo.state = {
+        orientation: a4Studio.orientation,
+        fitMode: a4Studio.fitMode,
+        rotationDeg: a4Studio.rotationDeg,
+        zoom: a4Studio.zoom,
+        panX: a4Studio.panX,
+        panY: a4Studio.panY
+      };
+      closeA4CropStudio();
+      await rerenderPhoto(doc);
     }
 
     /**
@@ -3056,399 +3027,1495 @@
       return compData;
     }
 
-    async function handleFileSelected(input) {
-      showError(null);
-      if (!input.files || !input.files[0]) return;
-      const file = input.files[0];
-      try { input.value = ''; } catch(e) {}
+    /* ==========================================================================
+       MULTI-DOCUMENT ORDER (CART)
+       Every document is turned into PDF bytes in the browser where possible.
+       At checkout the selected pages of all documents are combined into ONE
+       PDF with pdf-lib and sent through the normal upload → quote → order flow,
+       so any station version can print it. Files the browser can't read
+       (e.g. .pptx/.xlsx, encrypted PDFs) are converted on the station PC and
+       must be ordered on their own.
+       ========================================================================== */
+    const STATION_MAX_BYTES = 50 * 1024 * 1024;
+    const STATION_MAX_PAGES = 500;
+    const A4_PT = { w: 595.28, h: 841.89 };
+    // The station counts pages by scanning for /Type /Page in the raw file, so pages must not be
+    // hidden inside compressed object streams (pdf-lib's default).
+    const STATION_PDF_SAVE = { useObjectStreams: false };
+    const PDFJS_SRC = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js';
+    const PDFJS_WORKER_SRC = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
 
-      if (isImageFile(file)) {
-        openA4CropStudio(file);
-        return;
-      }
+    let cart = [];
+    let activeDocId = null;
+    let previewPageIdx = 0;
+    let docSeq = 0;
+    let orderSettings = { colorMode: 'bw', duplexMode: 'OneSided', paperSize: 'A4', pagesPerSheet: 1, copies: 1 };
+    let autoCropPhotos = readPref('printaway_autocrop', '1') === '1';
+    let lastUploadedJob = null;
+    let placingOrder = false;
 
-      if (isOfficeDoc(file)) {
-        try {
-          const isDocx = /\.docx$/i.test(file.name || '');
-          let uploadBytes, uploadName, uploadType;
-          // Single-pass rule: process small .docx once client-side, or delegate larger/binary Office docs straight to station PC engine
-          if (isDocx && file.size <= 2 * 1024 * 1024) {
-            const converted = await convertDocxClientSideToPdf(file);
-            uploadBytes = converted.pdfBytes;
-            uploadName = converted.pdfName;
-            uploadType = converted.contentType || 'application/octet-stream';
-          } else {
-            showMascotLoader('Transferring Document...', 'Sending Office document directly to station PC engine for 1-pass conversion');
-            uploadBytes = await file.arrayBuffer();
-            uploadName = file.name;
-            uploadType = 'application/octet-stream';
-          }
-          const data = await uploadDocumentSmart(uploadBytes, uploadName, uploadType);
-          hideMascotLoader();
-          const btnReCrop = document.getElementById('btnReAdjustCrop');
-          if (btnReCrop) btnReCrop.classList.add('hidden');
-          const lblBadge = document.getElementById('lblDocBadge');
-          if (lblBadge) lblBadge.textContent = 'WORD / DOC';
-          onFileValidated(data);
-          return;
-        } catch (err) {
-          hideMascotLoader();
-          console.error('Office doc conversion error:', err);
-          showError('Could not process document: ' + err.message);
-          return;
-        }
-      }
+    function readPref(key, fallback) {
+      try { const v = localStorage.getItem(key); return v === null ? fallback : v; } catch (e) { return fallback; }
+    }
+    function writePref(key, value) {
+      try { localStorage.setItem(key, value); } catch (e) { }
+    }
+    const $id = id => document.getElementById(id);
+    const toU8 = b => (b instanceof Uint8Array ? b : new Uint8Array(b));
+    const round2 = n => Math.round((n + Number.EPSILON) * 100) / 100;
+    const money = n => Number(n || 0).toFixed(2);
+    const plural = (n, one, many) => n + ' ' + (n === 1 ? one : (many || one + 's'));
+    const findDoc = id => cart.find(d => d.id === id) || null;
+    const activeDoc = () => findDoc(activeDocId);
 
-      if (isTextDoc(file)) {
-        try {
-          let converted;
-          if (file.size <= 1024 * 1024) {
-            converted = await convertTextFileToPdf(file);
-          } else {
-            showMascotLoader('Transferring Text Document...', 'Sending file directly to station PC engine');
-            converted = { pdfBytes: await file.arrayBuffer(), pdfName: file.name, contentType: 'text/plain' };
-          }
-          const data = await uploadDocumentSmart(converted.pdfBytes, converted.pdfName, converted.contentType || 'application/pdf');
-          hideMascotLoader();
-          const btnReCrop = document.getElementById('btnReAdjustCrop');
-          if (btnReCrop) btnReCrop.classList.add('hidden');
-          const lblBadge = document.getElementById('lblDocBadge');
-          if (lblBadge) lblBadge.textContent = 'TEXT DOC';
-          onFileValidated(data);
-          return;
-        } catch (err) {
-          hideMascotLoader();
-          console.error('Text doc conversion error:', err);
-          showError('Could not format text document: ' + err.message);
-          return;
-        }
-      }
-
-      showMascotLoader('Uploading & Validating PDF...', 'Checking pages (up to 500 pages / 50 MB) and security signatures');
-      try {
-        const buf = await file.arrayBuffer();
-        const data = await uploadDocumentSmart(buf, file.name, 'application/pdf');
-        hideMascotLoader();
-        const btnReCrop = document.getElementById('btnReAdjustCrop');
-        if (btnReCrop) btnReCrop.classList.add('hidden');
-        const lblBadge = document.getElementById('lblDocBadge');
-        if (lblBadge) lblBadge.textContent = 'PDF';
-        onFileValidated(data);
-      } catch (e) {
-        hideMascotLoader();
-        showError('Failed to upload PDF: ' + e.message);
+    function requirePdfLib() {
+      if (typeof PDFLib === 'undefined' || !PDFLib.PDFDocument) {
+        throw new Error('The PDF engine did not load. Check your connection and refresh the page.');
       }
     }
 
-    async function printBlankPagePdf() {
-      showError(null);
-      showMascotLoader('Preparing 1 Blank Page PDF...', 'Generating 1 blank test page');
-      try {
-        let saved = null;
-        try {
-          const res = await apiFetch('/api/uploads/sample', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ pages: 1, title: 'Blank_Test_Page' })
-          });
-          if (res.ok) {
-            saved = await res.json();
-          }
-        } catch (e) { }
-
-        if (!saved || !saved.fileToken) {
-          // Client fallback: Synthesize minimal valid 1-page PDF
-          const rawPdf = `%PDF-1.4\n1 0 obj<</Type/Catalog/Pages 2 0 R>>endobj\n2 0 obj<</Type/Pages/Count 1/Kids[3 0 R]>>endobj\n3 0 obj<</Type/Page/MediaBox[0 0 595 842]/Parent 2 0 R/Resources<<>>>>endobj\nxref\n0 4\n0000000000 65535 f \n0000000009 00000 n \n0000000052 00000 n \n0000000101 00000 n \ntrailer<</Size 4/Root 1 0 R>>\nstartxref\n178\n%%EOF`;
-          const blob = new Blob([rawPdf], { type: 'application/pdf' });
-          const uploadRes = await apiFetch('/api/uploads?filename=Blank_Test_Page.pdf', {
-            method: 'POST',
-            headers: { 'X-File-Name': 'Blank_Test_Page.pdf' },
-            body: blob
-          });
-          if (uploadRes.ok) {
-            saved = await uploadRes.json();
-          }
-        }
-
-        hideMascotLoader();
-        if (!saved || !saved.fileToken) {
-          showError('Could not prepare 1-page blank document. Please upload a PDF file.');
-          return;
-        }
-
-        onFileValidated(saved);
-        calculateQuote();
-      } catch (err) {
-        hideMascotLoader();
-        showError('Error preparing blank test page: ' + err.message);
-      }
+    function allPagesSet(n) {
+      const s = new Set();
+      for (let i = 1; i <= n; i++) s.add(i);
+      return s;
     }
 
-    function onFileValidated(data) {
-      currentFileToken = data.fileToken;
-      currentDocPages = data.pageCount || 1;
-      document.getElementById('lblFileName').textContent = data.displayName;
-      document.getElementById('lblPageCount').textContent = currentDocPages;
-      document.getElementById('lblInlineTotalPages').textContent = currentDocPages;
-      document.getElementById('lblFileSize').textContent = Math.max(1, Math.round(data.sizeBytes / 1024));
-      document.getElementById('lblSha').textContent = data.sha256Prefix + '...';
-
-      const inpFirstN = document.getElementById('inpFirstN');
-      inpFirstN.max = currentDocPages;
-      inpFirstN.value = Math.min(currentDocPages, 1);
-
-      const inpFrom = document.getElementById('inpPageFrom');
-      const inpTo = document.getElementById('inpPageTo');
-      inpFrom.max = currentDocPages;
-      inpFrom.value = 1;
-      inpTo.max = currentDocPages;
-      inpTo.value = currentDocPages;
-
-      selectedChipPages = new Set();
-      for (let i = 1; i <= currentDocPages; i++) selectedChipPages.add(i);
-
-      document.getElementById('pageSelectionMode').value = 'all';
-      document.getElementById('pageRangeInput').value = 'all';
-      renderPageChips();
-      onPageModeChanged();
-
-      document.getElementById('uploadedFileInfo').classList.remove('hidden');
-      document.getElementById('configCard').classList.remove('hidden');
-      updateStepper(2);
-
-      // Smooth scroll down to options
-      setTimeout(() => {
-        document.getElementById('configCard').scrollIntoView({ behavior: 'smooth', block: 'start' });
-      }, 150);
+    function sortedPages(doc) {
+      return Array.from(doc.selected).sort((a, b) => a - b);
     }
 
-    function renderPageChips() {
-      const container = document.getElementById('pageChipsContainer');
-      const maxChips = Math.min(currentDocPages, 60);
-      let html = '';
-      for (let p = 1; p <= maxChips; p++) {
-        const isSel = selectedChipPages.has(p);
-        html += `<div class="page-chip ${isSel ? 'selected' : ''}" onclick="togglePageChip(${p})">${isSel ? '✓ ' : ''}Page ${p}</div>`;
-      }
-      if (currentDocPages > maxChips) {
-        html += `<span style="font-size:0.78rem;color:var(--muted);margin-left:6px;">(+${currentDocPages - maxChips} more pages)</span>`;
-      }
-      container.innerHTML = html;
-    }
-
-    function togglePageChip(pageNum) {
-      if (selectedChipPages.has(pageNum)) {
-        if (selectedChipPages.size <= 1) {
-          showError('At least 1 page must remain selected.');
-          return;
-        }
-        selectedChipPages.delete(pageNum);
-      } else {
-        selectedChipPages.add(pageNum);
-      }
-      document.getElementById('pageSelectionMode').value = 'custom_chips';
-      document.getElementById('subPageFirstN').classList.add('hidden');
-      document.getElementById('subPageFromTo').classList.add('hidden');
-      document.getElementById('subPageCustomText').classList.remove('hidden');
-
-      const spec = compressPagesToRangeString(Array.from(selectedChipPages).sort((a, b) => a - b));
-      document.getElementById('pageRangeInput').value = spec;
-      renderPageChips();
-      requestServerQuote();
-    }
-
-    function quickSelectPages(preset) {
-      selectedChipPages.clear();
-      if (preset === 'all') {
-        for (let i = 1; i <= currentDocPages; i++) selectedChipPages.add(i);
-        document.getElementById('pageSelectionMode').value = 'all';
-      } else if (preset === 'first1') {
-        selectedChipPages.add(1);
-        document.getElementById('pageSelectionMode').value = 'first_n';
-        document.getElementById('inpFirstN').value = 1;
-      } else if (preset === 'odd') {
-        for (let i = 1; i <= currentDocPages; i += 2) selectedChipPages.add(i);
-        document.getElementById('pageSelectionMode').value = 'odd';
-      } else if (preset === 'even') {
-        for (let i = 2; i <= currentDocPages; i += 2) selectedChipPages.add(i);
-        if (selectedChipPages.size === 0) selectedChipPages.add(1);
-        document.getElementById('pageSelectionMode').value = 'even';
-      }
-      onPageModeChanged();
-    }
-
-    function compressPagesToRangeString(sortedPages) {
-      if (!sortedPages.length) return '1';
-      if (sortedPages.length === currentDocPages) return 'all';
+    function compressPages(pages, total) {
+      if (!pages.length) return '';
+      if (pages.length === total) return 'all';
       const parts = [];
-      let start = sortedPages[0];
+      let start = pages[0];
       let prev = start;
-      for (let i = 1; i < sortedPages.length; i++) {
-        const cur = sortedPages[i];
-        if (cur === prev + 1) {
-          prev = cur;
-        } else {
-          parts.push(start === prev ? `${start}` : `${start}-${prev}`);
-          start = cur;
-          prev = cur;
-        }
+      for (let i = 1; i < pages.length; i++) {
+        if (pages[i] === prev + 1) { prev = pages[i]; continue; }
+        parts.push(start === prev ? String(start) : start + '-' + prev);
+        start = prev = pages[i];
       }
-      parts.push(start === prev ? `${start}` : `${start}-${prev}`);
+      parts.push(start === prev ? String(start) : start + '-' + prev);
       return parts.join(',');
     }
 
-    function onPageModeChanged() {
-      const mode = document.getElementById('pageSelectionMode').value;
-      document.getElementById('subPageFirstN').classList.toggle('hidden', mode !== 'first_n');
-      document.getElementById('subPageFromTo').classList.toggle('hidden', mode !== 'from_to');
-      document.getElementById('subPageCustomText').classList.toggle('hidden', mode !== 'custom_chips');
-      syncPageRangeAndQuote();
-    }
-
-    function syncPageRangeAndQuote() {
-      const mode = document.getElementById('pageSelectionMode').value;
-      selectedChipPages.clear();
-
-      if (mode === 'all') {
-        for (let i = 1; i <= currentDocPages; i++) selectedChipPages.add(i);
-        document.getElementById('pageRangeInput').value = 'all';
-      } else if (mode === 'first_n') {
-        let n = parseInt(document.getElementById('inpFirstN').value || '1', 10);
-        n = Math.max(1, Math.min(currentDocPages, n));
-        for (let i = 1; i <= n; i++) selectedChipPages.add(i);
-        document.getElementById('pageRangeInput').value = 'first:' + n;
-      } else if (mode === 'from_to') {
-        let f = parseInt(document.getElementById('inpPageFrom').value || '1', 10);
-        let t = parseInt(document.getElementById('inpPageTo').value || String(currentDocPages), 10);
-        f = Math.max(1, Math.min(currentDocPages, f));
-        t = Math.max(f, Math.min(currentDocPages, t));
-        for (let i = f; i <= t; i++) selectedChipPages.add(i);
-        document.getElementById('pageRangeInput').value = `${f}-${t}`;
-      } else if (mode === 'odd') {
-        for (let i = 1; i <= currentDocPages; i += 2) selectedChipPages.add(i);
-        document.getElementById('pageRangeInput').value = 'odd';
-      } else if (mode === 'even') {
-        for (let i = 2; i <= currentDocPages; i += 2) selectedChipPages.add(i);
-        document.getElementById('pageRangeInput').value = 'even';
+    function parsePageSpec(text, total) {
+      const raw = String(text || '').replace(/\s+/g, '');
+      if (!raw) return { error: 'Type the pages to print, e.g. 1-3, 5.' };
+      const set = new Set();
+      for (const part of raw.split(',')) {
+        if (!part) continue;
+        const m = /^(\d+)(?:-(\d+))?$/.exec(part);
+        if (!m) return { error: '"' + part + '" is not a page or range. Use numbers like 1-3, 5.' };
+        const a = parseInt(m[1], 10);
+        const b = m[2] ? parseInt(m[2], 10) : a;
+        if (a < 1 || b < 1 || a > total || b > total) return { error: 'This document has ' + plural(total, 'page') + '. "' + part + '" is outside that.' };
+        if (b < a) return { error: '"' + part + '" goes backwards. Write it as ' + b + '-' + a + '.' };
+        for (let p = a; p <= b; p++) set.add(p);
       }
-      renderPageChips();
-      requestServerQuote();
+      if (!set.size) return { error: 'Pick at least one page.' };
+      const pages = Array.from(set).sort((x, y) => x - y);
+      return { pages, normalized: compressPages(pages, total) };
     }
 
-    function onCustomRangeTextEdited() {
-      requestServerQuote();
+    function newDoc(fields) {
+      const d = Object.assign({
+        id: 'd' + (++docSeq),
+        name: 'Document',
+        kind: 'pdf',          // 'pdf' = bytes held in the browser, 'station' = converted on the shop PC
+        badge: 'PDF',
+        bytes: null,
+        version: 1,
+        pageCount: 1,
+        selected: null,
+        pageMode: 'all',
+        rangeFrom: 1,
+        rangeTo: 1,
+        customText: '',
+        fileToken: null,
+        photo: null,
+        pdfjs: null,
+        thumbs: new Map(),
+        pickedForMerge: false
+      }, fields);
+      d.pageCount = Math.max(1, d.pageCount | 0);
+      if (!d.selected) d.selected = allPagesSet(d.pageCount);
+      d.rangeTo = d.pageCount;
+      return d;
     }
 
-    async function requestServerQuote() {
-      if (!currentFileToken) return;
+    function resetDocRender(doc) {
+      if (doc.pdfjs) {
+        const p = doc.pdfjs;
+        p.then(pdf => { if (pdf) pdf.destroy(); }).catch(() => { });
+      }
+      doc.pdfjs = null;
+      doc.thumbs = new Map();
+    }
+
+    function pdfFileName(name) {
+      const base = String(name || 'document').replace(/\.[^/.]+$/, '').replace(/[^\w\- ]+/g, '_').trim() || 'document';
+      return base.slice(0, 60) + '.pdf';
+    }
+
+    /* ---------- Adding files ---------- */
+    function openSourcePicker() {
+      $id('modalSource').classList.add('active');
+      setTimeout(() => { const b = document.querySelector('#modalSource .src-btn'); if (b) b.focus(); }, 60);
+    }
+    function closeSourcePicker() { $id('modalSource').classList.remove('active'); }
+
+    function pickFrom(inputId) {
+      closeSourcePicker();
+      const el = $id(inputId);
+      try { el.value = ''; } catch (e) { }
+      el.click();
+    }
+
+    async function addFilesFromInput(input) {
+      const files = Array.from(input.files || []);
+      try { input.value = ''; } catch (e) { }
+      await addFilesToCart(files);
+    }
+
+    async function addFilesToCart(files) {
+      if (!files || !files.length) return;
       showError(null);
-      const copies = parseInt(document.getElementById('copiesInput').value || '1', 10);
-      const duplexMode = document.getElementById('duplexSelect').value;
-      const pageRange = document.getElementById('pageRangeInput').value || 'all';
-      const colorMode = document.getElementById('colorModeInput').value || 'bw';
-      const paperSize = document.getElementById('paperSizeSelect').value || 'A4';
-      const orientation = document.getElementById('orientationSelect').value || 'auto';
-      const pagesPerSheet = parseInt(document.getElementById('pagesPerSheetSelect').value || '1', 10);
-      const collate = document.getElementById('collateCheck').checked;
+      const problems = [];
+      let firstNew = null;
+      for (let i = 0; i < files.length; i++) {
+        const f = files[i];
+        const counter = files.length > 1 ? ' (' + (i + 1) + ' of ' + files.length + ')' : '';
+        try {
+          showMascotLoader('Adding ' + (f.name || 'file') + counter, 'Reading pages on your device');
+          const doc = await fileToDoc(f);
+          cart.push(doc);
+          lastUploadedJob = null;
+          if (!firstNew) firstNew = doc;
+        } catch (err) {
+          console.error('[PrintAway] Could not add file', f && f.name, err);
+          problems.push((f && f.name ? f.name + ': ' : '') + err.message);
+        }
+      }
+      hideMascotLoader();
+      if (firstNew) {
+        activeDocId = firstNew.id;
+        previewPageIdx = 0;
+      }
+      renderWorkspace();
+      if (problems.length) showError(problems.join('  •  '));
+      else if (firstNew) setTimeout(() => { const w = $id('workspace'); if (w) w.scrollIntoView({ behavior: 'smooth', block: 'start' }); }, 120);
+    }
 
+    function officeBadge(name) {
+      if (/\.pptx?$/i.test(name)) return 'SLIDES';
+      if (/\.xlsx?$/i.test(name)) return 'SHEET';
+      return 'WORD';
+    }
+
+    async function fileToDoc(file) {
+      const name = file.name || 'document';
+      if (file.size > STATION_MAX_BYTES) {
+        throw new Error('this file is ' + (file.size / 1048576).toFixed(1) + ' MB. The limit is 50 MB.');
+      }
+      if (isImageFile(file)) return await imageFileToDoc(file);
+
+      if (/\.pdf$/i.test(name) || file.type === 'application/pdf') {
+        const bytes = new Uint8Array(await file.arrayBuffer());
+        const info = await inspectPdf(bytes);
+        if (info) return newDoc({ name, kind: 'pdf', badge: 'PDF', bytes, pageCount: info.pageCount });
+        // Encrypted or unusual PDF: the station validates it and prints it as its own job.
+        return await stationDoc(bytes, name, 'application/pdf', 'PDF');
+      }
+
+      if (isOfficeDoc(file)) {
+        if (/\.docx$/i.test(name) && file.size <= 2 * 1024 * 1024) {
+          const converted = await convertDocxClientSideToPdf(file);
+          if (converted.contentType === 'application/pdf') {
+            const bytes = toU8(converted.pdfBytes);
+            const info = await inspectPdf(bytes);
+            if (info) return newDoc({ name, kind: 'pdf', badge: 'WORD', bytes, pageCount: info.pageCount });
+          }
+        }
+        return await stationDoc(await file.arrayBuffer(), name, 'application/octet-stream', officeBadge(name));
+      }
+
+      if (isTextDoc(file)) {
+        if (file.size <= 1024 * 1024) {
+          const converted = await convertTextFileToPdf(file);
+          if (converted.contentType === 'application/pdf') {
+            const bytes = toU8(converted.pdfBytes);
+            const info = await inspectPdf(bytes);
+            if (info) return newDoc({ name, kind: 'pdf', badge: 'TEXT', bytes, pageCount: info.pageCount });
+          }
+          return await stationDoc(converted.pdfBytes, converted.pdfName, converted.contentType, 'TEXT');
+        }
+        return await stationDoc(await file.arrayBuffer(), name, 'text/plain', 'TEXT');
+      }
+
+      throw new Error('this file type is not supported. Use PDF, photos, Word, Excel, PowerPoint or TXT.');
+    }
+
+    async function inspectPdf(bytes) {
+      if (typeof PDFLib === 'undefined' || !PDFLib.PDFDocument) return null;
       try {
-        const res = await apiFetch('/api/orders/quote', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            fileToken: currentFileToken,
-            copies,
-            duplexMode,
-            pageRange,
-            colorMode,
-            paperSize,
-            orientation,
-            pagesPerSheet,
-            collate
-          })
+        const pdf = await PDFLib.PDFDocument.load(bytes, { updateMetadata: false });
+        const n = pdf.getPageCount();
+        return n > 0 ? { pageCount: n } : null;
+      } catch (e) {
+        console.warn('[PrintAway] Browser could not open this PDF; the station will handle it.', e);
+        return null;
+      }
+    }
+
+    async function stationDoc(bytes, name, contentType, badge) {
+      showMascotLoader('Sending ' + name + ' to the shop PC…', 'This file type is converted on the print station');
+      const data = await uploadDocumentSmart(bytes, name, contentType);
+      if (!data || !data.fileToken) throw new Error((data && data.message) || 'the station did not accept the file.');
+      return newDoc({
+        name: name,
+        kind: 'station',
+        badge,
+        fileToken: data.fileToken,
+        pageCount: Math.max(1, parseInt(data.pageCount || 1, 10))
+      });
+    }
+
+    async function addBlankPageDoc() {
+      showError(null);
+      try {
+        requirePdfLib();
+        const pdf = await PDFLib.PDFDocument.create();
+        pdf.addPage([A4_PT.w, A4_PT.h]);
+        const doc = newDoc({ name: 'Blank page', kind: 'pdf', badge: 'BLANK', bytes: await pdf.save(STATION_PDF_SAVE), pageCount: 1 });
+        cart.push(doc);
+        lastUploadedJob = null;
+        activeDocId = doc.id;
+        previewPageIdx = 0;
+        renderWorkspace();
+      } catch (e) {
+        showError('Could not add a blank page: ' + e.message);
+      }
+    }
+
+    function toggleAutoCrop() {
+      autoCropPhotos = !autoCropPhotos;
+      writePref('printaway_autocrop', autoCropPhotos ? '1' : '0');
+      syncAutoCropChip();
+    }
+    function syncAutoCropChip() {
+      const b = $id('btnAutoCrop');
+      if (b) b.setAttribute('aria-pressed', autoCropPhotos ? 'true' : 'false');
+    }
+
+    /* ---------- Photos ---------- */
+    async function loadImageCanvas(file) {
+      const url = URL.createObjectURL(file);
+      try {
+        const img = await new Promise((resolve, reject) => {
+          const im = new Image();
+          im.onload = () => resolve(im);
+          im.onerror = () => reject(new Error('could not read this image. Try a JPG or PNG (HEIC photos are not supported by browsers).'));
+          im.src = url;
         });
-        const data = await res.json();
-        if (!res.ok || data.error) {
-          showError(data.message || 'Quote calculation failed.');
-          document.getElementById('quoteBox').classList.add('hidden');
-          document.getElementById('checkoutCard').classList.add('hidden');
+        // Cap at A4 @ 300 DPI so a handful of camera photos don't exhaust phone memory.
+        const scale = Math.min(1, 3508 / Math.max(img.naturalWidth, img.naturalHeight));
+        const c = document.createElement('canvas');
+        c.width = Math.max(1, Math.round(img.naturalWidth * scale));
+        c.height = Math.max(1, Math.round(img.naturalHeight * scale));
+        const ctx = c.getContext('2d');
+        ctx.imageSmoothingQuality = 'high';
+        ctx.drawImage(img, 0, 0, c.width, c.height);
+        return c;
+      } finally {
+        URL.revokeObjectURL(url);
+      }
+    }
+
+    // Finds the bright sheet of paper in a photo taken on a darker surface.
+    // Returns null when there is nothing worth trimming (screenshots, scans, plain photos).
+    function detectPaperBounds(src) {
+      try {
+        const scale = Math.min(1, 360 / Math.max(src.width, src.height));
+        const w = Math.max(1, Math.round(src.width * scale));
+        const h = Math.max(1, Math.round(src.height * scale));
+        const c = document.createElement('canvas');
+        c.width = w; c.height = h;
+        const ctx = c.getContext('2d', { willReadFrequently: true });
+        ctx.drawImage(src, 0, 0, w, h);
+        const px = ctx.getImageData(0, 0, w, h).data;
+        const total = w * h;
+        const lum = new Uint8Array(total);
+        const hist = new Array(256).fill(0);
+        for (let i = 0, j = 0; j < total; i += 4, j++) {
+          const v = ((px[i] * 299 + px[i + 1] * 587 + px[i + 2] * 114) / 1000) | 0;
+          lum[j] = v; hist[v]++;
+        }
+        // Otsu threshold separates paper from background.
+        let sumAll = 0;
+        for (let t = 0; t < 256; t++) sumAll += t * hist[t];
+        let sumB = 0, wB = 0, best = 0, thr = 128, meanDark = 0, meanBright = 255;
+        for (let t = 0; t < 256; t++) {
+          wB += hist[t];
+          if (!wB) continue;
+          const wF = total - wB;
+          if (!wF) break;
+          sumB += t * hist[t];
+          const mB = sumB / wB, mF = (sumAll - sumB) / wF;
+          const between = wB * wF * (mB - mF) * (mB - mF);
+          if (between > best) { best = between; thr = t; meanDark = mB; meanBright = mF; }
+        }
+        if (meanBright - meanDark < 45) return null;
+        const bright = new Uint8Array(total);
+        let nBright = 0;
+        for (let j = 0; j < total; j++) if (lum[j] > thr) { bright[j] = 1; nBright++; }
+        const frac = nBright / total;
+        if (frac < 0.15 || frac > 0.97) return null;
+
+        // Longest stretch above the cutoff; short dips (lines of text, ruled lines) don't break it.
+        const longestRun = (values, cutoff) => {
+          const maxGap = Math.max(2, Math.round(values.length * 0.08));
+          let bestS = -1, bestE = -1, s = -1, lastOn = -1;
+          for (let i = 0; i <= values.length; i++) {
+            const on = i < values.length && values[i] >= cutoff;
+            if (on) {
+              if (s < 0) s = i;
+              lastOn = i;
+            } else if (s >= 0 && (i === values.length || i - lastOn > maxGap)) {
+              if (lastOn + 1 - s > bestE - bestS) { bestS = s; bestE = lastOn + 1; }
+              s = -1;
+            }
+          }
+          return bestS < 0 ? null : [bestS, bestE];
+        };
+
+        const rowFrac = new Array(h).fill(0);
+        for (let y = 0; y < h; y++) {
+          let n = 0;
+          for (let x = 0; x < w; x++) n += bright[y * w + x];
+          rowFrac[y] = n / w;
+        }
+        const rows = longestRun(rowFrac, Math.max(...rowFrac) * 0.5);
+        if (!rows) return null;
+        const colFrac = new Array(w).fill(0);
+        const rowSpan = rows[1] - rows[0];
+        for (let x = 0; x < w; x++) {
+          let n = 0;
+          for (let y = rows[0]; y < rows[1]; y++) n += bright[y * w + x];
+          colFrac[x] = n / rowSpan;
+        }
+        const cols = longestRun(colFrac, Math.max(...colFrac) * 0.5);
+        if (!cols) return null;
+
+        const area = ((rows[1] - rows[0]) * (cols[1] - cols[0])) / total;
+        if (area < 0.2 || area > 0.92) return null;
+        const padX = Math.round(w * 0.01), padY = Math.round(h * 0.01);
+        const x0 = Math.max(0, cols[0] - padX), x1 = Math.min(w, cols[1] + padX);
+        const y0 = Math.max(0, rows[0] - padY), y1 = Math.min(h, rows[1] + padY);
+        return {
+          x: Math.round(x0 / scale),
+          y: Math.round(y0 / scale),
+          w: Math.max(1, Math.round((x1 - x0) / scale)),
+          h: Math.max(1, Math.round((y1 - y0) / scale))
+        };
+      } catch (e) {
+        console.warn('[PrintAway] Auto-crop skipped', e);
+        return null;
+      }
+    }
+
+    function cropCanvas(src, b) {
+      const c = document.createElement('canvas');
+      c.width = b.w; c.height = b.h;
+      c.getContext('2d').drawImage(src, b.x, b.y, b.w, b.h, 0, 0, b.w, b.h);
+      return c;
+    }
+
+    function defaultPhotoState() {
+      return { orientation: 'auto', fitMode: 'fit', rotationDeg: 0, zoom: 1, panX: 0, panY: 0 };
+    }
+
+    function photoImage(doc) {
+      return doc.photo.useCrop && doc.photo.cropped ? doc.photo.cropped : doc.photo.src;
+    }
+
+    function resolvePhotoOrientation(img, st) {
+      if (st.orientation === 'portrait' || st.orientation === 'landscape') return st.orientation;
+      const turned = st.rotationDeg === 90 || st.rotationDeg === 270;
+      const w = turned ? img.height : img.width;
+      const h = turned ? img.width : img.height;
+      return w > h * 1.15 ? 'landscape' : 'portrait';
+    }
+
+    async function imageFileToDoc(file) {
+      const src = await loadImageCanvas(file);
+      const bounds = detectPaperBounds(src);
+      const cropped = bounds ? cropCanvas(src, bounds) : null;
+      const doc = newDoc({
+        name: file.name || 'Photo',
+        kind: 'pdf',
+        badge: 'PHOTO',
+        pageCount: 1,
+        photo: { src, cropped, useCrop: autoCropPhotos && !!cropped, state: defaultPhotoState() }
+      });
+      await renderPhotoDoc(doc);
+      return doc;
+    }
+
+    async function renderPhotoDoc(doc) {
+      const img = photoImage(doc);
+      const st = Object.assign({}, doc.photo.state, { orientation: resolvePhotoOrientation(img, doc.photo.state) });
+      const bytes = await composeImageA4Pdf(img, st);
+      resetDocRender(doc);
+      doc.bytes = bytes;
+      doc.version++;
+      lastUploadedJob = null;
+    }
+
+    async function canvasToJpegBytes(canvas, quality) {
+      const blob = await new Promise(resolve => canvas.toBlob(resolve, 'image/jpeg', quality));
+      if (!blob) throw new Error('the browser could not encode the image.');
+      return new Uint8Array(await blob.arrayBuffer());
+    }
+
+    async function jpegPagePdf(jpegBytes, isPortrait) {
+      requirePdfLib();
+      const pdf = await PDFLib.PDFDocument.create();
+      const pageW = isPortrait ? A4_PT.w : A4_PT.h;
+      const pageH = isPortrait ? A4_PT.h : A4_PT.w;
+      const page = pdf.addPage([pageW, pageH]);
+      const embedded = await pdf.embedJpg(jpegBytes);
+      page.drawImage(embedded, { x: 0, y: 0, width: pageW, height: pageH });
+      return await pdf.save(STATION_PDF_SAVE);
+    }
+
+    // Same geometry as the A4 Crop Studio preview, rendered at 300 DPI.
+    async function composeImageA4Pdf(img, st) {
+      const isPort = st.orientation === 'portrait';
+      const exportW = isPort ? 2480 : 3508;
+      const exportH = isPort ? 3508 : 2480;
+      const canvas = document.createElement('canvas');
+      canvas.width = exportW;
+      canvas.height = exportH;
+      const ctx = canvas.getContext('2d');
+      ctx.imageSmoothingEnabled = true;
+      ctx.imageSmoothingQuality = 'high';
+      ctx.fillStyle = '#ffffff';
+      ctx.fillRect(0, 0, exportW, exportH);
+
+      const dims = a4DimsFor(st.orientation);
+      const k = exportW / dims.w;
+      const rot = st.rotationDeg || 0;
+      const turned = rot === 90 || rot === 270;
+      const effW = turned ? img.height : img.width;
+      const effH = turned ? img.width : img.height;
+      let s;
+      if (st.fitMode === 'fill') s = Math.max(dims.w / effW, dims.h / effH) * (st.zoom || 1);
+      else if (st.fitMode === 'fit') s = Math.min((dims.w - 16) / effW, (dims.h - 16) / effH);
+      else s = Math.min((dims.w - 16) / effW, (dims.h - 16) / effH) * (st.zoom || 1);
+      const drawW = effW * s * k;
+      const drawH = effH * s * k;
+
+      ctx.save();
+      ctx.translate(exportW / 2 + (st.panX || 0) * k, exportH / 2 + (st.panY || 0) * k);
+      ctx.rotate((rot * Math.PI) / 180);
+      const w = turned ? drawH : drawW;
+      const h = turned ? drawW : drawH;
+      ctx.drawImage(img, -w / 2, -h / 2, w, h);
+      ctx.restore();
+
+      return await jpegPagePdf(await canvasToJpegBytes(canvas, 0.92), isPort);
+    }
+
+    async function setPhotoOption(key, value) {
+      const d = activeDoc();
+      if (!d || !d.photo || d.photo.state[key] === value) return;
+      d.photo.state[key] = value;
+      Object.assign(d.photo.state, { zoom: 1, panX: 0, panY: 0 });
+      await rerenderPhoto(d);
+    }
+
+    async function togglePhotoCrop() {
+      const d = activeDoc();
+      if (!d || !d.photo || !d.photo.cropped) return;
+      d.photo.useCrop = !d.photo.useCrop;
+      Object.assign(d.photo.state, { zoom: 1, panX: 0, panY: 0 });
+      await rerenderPhoto(d);
+    }
+
+    async function rerenderPhoto(d) {
+      showMascotLoader('Updating photo…', 'Fitting it on the A4 sheet');
+      try {
+        await renderPhotoDoc(d);
+      } catch (e) {
+        showError('Could not update the photo: ' + e.message);
+      } finally {
+        hideMascotLoader();
+      }
+      renderDocStrip();
+      renderDocSettings();
+      renderThumbGrid();
+      renderPreview();
+      refreshEstimate();
+    }
+
+    function editActivePhoto() {
+      const d = activeDoc();
+      if (!d || !d.photo) return;
+      const img = photoImage(d);
+      const st = d.photo.state;
+      a4Studio.targetDocId = d.id;
+      a4Studio.img = img;
+      a4Studio.orientation = resolvePhotoOrientation(img, st);
+      a4Studio.fitMode = st.fitMode || 'fit';
+      a4Studio.rotationDeg = st.rotationDeg || 0;
+      a4Studio.zoom = st.zoom || 1;
+      a4Studio.panX = st.panX || 0;
+      a4Studio.panY = st.panY || 0;
+      const rng = $id('rngA4Zoom');
+      if (rng) rng.value = String(a4Studio.zoom);
+      const lbl = $id('lblA4ZoomVal');
+      if (lbl) lbl.textContent = Math.round(a4Studio.zoom * 100) + '%';
+      updateA4StudioButtons();
+      renderA4Preview();
+      const modal = $id('modalA4CropStudio');
+      modal.classList.remove('hidden');
+      modal.classList.add('active');
+      setupA4CanvasEvents();
+    }
+
+    /* ---------- Merging photos ---------- */
+    function pickedPhotos() {
+      return cart.filter(d => d.photo && d.pickedForMerge);
+    }
+
+    function toggleSelectAllImages() {
+      const photos = cart.filter(d => d.photo);
+      const allPicked = photos.length > 0 && photos.every(d => d.pickedForMerge);
+      photos.forEach(d => { d.pickedForMerge = !allPicked; });
+      renderDocStrip();
+      renderMergeBar();
+    }
+
+    function renderMergeBar() {
+      const bar = $id('mergeBar');
+      const photos = cart.filter(d => d.photo);
+      bar.classList.toggle('hidden', photos.length < 2);
+      const n = pickedPhotos().length;
+      const btn = $id('btnMergeImgs');
+      btn.disabled = n < 2;
+      btn.textContent = n >= 2 ? 'Merge ' + n + ' photos' : 'Merge';
+      $id('btnSelectAllImgs').textContent = photos.length && photos.every(d => d.pickedForMerge) ? 'Clear selection' : 'Select all photos';
+      $id('lblMergeHint').textContent = n >= 2 ? '' : 'Tick 2 or more photos to merge them';
+    }
+
+    function openMergeSheet() {
+      const n = pickedPhotos().length;
+      if (n < 2) return;
+      $id('lblMergeCount').textContent = n;
+      $id('btnMergeOnePage').disabled = n > 6;
+      $id('lblMergeLimit').textContent = n > 6 ? 'Up to 6 photos fit on one page. Pick fewer, or use "One page each".' : '';
+      $id('modalMerge').classList.add('active');
+    }
+    function closeMergeSheet() { $id('modalMerge').classList.remove('active'); }
+
+    function drawContained(ctx, img, rotationDeg, x, y, w, h) {
+      const turned = rotationDeg === 90 || rotationDeg === 270;
+      const effW = turned ? img.height : img.width;
+      const effH = turned ? img.width : img.height;
+      const s = Math.min(w / effW, h / effH);
+      const dw = effW * s, dh = effH * s;
+      ctx.save();
+      ctx.translate(x + w / 2, y + h / 2);
+      ctx.rotate((rotationDeg * Math.PI) / 180);
+      const iw = turned ? dh : dw;
+      const ih = turned ? dw : dh;
+      ctx.drawImage(img, -iw / 2, -ih / 2, iw, ih);
+      ctx.restore();
+    }
+
+    async function composeGridPdf(docs) {
+      const W = 2480, H = 3508, margin = 110, gap = 70;
+      const n = docs.length;
+      const cols = n <= 2 ? 1 : 2;
+      const rows = Math.ceil(n / cols);
+      const cellW = (W - margin * 2 - gap * (cols - 1)) / cols;
+      const cellH = (H - margin * 2 - gap * (rows - 1)) / rows;
+      const canvas = document.createElement('canvas');
+      canvas.width = W; canvas.height = H;
+      const ctx = canvas.getContext('2d');
+      ctx.imageSmoothingQuality = 'high';
+      ctx.fillStyle = '#ffffff';
+      ctx.fillRect(0, 0, W, H);
+      docs.forEach((d, i) => {
+        const r = Math.floor(i / cols), c = i % cols;
+        drawContained(ctx, photoImage(d), d.photo.state.rotationDeg || 0,
+          margin + c * (cellW + gap), margin + r * (cellH + gap), cellW, cellH);
+      });
+      return await jpegPagePdf(await canvasToJpegBytes(canvas, 0.92), true);
+    }
+
+    async function mergeSelectedImages(layout) {
+      const picks = pickedPhotos();
+      if (picks.length < 2) return;
+      if (layout === 'grid' && picks.length > 6) return;
+      closeMergeSheet();
+      showMascotLoader('Merging ' + picks.length + ' photos…', layout === 'grid' ? 'Arranging them on one A4 page' : 'Building one multi-page document');
+      try {
+        requirePdfLib();
+        let bytes;
+        let pageCount;
+        if (layout === 'grid') {
+          bytes = await composeGridPdf(picks);
+          pageCount = 1;
+        } else {
+          const out = await PDFLib.PDFDocument.create();
+          for (const d of picks) {
+            const src = await PDFLib.PDFDocument.load(d.bytes);
+            const [pg] = await out.copyPages(src, [0]);
+            out.addPage(pg);
+          }
+          bytes = await out.save(STATION_PDF_SAVE);
+          pageCount = picks.length;
+        }
+        const merged = newDoc({ name: 'Merged photos (' + picks.length + ')', kind: 'pdf', badge: 'MERGED', bytes, pageCount });
+        const insertAt = cart.indexOf(picks[0]);
+        picks.forEach(resetDocRender);
+        cart = cart.filter(d => !picks.includes(d));
+        cart.splice(Math.min(insertAt, cart.length), 0, merged);
+        activeDocId = merged.id;
+        previewPageIdx = 0;
+        lastUploadedJob = null;
+      } catch (e) {
+        showError('Could not merge the photos: ' + e.message);
+      } finally {
+        hideMascotLoader();
+      }
+      renderWorkspace();
+    }
+
+    /* ---------- Preview & thumbnails (pdf.js, loaded on demand) ---------- */
+    let pdfjsLoading = null;
+    function ensurePdfJs() {
+      if (window.pdfjsLib) return Promise.resolve(window.pdfjsLib);
+      if (pdfjsLoading) return pdfjsLoading;
+      pdfjsLoading = new Promise(resolve => {
+        const s = document.createElement('script');
+        s.src = PDFJS_SRC;
+        s.onload = () => {
+          try {
+            window.pdfjsLib.GlobalWorkerOptions.workerSrc = PDFJS_WORKER_SRC;
+            resolve(window.pdfjsLib);
+          } catch (e) {
+            resolve(null);
+          }
+        };
+        s.onerror = () => { pdfjsLoading = null; resolve(null); };
+        document.head.appendChild(s);
+      });
+      return pdfjsLoading;
+    }
+
+    function getPdfJsDoc(doc) {
+      if (!doc.bytes) return Promise.resolve(null);
+      if (!doc.pdfjs) {
+        const copy = doc.bytes.slice(); // pdf.js takes ownership of the buffer it is given
+        doc.pdfjs = ensurePdfJs()
+          .then(lib => (lib ? lib.getDocument({ data: copy }).promise : null))
+          .catch(e => { console.warn('[PrintAway] Preview unavailable', e); return null; });
+      }
+      return doc.pdfjs;
+    }
+
+    async function renderPdfPageToCanvas(doc, pageNum, canvas, maxW, maxH) {
+      const pdf = await getPdfJsDoc(doc);
+      if (!pdf) return false;
+      const page = await pdf.getPage(pageNum);
+      const base = page.getViewport({ scale: 1 });
+      const dpr = Math.min(2, window.devicePixelRatio || 1);
+      const fit = Math.min(maxW / base.width, maxH / base.height);
+      const vp = page.getViewport({ scale: fit * dpr });
+      canvas.width = Math.max(1, Math.round(vp.width));
+      canvas.height = Math.max(1, Math.round(vp.height));
+      canvas.style.width = Math.round(vp.width / dpr) + 'px';
+      canvas.style.height = Math.round(vp.height / dpr) + 'px';
+      await page.render({ canvasContext: canvas.getContext('2d'), viewport: vp }).promise;
+      return true;
+    }
+
+    let previewSeq = 0;
+    async function renderPreview() {
+      const d = activeDoc();
+      if (!d) return;
+      previewPageIdx = Math.max(0, Math.min(d.pageCount - 1, previewPageIdx));
+      const pageNum = previewPageIdx + 1;
+      $id('pvName').textContent = d.name;
+      $id('pvPos').textContent = pageNum + ' / ' + d.pageCount;
+      $id('pvPrev').disabled = previewPageIdx === 0;
+      $id('pvNext').disabled = previewPageIdx >= d.pageCount - 1;
+      $id('pvNav').classList.toggle('hidden', d.pageCount < 2);
+      $id('pvEditBtn').classList.toggle('hidden', !d.photo);
+      $id('pvFoot').textContent = d.kind === 'station'
+        ? 'This file is converted on the shop PC, so a page preview is not available.'
+        : (d.pageCount > 1 ? 'Tap a thumbnail to preview it; tap its ✓ to skip or include that page.' : '');
+      updatePreviewDecorations();
+
+      const placeholder = $id('pvPlaceholder');
+      const placeholderText = $id('pvPlaceholderText');
+      if (d.kind === 'station' || !d.bytes) {
+        $id('pvCanvas').classList.add('hidden');
+        placeholder.classList.remove('hidden');
+        placeholderText.textContent = d.badge + ' document · page ' + pageNum + ' of ' + d.pageCount;
+        return;
+      }
+
+      const token = ++previewSeq;
+      const renderKey = d.id + ':' + d.version;
+      if ($id('pvCanvas').dataset.doc !== renderKey) {
+        // Never leave another document's page on screen while this one renders.
+        $id('pvCanvas').classList.add('hidden');
+        placeholder.classList.remove('hidden');
+        placeholderText.textContent = 'Loading preview…';
+      }
+      const stage = $id('pvStage');
+      const maxW = Math.max(160, Math.min(520, stage.clientWidth - 24));
+      const maxH = window.innerWidth <= 600 ? 340 : 420;
+      const fresh = document.createElement('canvas');
+      let ok = false;
+      try {
+        ok = await renderPdfPageToCanvas(d, pageNum, fresh, maxW, maxH);
+      } catch (e) {
+        console.warn('[PrintAway] Page render failed', e);
+      }
+      if (token !== previewSeq) return;
+      const old = $id('pvCanvas');
+      if (!ok) {
+        old.classList.add('hidden');
+        placeholder.classList.remove('hidden');
+        placeholderText.textContent = 'Preview unavailable · page ' + pageNum + ' of ' + d.pageCount;
+        return;
+      }
+      fresh.id = 'pvCanvas';
+      fresh.dataset.doc = renderKey;
+      fresh.setAttribute('aria-label', 'Preview of page ' + pageNum);
+      old.replaceWith(fresh);
+      placeholder.classList.add('hidden');
+      updatePreviewDecorations();
+    }
+
+    function updatePreviewDecorations() {
+      const d = activeDoc();
+      if (!d) return;
+      const pageNum = previewPageIdx + 1;
+      const included = d.selected.has(pageNum);
+      const canvas = $id('pvCanvas');
+      canvas.classList.toggle('bw', orderSettings.colorMode === 'bw');
+      $id('thumbGrid').classList.toggle('bw', orderSettings.colorMode === 'bw');
+      canvas.classList.toggle('excluded', !included);
+      $id('pvExcluded').classList.toggle('hidden', included);
+      $id('pvIncludeChk').checked = included;
+      $id('pvCount').textContent = d.pageCount > 1
+        ? d.selected.size + ' of ' + d.pageCount + ' pages selected'
+        : '1 page';
+      const badges = [
+        orderSettings.colorMode === 'color' ? 'Colour' : 'B&W',
+        orderSettings.duplexMode === 'OneSided' ? '1-sided' : '2-sided',
+        orderSettings.paperSize
+      ];
+      if (orderSettings.pagesPerSheet > 1) badges.push(orderSettings.pagesPerSheet + ' per side');
+      if (d.photo) badges.push(d.photo.state.fitMode === 'fill' ? 'Fill page' : (d.photo.state.fitMode === 'fit' ? 'Fit to page' : 'Custom crop'));
+      $id('pvBadges').innerHTML = badges.map(b => '<span>' + escapeHtml(b) + '</span>').join('');
+    }
+
+    function showPreviewPage(idx) {
+      previewPageIdx = idx;
+      syncThumbStates();
+      renderPreview();
+    }
+
+    function stepPreviewPage(delta) {
+      const d = activeDoc();
+      if (!d) return;
+      const next = Math.max(0, Math.min(d.pageCount - 1, previewPageIdx + delta));
+      if (next !== previewPageIdx) showPreviewPage(next);
+    }
+
+    let thumbObserver = null;
+    let thumbQueue = [];
+    let thumbWorking = false;
+
+    function renderThumbGrid() {
+      const grid = $id('thumbGrid');
+      const d = activeDoc();
+      if (!d || d.pageCount < 2) {
+        grid.classList.add('hidden');
+        grid.innerHTML = '';
+        grid.dataset.key = '';
+        return;
+      }
+      grid.classList.remove('hidden');
+      const key = d.id + ':' + d.version;
+      if (grid.dataset.key === key) { syncThumbStates(); return; }
+      grid.dataset.key = key;
+      thumbQueue = [];
+      if (thumbObserver) thumbObserver.disconnect();
+      let html = '';
+      for (let p = 1; p <= d.pageCount; p++) {
+        const cached = d.thumbs.get(p);
+        html += '<div class="thumb" role="button" tabindex="0" data-page="' + p + '" aria-label="Preview page ' + p + '">' +
+          '<div class="t-img">' + (cached ? '<img alt="" src="' + cached + '">' : '<span>' + p + '</span>') + '</div>' +
+          '<div class="t-lbl">Page ' + p + '</div>' +
+          '<button type="button" class="t-tick" data-tick="' + p + '">✓</button></div>';
+      }
+      grid.innerHTML = html;
+      syncThumbStates();
+      if (d.kind !== 'station' && d.bytes && 'IntersectionObserver' in window) {
+        thumbObserver = new IntersectionObserver(entries => {
+          entries.forEach(en => {
+            if (!en.isIntersecting) return;
+            thumbObserver.unobserve(en.target);
+            const p = parseInt(en.target.dataset.page, 10);
+            if (!d.thumbs.has(p)) { thumbQueue.push([d, p, d.version]); pumpThumbs(); }
+          });
+        }, { root: grid, rootMargin: '240px' });
+        grid.querySelectorAll('.thumb').forEach(el => thumbObserver.observe(el));
+      }
+    }
+
+    async function pumpThumbs() {
+      if (thumbWorking) return;
+      thumbWorking = true;
+      try {
+        while (thumbQueue.length) {
+          const [d, p, ver] = thumbQueue.shift();
+          if (d.version !== ver || !cart.includes(d) || d.thumbs.has(p)) continue;
+          const c = document.createElement('canvas');
+          let ok = false;
+          try { ok = await renderPdfPageToCanvas(d, p, c, 110, 156); } catch (e) { ok = false; }
+          if (!ok) { thumbQueue = []; break; }
+          if (d.version !== ver) continue;
+          const url = c.toDataURL('image/jpeg', 0.72);
+          d.thumbs.set(p, url);
+          const grid = $id('thumbGrid');
+          if (grid.dataset.key === d.id + ':' + ver) {
+            const slot = grid.querySelector('.thumb[data-page="' + p + '"] .t-img');
+            if (slot) slot.innerHTML = '<img alt="" src="' + url + '">';
+          }
+        }
+      } finally {
+        thumbWorking = false;
+      }
+    }
+
+    function syncThumbStates() {
+      const d = activeDoc();
+      if (!d) return;
+      $id('thumbGrid').querySelectorAll('.thumb').forEach(el => {
+        const p = parseInt(el.dataset.page, 10);
+        const on = d.selected.has(p);
+        el.classList.toggle('off', !on);
+        el.classList.toggle('current', p === previewPageIdx + 1);
+        const tick = el.querySelector('.t-tick');
+        if (tick) {
+          tick.textContent = on ? '✓' : '✕';
+          tick.setAttribute('aria-label', (on ? 'Skip page ' : 'Print page ') + p);
+          tick.setAttribute('aria-pressed', on ? 'true' : 'false');
+        }
+      });
+    }
+
+    /* ---------- Documents strip ---------- */
+    function renderDocStrip() {
+      const strip = $id('docStrip');
+      strip.innerHTML = cart.map((d, i) => {
+        const pages = d.pageCount > 1 && d.selected.size !== d.pageCount
+          ? d.selected.size + ' of ' + d.pageCount + ' pages'
+          : plural(d.pageCount, 'page');
+        const photoNote = d.photo ? (d.photo.useCrop ? ' · Auto-cropped' : ' · Original') : '';
+        const icon = d.photo ? '🖼️' : (d.badge === 'BLANK' ? '📄' : '📑');
+        return '<div class="doc-card' + (d.id === activeDocId ? ' active' : '') + '" role="listitem" tabindex="0" data-doc="' + d.id + '" aria-current="' + (d.id === activeDocId) + '">' +
+          '<div class="dc-top"><span class="dc-label">' + icon + ' Doc ' + (i + 1) + '</span>' +
+          '<button type="button" class="dc-del" data-del="' + d.id + '" aria-label="Remove ' + escapeHtml(d.name) + '">🗑</button></div>' +
+          '<div class="dc-name" title="' + escapeHtml(d.name) + '">' + escapeHtml(d.name) + '</div>' +
+          '<div class="dc-meta">' + pages + ' · ' + escapeHtml(d.badge) + photoNote + '</div>' +
+          (d.kind === 'station' ? '<div class="dc-warn">Converted at shop · order on its own</div>' : '') +
+          (d.photo ? '<label class="dc-pick"><input type="checkbox" data-pick="' + d.id + '"' + (d.pickedForMerge ? ' checked' : '') + ' /> Merge</label>' : '') +
+          '</div>';
+      }).join('');
+    }
+
+    function selectDoc(id) {
+      if (!findDoc(id) || id === activeDocId) return;
+      activeDocId = id;
+      previewPageIdx = 0;
+      renderDocStrip();
+      renderDocSettings();
+      renderThumbGrid();
+      renderPreview();
+    }
+
+    function removeDoc(id) {
+      const idx = cart.findIndex(d => d.id === id);
+      if (idx < 0) return;
+      resetDocRender(cart[idx]);
+      cart.splice(idx, 1);
+      lastUploadedJob = null;
+      if (activeDocId === id) {
+        const next = cart[Math.min(idx, cart.length - 1)];
+        activeDocId = next ? next.id : null;
+        previewPageIdx = 0;
+      }
+      showError(null);
+      renderWorkspace();
+    }
+
+    /* ---------- Per-document page selection ---------- */
+    function renderDocSettings() {
+      const d = activeDoc();
+      if (!d) return;
+      const multi = d.pageCount > 1;
+      $id('secPages').classList.toggle('hidden', !multi);
+      $id('secPhoto').classList.toggle('hidden', !d.photo);
+      $id('docSettingsCard').classList.toggle('hidden', !multi && !d.photo);
+      if (multi) {
+        $id('pageModeSelect').value = d.pageMode;
+        $id('rowRange').classList.toggle('hidden', d.pageMode !== 'range');
+        $id('rowCustom').classList.toggle('hidden', d.pageMode !== 'custom');
+        const from = $id('inpFrom'), to = $id('inpTo');
+        from.max = to.max = d.pageCount;
+        from.value = d.rangeFrom;
+        to.value = d.rangeTo;
+        $id('inpCustom').value = d.customText || compressPages(sortedPages(d), d.pageCount);
+        $id('lblPagesSummary').textContent = d.selected.size + ' of ' + d.pageCount + ' selected';
+      }
+      if (d.photo) {
+        const st = d.photo.state;
+        document.querySelectorAll('[data-photo-ori]').forEach(b => b.classList.toggle('active', b.dataset.photoOri === st.orientation));
+        document.querySelectorAll('[data-photo-fit]').forEach(b => b.classList.toggle('active', b.dataset.photoFit === st.fitMode));
+        const cropBtn = document.querySelector('[data-photo-crop]');
+        cropBtn.disabled = !d.photo.cropped;
+        cropBtn.classList.toggle('active', !!(d.photo.cropped && d.photo.useCrop));
+        $id('lblPhotoCrop').textContent = !d.photo.cropped ? 'No crop needed' : (d.photo.useCrop ? 'Auto-cropped' : 'Original photo');
+        $id('lblPhotoCropSub').textContent = !d.photo.cropped ? 'No page edges found' : (d.photo.useCrop ? 'Tap to use the original' : 'Tap to trim the background');
+      }
+    }
+
+    function applyPageMode(d) {
+      const n = d.pageCount;
+      const s = new Set();
+      if (d.pageMode === 'odd') {
+        for (let p = 1; p <= n; p += 2) s.add(p);
+      } else if (d.pageMode === 'even') {
+        for (let p = 2; p <= n; p += 2) s.add(p);
+      } else if (d.pageMode === 'range') {
+        let a = Math.max(1, Math.min(n, parseInt(d.rangeFrom, 10) || 1));
+        let b = Math.max(1, Math.min(n, parseInt(d.rangeTo, 10) || n));
+        if (b < a) { const t = a; a = b; b = t; }
+        d.rangeFrom = a; d.rangeTo = b;
+        for (let p = a; p <= b; p++) s.add(p);
+      } else if (d.pageMode === 'custom') {
+        const r = parsePageSpec(d.customText, n);
+        if (r.error) return r.error;
+        r.pages.forEach(p => s.add(p));
+      } else {
+        for (let p = 1; p <= n; p++) s.add(p);
+      }
+      if (!s.size) return 'No pages match that choice.';
+      d.selected = s;
+      return null;
+    }
+
+    function onPageModeChange(mode) {
+      const d = activeDoc();
+      if (!d) return;
+      d.pageMode = mode;
+      if (mode === 'range') { d.rangeFrom = 1; d.rangeTo = d.pageCount; }
+      if (mode === 'custom') d.customText = compressPages(sortedPages(d), d.pageCount);
+      const err = applyPageMode(d);
+      showError(err);
+      afterSelectionChange();
+    }
+
+    function onRangeInputs() {
+      const d = activeDoc();
+      if (!d) return;
+      d.rangeFrom = $id('inpFrom').value;
+      d.rangeTo = $id('inpTo').value;
+      showError(applyPageMode(d));
+      afterSelectionChange();
+    }
+
+    function onCustomRange() {
+      const d = activeDoc();
+      if (!d) return;
+      const r = parsePageSpec($id('inpCustom').value, d.pageCount);
+      if (r.error) { showError(r.error); return; }
+      showError(null);
+      d.customText = r.normalized;
+      d.selected = new Set(r.pages);
+      afterSelectionChange();
+    }
+
+    function toggleIncludePage(pageNum) {
+      const d = activeDoc();
+      if (!d) return;
+      if (d.selected.has(pageNum)) {
+        if (d.selected.size <= 1) {
+          showError('Keep at least one page. To drop the whole document, tap its 🗑 button.');
+          updatePreviewDecorations();
           return;
         }
-        currentQuoteToken = data.quoteToken;
-
-        if (Array.isArray(data.resolvedPages)) {
-          selectedChipPages = new Set(data.resolvedPages);
-          renderPageChips();
-        }
-
-        const modeLabel = data.colorMode === 'color' ? '🎨 Full Colour' : '⚫ Black & White';
-        const duplexLabel = data.duplexMode === 'OneSided' ? 'Single-Sided (Simplex)' : `Double-Sided (${data.duplexMode})`;
-        document.getElementById('qModeSummary').textContent = `${data.paperSize} ${modeLabel} | ${duplexLabel}`;
-        document.getElementById('qSelectedPages').textContent = data.selectedPages;
-        document.getElementById('qDocPages').textContent = data.documentPages;
-        document.getElementById('qRange').textContent = data.pageRange;
-        document.getElementById('qLayoutInfo').textContent = `${data.pagesPerSheet} page(s)/side × ${data.copies} copy(s) (${data.collate ? 'Collated' : 'Uncollated'})`;
-        document.getElementById('qPrintedSides').textContent = data.printedSides;
-        document.getElementById('qRate').textContent = Number(data.ratePerSideInr).toFixed(2);
-        document.getElementById('qPhysicalSheets').textContent = data.physicalSheets;
-        const totalFormatted = Number(data.totalAmountInr).toFixed(2);
-        document.getElementById('qTotalInr').textContent = totalFormatted;
-        const btnAmt = document.getElementById('btnAmountSpan');
-        if (btnAmt) btnAmt.textContent = totalFormatted;
-
-        document.getElementById('quoteBox').classList.remove('hidden');
-        document.getElementById('checkoutCard').classList.remove('hidden');
-        updateStepper(3);
-      } catch (e) {
-        showError('Quote error: ' + e.message);
+        d.selected.delete(pageNum);
+      } else {
+        d.selected.add(pageNum);
       }
+      showError(null);
+      const pages = sortedPages(d);
+      d.pageMode = pages.length === d.pageCount ? 'all' : 'custom';
+      d.customText = compressPages(pages, d.pageCount);
+      afterSelectionChange();
     }
 
-    async function createOrderAndStartUpi(paymentMethod = 'online') {
+    function afterSelectionChange() {
+      lastUploadedJob = null;
+      renderDocSettings();
+      syncThumbStates();
+      updatePreviewDecorations();
+      renderDocStrip();
+      renderOrderSettings();
+      refreshEstimate();
+    }
+
+    /* ---------- Order-wide settings & live estimate ---------- */
+    function getRates() {
+      const p = (shopCapabilities && shopCapabilities.pricing) || {};
+      const num = (v, fallback) => { const n = Number(v); return isFinite(n) && n >= 0 ? n : fallback; };
+      return {
+        bwSimplex: num(p.simplexPerSideInr, 2),
+        bwDuplex: num(p.duplexPerSideInr, 1.5),
+        colorSimplex: num(p.colorSimplexPerSideInr, 10),
+        colorDuplex: num(p.colorDuplexPerSideInr, 8),
+        minCharge: num(p.minOrderChargeInr, 0),
+        taxPercent: num(p.taxPercent, 0)
+      };
+    }
+
+    // In 2-sided mode each document starts on a fresh sheet, so an odd page count gets a blank back.
+    function computeJobLayout() {
+      const pad = orderSettings.duplexMode !== 'OneSided' && orderSettings.pagesPerSheet === 1 && cart.length > 1;
+      let pages = 0, blanks = 0;
+      cart.forEach((d, i) => {
+        const n = d.selected.size;
+        pages += n;
+        if (pad && i < cart.length - 1 && n % 2 === 1) blanks++;
+      });
+      return { pages, blanks, totalPages: pages + blanks };
+    }
+
+    // Mirrors PdfAndPrinterEngine.CalculateQuote on the station; the station's quote is still authoritative.
+    function estimateQuote() {
+      const L = computeJobLayout();
+      if (L.totalPages <= 0) return null;
+      const r = getRates();
+      const isDuplex = orderSettings.duplexMode !== 'OneSided';
+      const isColor = orderSettings.colorMode === 'color';
+      const copies = orderSettings.copies;
+      const sidesPerCopy = Math.ceil(L.totalPages / orderSettings.pagesPerSheet);
+      const sides = sidesPerCopy * copies;
+      const sheetsPerCopy = isDuplex ? Math.ceil(sidesPerCopy / 2) : sidesPerCopy;
+      const rate = isColor ? (isDuplex ? r.colorDuplex : r.colorSimplex) : (isDuplex ? r.bwDuplex : r.bwSimplex);
+      const base = round2(sides * rate);
+      const subtotal = Math.max(base, r.minCharge);
+      const tax = round2(subtotal * (r.taxPercent / 100));
+      return Object.assign({}, L, {
+        sidesPerCopy, sides, sheets: sheetsPerCopy * copies, rate, base,
+        minDelta: round2(subtotal - base), tax, taxPercent: r.taxPercent, total: round2(subtotal + tax)
+      });
+    }
+
+    function renderOrderSettings() {
+      const r = getRates();
+      const caps = shopCapabilities || {};
+      const colorOk = caps.supportsColor !== false;
+      const duplexOk = caps.supportsDuplex !== false;
+      const totalSelected = computeJobLayout().pages;
+      if (orderSettings.duplexMode !== 'OneSided' && (totalSelected < 2 || !duplexOk)) orderSettings.duplexMode = 'OneSided';
+      if (orderSettings.colorMode === 'color' && !colorOk) orderSettings.colorMode = 'bw';
+      const isColor = orderSettings.colorMode === 'color';
+      const isDuplex = orderSettings.duplexMode !== 'OneSided';
+
+      $id('optBw').classList.toggle('active', !isColor);
+      $id('optColor').classList.toggle('active', isColor);
+      $id('optColor').disabled = !colorOk;
+      $id('lblBwRate').textContent = '₹' + money(r.bwSimplex) + '/page';
+      $id('lblColorRate').textContent = colorOk ? '₹' + money(r.colorSimplex) + '/page' : 'Not available here';
+
+      $id('optSimplex').classList.toggle('active', !isDuplex);
+      $id('optDuplex').classList.toggle('active', isDuplex);
+      $id('optDuplex').disabled = !duplexOk || totalSelected < 2;
+      $id('lblSimplexRate').textContent = '₹' + money(isColor ? r.colorSimplex : r.bwSimplex) + '/side';
+      $id('lblDuplexRate').textContent = !duplexOk ? 'Not available here'
+        : (totalSelected < 2 ? 'Needs 2 or more pages' : '₹' + money(isColor ? r.colorDuplex : r.bwDuplex) + '/side');
+
+      const L = computeJobLayout();
+      const note = $id('lblDuplexNote');
+      note.classList.toggle('hidden', !L.blanks);
+      note.textContent = L.blanks
+        ? 'So each document starts on its own sheet, ' + plural(L.blanks, 'blank back page') + ' will be added and charged per side.'
+        : '';
+
+      const allowed = String(caps.allowedPaperSizes || 'A4').split(',').map(s => s.trim()).filter(Boolean);
+      if (!allowed.length) allowed.push('A4');
+      if (!allowed.includes(orderSettings.paperSize)) orderSettings.paperSize = allowed[0];
+      const paperDesc = { A4: '210 × 297 mm', Legal: '216 × 356 mm', Letter: '216 × 279 mm' };
+      $id('paperGrid').innerHTML = allowed.map(p =>
+        '<button type="button" class="opt' + (p === orderSettings.paperSize ? ' active' : '') + '" data-paper="' + escapeHtml(p) + '">' +
+        '<span><span class="o-t">' + escapeHtml(p) + '</span><br /><span class="o-s">' + escapeHtml(paperDesc[p] || 'Paper') + '</span></span></button>'
+      ).join('');
+      $id('ppsSelect').value = String(orderSettings.pagesPerSheet);
+
+      const maxCopies = Math.max(1, parseInt(caps.maxCopies || 50, 10));
+      if (orderSettings.copies > maxCopies) orderSettings.copies = maxCopies;
+      $id('lblCopies').textContent = orderSettings.copies;
+      $id('btnCopiesMinus').disabled = orderSettings.copies <= 1;
+      $id('btnCopiesPlus').disabled = orderSettings.copies >= maxCopies;
+    }
+
+    function setOrderOption(key, value) {
+      const caps = shopCapabilities || {};
+      if (key === 'colorMode' && value === 'color' && caps.supportsColor === false) {
+        showError('This shop has colour printing switched off right now.');
+        return;
+      }
+      if (key === 'duplexMode' && value !== 'OneSided' && caps.supportsDuplex === false) {
+        showError('This shop has 2-sided printing switched off right now.');
+        return;
+      }
+      if (key === 'pagesPerSheet' && ![1, 2, 4].includes(value)) return;
+      orderSettings[key] = value;
+      if (key === 'duplexMode' || key === 'pagesPerSheet') lastUploadedJob = null;
       showError(null);
-      if (!currentQuoteToken) return;
-      const consent = document.getElementById('consentCheck').checked;
-      const customerName = document.getElementById('custName').value;
-      const customerPhone = document.getElementById('custPhone').value;
+      renderOrderSettings();
+      updatePreviewDecorations();
+      refreshEstimate();
+    }
 
-      showMascotLoader(
-        paymentMethod === 'cash' ? 'Sending Order to Counter...' : 'Securing Order...',
-        paymentMethod === 'cash' ? 'Queueing order for shopkeeper cash approval' : 'Reserving hardware printer queue & generating UPI order'
-      );
+    function changeCopies(delta) {
+      const maxCopies = Math.max(1, parseInt((shopCapabilities && shopCapabilities.maxCopies) || 50, 10));
+      orderSettings.copies = Math.max(1, Math.min(maxCopies, orderSettings.copies + delta));
+      renderOrderSettings();
+      refreshEstimate();
+    }
 
+    function getCheckoutProblem() {
+      if (!cart.length) return 'Add a document to print.';
+      const stationOnly = cart.find(d => d.kind === 'station');
+      if (stationOnly && cart.length > 1) {
+        return '"' + stationOnly.name + '" is converted on the shop PC, so it has to be ordered on its own. Remove the other documents or order them separately.';
+      }
+      const L = computeJobLayout();
+      if (L.totalPages > STATION_MAX_PAGES) return 'This order has ' + L.totalPages + ' pages. The station accepts up to ' + STATION_MAX_PAGES + ' per order.';
+      if (shopCapabilities && shopCapabilities.acceptingOrders === false) return shopCapabilities.statusReason || 'This shop is not accepting orders right now.';
+      return null;
+    }
+
+    function refreshEstimate() {
+      const q = estimateQuote();
+      $id('pbTotal').textContent = money(q ? q.total : 0);
+      let sub = '';
+      if (q) {
+        sub = cart.length === 1
+          ? '₹' + money(q.rate) + '/side × ' + plural(q.sidesPerCopy, 'side') + ' × ' + plural(orderSettings.copies, 'copy', 'copies')
+          : plural(cart.length, 'document') + ' · ' + plural(q.totalPages, 'page') + ' per copy';
+        if (q.minDelta > 0) sub += ' · min. charge applies';
+        if (q.tax > 0) sub += ' · incl. ' + q.taxPercent + '% tax';
+      }
+      $id('pbSub').textContent = sub;
+      const problem = getCheckoutProblem();
+      const warn = $id('pbWarn');
+      warn.textContent = problem || '';
+      warn.classList.toggle('hidden', !problem || !cart.length);
+      $id('btnConfirmPay').disabled = !!problem;
+    }
+
+    function renderWorkspace() {
+      const has = cart.length > 0;
+      $id('uploadCard').classList.toggle('hidden', has);
+      $id('workspace').classList.toggle('hidden', !has);
+      $id('payBar').classList.toggle('hidden', !has);
+      document.body.classList.toggle('has-paybar', has);
+      updateStepper(has ? 2 : 1);
+      syncAutoCropChip();
+      if (!has) { activeDocId = null; return; }
+      if (!activeDoc()) { activeDocId = cart[0].id; previewPageIdx = 0; }
+      renderDocStrip();
+      renderMergeBar();
+      renderDocSettings();
+      renderOrderSettings();
+      renderThumbGrid();
+      renderPreview();
+      refreshEstimate();
+    }
+
+    /* ---------- Checkout ---------- */
+    function openCheckout() {
+      const problem = getCheckoutProblem();
+      if (problem) { showError(problem); return; }
+      const q = estimateQuote();
+      if (!q) return;
+      const caps = shopCapabilities || {};
+      $id('coShop').textContent = caps.shopName ? 'Printing at ' + caps.shopName : '';
+      const rows = [
+        ['Documents', cart.length === 1 ? cart[0].name : plural(cart.length, 'document')],
+        ['Pages per copy', String(q.pages) + (q.blanks ? ' + ' + plural(q.blanks, 'blank back') : '')],
+        ['Print', (orderSettings.colorMode === 'color' ? 'Colour' : 'B&W') + ' · ' + (orderSettings.duplexMode === 'OneSided' ? '1-sided' : '2-sided') + ' · ' + orderSettings.paperSize + (orderSettings.pagesPerSheet > 1 ? ' · ' + orderSettings.pagesPerSheet + ' per side' : '')],
+        ['Copies', String(orderSettings.copies)],
+        ['Printed sides', q.sides + ' × ₹' + money(q.rate)]
+      ];
+      if (q.minDelta > 0) rows.push(['Minimum order top-up', '₹' + money(q.minDelta)]);
+      if (q.tax > 0) rows.push(['Tax (' + q.taxPercent + '%)', '₹' + money(q.tax)]);
+      $id('coLines').innerHTML = rows.map(r => '<div class="co-row"><span>' + escapeHtml(r[0]) + '</span><strong>' + escapeHtml(r[1]) + '</strong></div>').join('');
+      $id('coTotal').textContent = money(q.total);
+      $id('coError').classList.add('hidden');
+      updateStepper(3);
+      $id('modalCheckout').classList.add('active');
+    }
+
+    function closeCheckout() {
+      if (placingOrder) return;
+      $id('modalCheckout').classList.remove('active');
+      updateStepper(cart.length ? 2 : 1);
+    }
+
+    function showCheckoutError(msg) {
+      const el = $id('coError');
+      el.textContent = msg || '';
+      el.classList.toggle('hidden', !msg);
+    }
+
+    function jobKey() {
+      return JSON.stringify([
+        cart.map(d => [d.id, d.version, sortedPages(d).join(',')]),
+        orderSettings.duplexMode !== 'OneSided' && orderSettings.pagesPerSheet === 1
+      ]);
+    }
+
+    async function buildCombinedPdf(docs) {
+      requirePdfLib();
+      const out = await PDFLib.PDFDocument.create();
+      const pad = orderSettings.duplexMode !== 'OneSided' && orderSettings.pagesPerSheet === 1 && docs.length > 1;
+      for (let i = 0; i < docs.length; i++) {
+        const d = docs[i];
+        showMascotLoader('Combining your documents…', 'Adding ' + d.name + ' (' + (i + 1) + ' of ' + docs.length + ')');
+        const src = await PDFLib.PDFDocument.load(d.bytes, { updateMetadata: false });
+        const pages = await out.copyPages(src, sortedPages(d).map(p => p - 1));
+        pages.forEach(p => out.addPage(p));
+        if (pad && i < docs.length - 1 && pages.length % 2 === 1) {
+          const size = pages[pages.length - 1].getSize();
+          out.addPage([size.width, size.height]);
+        }
+      }
+      out.setTitle(docs.length === 1 ? docs[0].name : docs.length + ' documents');
+      out.setProducer('PrintAway');
+      return await out.save(STATION_PDF_SAVE);
+    }
+
+    // Uploads exactly what will print and returns { fileToken, pageRange } for the quote.
+    async function prepareJobUpload() {
+      const key = jobKey();
+      if (lastUploadedJob && lastUploadedJob.key === key) return lastUploadedJob;
+      let job;
+      if (cart.length === 1 && cart[0].kind === 'station') {
+        const d = cart[0];
+        const pages = sortedPages(d);
+        job = { fileToken: d.fileToken, pageRange: pages.length === d.pageCount ? 'all' : compressPages(pages, d.pageCount) };
+      } else if (cart.length === 1 && cart[0].pageCount <= STATION_MAX_PAGES) {
+        // Single document: send the file untouched and let the station apply the page range.
+        const d = cart[0];
+        const pages = sortedPages(d);
+        showMascotLoader('Uploading to the shop…', 'Sending ' + d.name);
+        try {
+          const up = await uploadDocumentSmart(d.bytes, pdfFileName(d.name), 'application/pdf');
+          job = { fileToken: up.fileToken, pageRange: pages.length === d.pageCount ? 'all' : compressPages(pages, d.pageCount) };
+        } catch (err) {
+          // Some PDFs (compressed page trees) can't be read by the station; a re-saved copy can.
+          if (!/pages/i.test(err.message || '')) throw err;
+          console.warn('[PrintAway] Station could not read the original PDF; retrying with a re-saved copy.', err);
+          const bytes = await buildCombinedPdf([d]);
+          showMascotLoader('Uploading to the shop…', 'Sending ' + d.name);
+          const up = await uploadDocumentSmart(bytes, pdfFileName(d.name), 'application/pdf');
+          job = { fileToken: up.fileToken, pageRange: 'all' };
+        }
+      } else {
+        const bytes = await buildCombinedPdf(cart);
+        if (bytes.byteLength > STATION_MAX_BYTES) {
+          throw new Error('The combined file is ' + (bytes.byteLength / 1048576).toFixed(1) + ' MB. The station accepts up to 50 MB, so remove a document or pick fewer pages.');
+        }
+        const name = cart.length === 1 ? pdfFileName(cart[0].name) : pdfFileName(cart.length + ' docs - ' + cart[0].name);
+        showMascotLoader('Uploading to the shop…', 'Sending ' + plural(cart.length, 'document') + ' as one print job');
+        const up = await uploadDocumentSmart(bytes, name, 'application/pdf');
+        job = { fileToken: up.fileToken, pageRange: 'all' };
+      }
+      job.key = key;
+      lastUploadedJob = job;
+      return job;
+    }
+
+    async function fetchQuote(job) {
+      const res = await apiFetch('/api/orders/quote', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          fileToken: job.fileToken,
+          copies: orderSettings.copies,
+          duplexMode: orderSettings.duplexMode,
+          pageRange: job.pageRange,
+          colorMode: orderSettings.colorMode,
+          paperSize: orderSettings.paperSize,
+          orientation: 'auto',
+          pagesPerSheet: orderSettings.pagesPerSheet,
+          collate: true
+        })
+      });
+      const data = await parseJsonSafe(res, 'Price check');
+      if (!res.ok || data.error || !data.quoteToken) {
+        lastUploadedJob = null;
+        throw new Error(data.message || 'The station could not price this order.');
+      }
+      return data;
+    }
+
+    async function placeOrder(paymentMethod) {
+      if (placingOrder) return;
+      showCheckoutError(null);
+      showError(null);
+      const problem = getCheckoutProblem();
+      if (problem) { showCheckoutError(problem); return; }
+      const consent = $id('consentCheck').checked;
+      if (!consent) { showCheckoutError('Please accept the pickup terms to place the order.'); return; }
+      const isCash = paymentMethod === 'cash';
+      placingOrder = true;
+      $id('btnCreateOrder').disabled = true;
+      $id('btnCreateOrderCash').disabled = true;
       try {
+        showMascotLoader('Preparing your print job…', 'Packing your pages');
+        const job = await prepareJobUpload();
+        showMascotLoader('Checking the final price…', 'The shop station confirms pages and rates');
+        const quote = await fetchQuote(job);
+        showMascotLoader(isCash ? 'Sending order to the counter…' : 'Securing your order…',
+          isCash ? 'The shopkeeper will collect cash and approve it' : 'Reserving the printer and opening payment');
         const res = await apiFetch('/api/orders', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ quoteToken: currentQuoteToken, customerName, customerPhone, consentAccepted: consent, paymentMethod })
+          body: JSON.stringify({
+            quoteToken: quote.quoteToken,
+            customerName: $id('custName').value,
+            customerPhone: $id('custPhone').value,
+            consentAccepted: consent,
+            paymentMethod
+          })
         });
-        const data = await res.json();
+        const data = await parseJsonSafe(res, 'Order');
+        if (!res.ok || data.error) throw new Error(data.message || 'The order could not be created.');
         hideMascotLoader();
-        if (!res.ok || data.error) {
-          showError(data.message || 'Order creation failed.');
-          return;
-        }
+        placingOrder = false;
+        $id('modalCheckout').classList.remove('active');
         currentOrder = data;
-        const trkInput = document.getElementById('trackTokenInput');
+        const trkInput = $id('trackTokenInput');
         if (trkInput) trkInput.value = data.publicToken;
-        document.getElementById('orderWizard').classList.add('hidden');
-        document.getElementById('trackingCard').classList.remove('hidden');
+        $id('orderWizard').classList.add('hidden');
+        $id('payBar').classList.add('hidden');
+        document.body.classList.remove('has-paybar');
+        $id('trackingCard').classList.remove('hidden');
         updateStepper(4);
         triggerConfetti();
-
         await refreshCurrentOrder();
         if (pollTimer) clearInterval(pollTimer);
         pollTimer = setInterval(refreshCurrentOrder, 2500);
-
-        // Auto-launch Razorpay Checkout modal only when paying online
-        if (paymentMethod !== 'cash' && data.razorpayOrderId && data.razorpayKeyId && typeof Razorpay !== 'undefined') {
+        if (!isCash && data.razorpayOrderId && data.razorpayKeyId && typeof Razorpay !== 'undefined') {
           setTimeout(launchRazorpayCheckout, 350);
         }
       } catch (e) {
         hideMascotLoader();
-        showError('Order error: ' + e.message);
+        showCheckoutError(e.message);
+      } finally {
+        placingOrder = false;
+        $id('btnCreateOrder').disabled = false;
+        $id('btnCreateOrderCash').disabled = false;
       }
     }
+
+    /* ---------- Wiring ---------- */
+    (function wireWorkspaceEvents() {
+      const strip = $id('docStrip');
+      strip.addEventListener('click', e => {
+        const del = e.target.closest('[data-del]');
+        if (del) { e.stopPropagation(); removeDoc(del.dataset.del); return; }
+        if (e.target.closest('.dc-pick')) return;
+        const card = e.target.closest('[data-doc]');
+        if (card) selectDoc(card.dataset.doc);
+      });
+      strip.addEventListener('change', e => {
+        const pick = e.target.closest('[data-pick]');
+        if (!pick) return;
+        const d = findDoc(pick.dataset.pick);
+        if (d) d.pickedForMerge = pick.checked;
+        renderMergeBar();
+      });
+      strip.addEventListener('keydown', e => {
+        if ((e.key === 'Enter' || e.key === ' ') && e.target.matches('[data-doc]')) {
+          e.preventDefault();
+          selectDoc(e.target.dataset.doc);
+        }
+      });
+
+      const grid = $id('thumbGrid');
+      grid.addEventListener('click', e => {
+        const tick = e.target.closest('[data-tick]');
+        if (tick) { e.stopPropagation(); toggleIncludePage(parseInt(tick.dataset.tick, 10)); return; }
+        const t = e.target.closest('.thumb');
+        if (t) showPreviewPage(parseInt(t.dataset.page, 10) - 1);
+      });
+      grid.addEventListener('keydown', e => {
+        if ((e.key === 'Enter' || e.key === ' ') && e.target.classList.contains('thumb')) {
+          e.preventDefault();
+          showPreviewPage(parseInt(e.target.dataset.page, 10) - 1);
+        }
+      });
+
+      $id('paperGrid').addEventListener('click', e => {
+        const b = e.target.closest('[data-paper]');
+        if (b) setOrderOption('paperSize', b.dataset.paper);
+      });
+
+      document.addEventListener('keydown', e => {
+        if (e.key !== 'Escape') return;
+        closeSourcePicker();
+        closeMergeSheet();
+        closeCheckout();
+      });
+
+      const dropTargets = [$id('uploadDropZone'), $id('workspace')];
+      dropTargets.forEach(zone => {
+        if (!zone) return;
+        ['dragenter', 'dragover'].forEach(ev => zone.addEventListener(ev, e => {
+          e.preventDefault();
+          e.stopPropagation();
+          zone.classList.add('dragover');
+        }));
+        ['dragleave', 'drop'].forEach(ev => zone.addEventListener(ev, e => {
+          e.preventDefault();
+          e.stopPropagation();
+          zone.classList.remove('dragover');
+        }));
+        zone.addEventListener('drop', e => {
+          const files = e.dataTransfer && e.dataTransfer.files;
+          if (files && files.length) addFilesToCart(Array.from(files));
+        });
+      });
+
+      syncAutoCropChip();
+    })();
 
     async function selectCashAtCounter() {
       if (!currentOrder) return;
@@ -3492,7 +4559,7 @@
         key: currentOrder.razorpayKeyId,
         amount: currentOrder.amountPaise,
         currency: 'INR',
-        name: 'PrintAway',
+        name: (shopCapabilities && shopCapabilities.shopName) || 'PrintAway',
         description: 'Print Order ' + currentOrder.orderCode,
         image: '/assets/logo.png',
         order_id: currentOrder.razorpayOrderId,
@@ -3629,47 +4696,21 @@
 
     function resetToNewOrder() {
       if (pollTimer) clearInterval(pollTimer);
-      currentFileToken = null;
-      currentQuoteToken = null;
+      cart.forEach(resetDocRender);
+      cart = [];
+      activeDocId = null;
+      previewPageIdx = 0;
+      lastUploadedJob = null;
+      orderSettings.copies = 1;
       currentOrder = null;
-      document.getElementById('uploadedFileInfo').classList.add('hidden');
-      document.getElementById('configCard').classList.add('hidden');
-      document.getElementById('checkoutCard').classList.add('hidden');
-      document.getElementById('trackingCard').classList.add('hidden');
-      document.getElementById('orderWizard').classList.remove('hidden');
-      updateStepper(1);
+      ['modalSource', 'modalMerge', 'modalCheckout'].forEach(id => $id(id).classList.remove('active'));
+      $id('trackingCard').classList.add('hidden');
+      $id('orderWizard').classList.remove('hidden');
       showError(null);
+      renderWorkspace();
       const sp = new URLSearchParams(window.location.search).get('station');
       if (sp) localStorage.setItem('printaway_api_base', sp.trim().replace(/\/+$/, ''));
       loadShopStatus();
-    }
-
-    // Drag and Drop Zone events
-    const dropZone = document.getElementById('uploadDropZone');
-    if (dropZone) {
-      ['dragenter', 'dragover'].forEach(eventName => {
-        dropZone.addEventListener(eventName, e => {
-          e.preventDefault();
-          e.stopPropagation();
-          dropZone.classList.add('dragover');
-        }, false);
-      });
-      ['dragleave', 'drop'].forEach(eventName => {
-        dropZone.addEventListener(eventName, e => {
-          e.preventDefault();
-          e.stopPropagation();
-          dropZone.classList.remove('dragover');
-        }, false);
-      });
-      dropZone.addEventListener('drop', e => {
-        const dt = e.dataTransfer;
-        const files = dt.files;
-        if (files && files.length > 0) {
-          const inp = document.getElementById('pdfInput');
-          inp.files = files;
-          handleFileSelected(inp);
-        }
-      });
     }
 
     window.addEventListener('DOMContentLoaded', () => {
