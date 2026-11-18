@@ -358,15 +358,7 @@ namespace PrintAway.SaaS
                 // Get active printer & tunnel info
                 var shopStatus = _repo.GetShopAndAvailabilityStatus();
                 string activePrinter = Convert.ToString(shopStatus["activeQueueName"]);
-                string tunnelUrl = "";
-                if (_tunnel != null && !string.IsNullOrWhiteSpace(_tunnel.LiveTunnelUrl))
-                {
-                    tunnelUrl = _tunnel.LiveTunnelUrl;
-                }
-                if (string.IsNullOrWhiteSpace(tunnelUrl) && _repo != null)
-                {
-                    tunnelUrl = _repo.GetLiveTunnelUrl();
-                }
+                string tunnelUrl = _tunnel != null ? _tunnel.LiveTunnelUrl : _repo.GetLiveTunnelUrl();
 
                 // 2. Heartbeat to public.shops
                 SendHeartbeat(activePrinter, tunnelUrl);
@@ -399,9 +391,9 @@ namespace PrintAway.SaaS
                     { "active_printer_model", activePrinter ?? "" }
                 };
 
-                if (!string.IsNullOrWhiteSpace(tunnelUrl))
+                if (_tunnel != null || !string.IsNullOrWhiteSpace(tunnelUrl))
                 {
-                    payload["live_tunnel_url"] = tunnelUrl;
+                    payload["live_tunnel_url"] = string.IsNullOrWhiteSpace(tunnelUrl) ? null : tunnelUrl;
                 }
 
                 ExecuteHttpRequest(patchUrl, "PATCH", _serializer.Serialize(payload), null);

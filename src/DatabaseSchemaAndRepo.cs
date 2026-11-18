@@ -2934,8 +2934,7 @@ CREATE TABLE IF NOT EXISTS audit_events (
 
         public void SetLiveTunnelUrl(string url)
         {
-            if (string.IsNullOrWhiteSpace(url)) return;
-            string clean = url.Trim();
+            string clean = string.IsNullOrWhiteSpace(url) ? "" : url.Trim();
             if (clean.IndexOf("api.trycloudflare.com", StringComparison.OrdinalIgnoreCase) >= 0 ||
                 clean.IndexOf("pkg.trycloudflare.com", StringComparison.OrdinalIgnoreCase) >= 0)
             {
@@ -2948,7 +2947,8 @@ CREATE TABLE IF NOT EXISTS audit_events (
                 string dataDir = Path.GetDirectoryName(_vaultDirectory);
                 if (!Directory.Exists(dataDir)) Directory.CreateDirectory(dataDir);
                 string path = Path.Combine(dataDir, "tunnel.url");
-                File.WriteAllText(path, clean, Encoding.UTF8);
+                if (clean.Length == 0) File.Delete(path);
+                else File.WriteAllText(path, clean, Encoding.UTF8);
             }
             catch { }
         }

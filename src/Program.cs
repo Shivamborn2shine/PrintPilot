@@ -336,7 +336,7 @@ namespace PrintAway
                         {
                             try { repo.SetLiveTunnelUrl(url ?? ""); } catch { }
                         };
-                        tunnel.Start();
+                        repo.SetLiveTunnelUrl(null);
                     }
 
                     string sbUrl = ControlPlane.Url;
@@ -351,9 +351,10 @@ namespace PrintAway
                         Console.ResetColor();
                     }
 
-                    using (var server = new PrintAwayHttpServer(port, repo, worker, webRoot, supabaseSync))
+                    using (var server = new PrintAwayHttpServer(port, repo, worker, webRoot, supabaseSync, allowExternalTunnelRegistration: tunnel == null))
                     {
                         server.Start();
+                        if (tunnel != null) tunnel.Start();
 
                         if (!cliMode)
                         {
